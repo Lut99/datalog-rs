@@ -1,0 +1,366 @@
+<svg class="railroad" viewBox="0 0 1716 544" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<style type="text/css">
+
+    svg.railroad {
+        background-color: hsl(30, 20%, 95%);
+        background-size: 15px 15px;
+        background-image: linear-gradient(to right, rgba(30, 30, 30, .05) 1px, transparent 1px),
+                          linear-gradient(to bottom, rgba(30, 30, 30, .05) 1px, transparent 1px);
+    }
+
+    svg.railroad path {
+        stroke-width: 3px;
+        stroke: black;
+        fill: transparent;
+    }
+
+    svg.railroad .debug {
+        stroke-width: 1px;
+        stroke: red;
+    }
+
+    svg.railroad text {
+        font: 14px monospace;
+        text-anchor: middle;
+    }
+
+    svg.railroad .nonterminal text {
+        font-weight: bold;
+    }
+
+    svg.railroad text.comment {
+        font: italic 12px monospace;
+    }
+
+    svg.railroad rect {
+        stroke-width: 3px;
+        stroke: black;
+        fill:hsl(-290, 70%, 90%);
+    }
+
+    svg.railroad g.labeledbox &gt; rect {
+        stroke-width: 1px;
+        stroke: grey;
+        stroke-dasharray: 5px;
+        fill:rgba(90, 90, 150, .1);
+    }</style>
+<g class="verticalgrid">
+<g class="sequence">
+<text class="comment" x="29" y="122">
+Spec</text>
+<path d=" M 58 107 v 20 m 10 -20 v 20 m -10 -10 h 20"/>
+<g class="sequence">
+<g class="repeat">
+<path d=" M 88 117 h 12 m 1564 0 h 12 m -12 0 a 12 12 0 0 1 12 12 v 393 m 0 -193 l -5 -5 m 10 0 l -5 5 m 0 193 a 12 12 0 0 1 -12 12 m 0 0 h -1564 m 785 0 l 5 -5 m 0 10 l -5 -5 m -785 0 a 12 12 0 0 1 -12 -12 v -393 m 0 199 l -5 5 m 10 0 l -5 -5 m 0 -199 a 12 12 0 0 1 12 -12"/>
+<g/>
+<g class="sequence">
+<g class="repeat">
+<path d=" M 100 117 h 12 m 628 0 h 12 m -12 0 a 12 12 0 0 1 12 12 v 124 m 0 -59 l -5 -5 m 10 0 l -5 5 m 0 59 a 12 12 0 0 1 -12 12 m -28 0 h -600 m 303 0 l 5 -5 m 0 10 l -5 -5 m -303 0 a 12 12 0 0 1 -12 -12 v -124 m 0 65 l -5 5 m 10 0 l -5 -5 m 0 -65 a 12 12 0 0 1 12 -12"/>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="28" x="712" y="254"/>
+<text x="726" y="270">
+,</text>
+</g>
+<g class="sequence">
+<g class="sequence">
+<text class="comment" x="134" y="122">
+regex</text>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="148" x="167" y="106"/>
+<text x="241" y="122">
+^[a-z_][a-z_-]*$</text>
+</g>
+<path d=" M 157 117 h 10"/>
+</g>
+<g class="optional">
+<path d=" M 325 117 h 24 m -24 0 a 12 12 0 0 0 12 -12 v -35 a 12 12 0 0 1 12 -12 h 367 m -180 0 l -5 -5 m 0 10 l 5 -5 m 180 0 a 12 12 0 0 1 12 12 v 35 a 12 12 0 0 0 12 12 h -24"/>
+<g class="sequence">
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="28" x="349" y="106"/>
+<text x="363" y="122">
+(</text>
+</g>
+<g class="repeat">
+<path d=" M 387 117 h 12 m 267 0 h 12 m -12 0 a 12 12 0 0 1 12 12 v 92 m 0 -43 l -5 -5 m 10 0 l -5 5 m 0 43 a 12 12 0 0 1 -12 12 m -28 0 h -239 m 122 0 l 5 -5 m 0 10 l -5 -5 m -122 0 a 12 12 0 0 1 -12 -12 v -92 m 0 49 l -5 5 m 10 0 l -5 -5 m 0 -49 a 12 12 0 0 1 12 -12"/>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="28" x="638" y="222"/>
+<text x="652" y="238">
+,</text>
+</g>
+<g class="choice">
+<path d=" M 399 117 h 24 m 219 0 h 24"/>
+<g class="labeledbox">
+<rect height="66" width="219" x="423" y="70"/>
+<path d=" M 423 117 h 8 m 203 0 h 8"/>
+<text class="comment" x="481" y="93">
+AtomArg::Atom</text>
+<g class="sequence">
+<g class="sequence">
+<text class="comment" x="453" y="122">
+regex</text>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="148" x="486" y="106"/>
+<text x="560" y="122">
+^[a-z_][a-z_-]*$</text>
+</g>
+<path d=" M 476 117 h 10"/>
+</g>
+</g>
+</g>
+<path d=" M 399 117 a 12 12 0 0 1 12 12 v 17 m 243 0 v -17 a 12 12 0 0 1 12 -12"/>
+<path d=" M 411 146 v 35 a 12 12 0 0 0 12 12 m 219 0 h 0 a 12 12 0 0 0 12 -12 v -35"/>
+<g class="labeledbox">
+<rect height="66" width="219" x="423" y="146"/>
+<path d=" M 423 193 h 8 m 203 0 h 8"/>
+<text class="comment" x="478" y="169">
+AtomArg::Var</text>
+<g class="sequence">
+<g class="sequence">
+<text class="comment" x="453" y="198">
+regex</text>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="148" x="486" y="182"/>
+<text x="560" y="198">
+^[a-z_][a-z_-]*$</text>
+</g>
+<path d=" M 476 193 h 10"/>
+</g>
+</g>
+</g>
+</g>
+</g>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="28" x="688" y="106"/>
+<text x="702" y="122">
+)</text>
+</g>
+<path d=" M 377 117 h 10"/>
+<path d=" M 678 117 h 10"/>
+</g>
+</g>
+<path d=" M 315 117 h 10"/>
+</g>
+</g>
+<g class="optional">
+<path d=" M 762 117 h 24 m -24 0 a 12 12 0 0 0 12 -12 v -83 m 0 44 l -5 5 m 10 0 l -5 -5 m 0 -44 a 12 12 0 0 1 12 -12 h 816 m -405 0 l -5 -5 m 0 10 l 5 -5 m 405 0 a 12 12 0 0 1 12 12 v 83 m 0 -38 l -5 -5 m 10 0 l -5 5 m 0 38 a 12 12 0 0 0 12 12 h -24"/>
+<g class="sequence">
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="36" x="786" y="106"/>
+<text x="804" y="122">
+:-</text>
+</g>
+<g class="repeat">
+<path d=" M 832 117 h 12 m 746 0 h 12 m -12 0 a 12 12 0 0 1 12 12 v 372 m 0 -183 l -5 -5 m 10 0 l -5 5 m 0 183 a 12 12 0 0 1 -12 12 m -28 0 h -718 m 362 0 l 5 -5 m 0 10 l -5 -5 m -362 0 a 12 12 0 0 1 -12 -12 v -372 m 0 189 l -5 5 m 10 0 l -5 -5 m 0 -189 a 12 12 0 0 1 12 -12"/>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="28" x="1562" y="502"/>
+<text x="1576" y="518">
+,</text>
+</g>
+<g class="choice">
+<path d=" M 844 117 h 24 m 644 0 h 78 m -36 0 l -5 -5 m 0 10 l 5 -5 m 36 0"/>
+<g class="labeledbox">
+<rect height="230" width="644" x="868" y="22"/>
+<path d=" M 868 117 h 8 m 628 0 h 8"/>
+<text class="comment" x="926" y="45">
+Literal::Atom</text>
+<g class="sequence">
+<g class="sequence">
+<g class="sequence">
+<text class="comment" x="898" y="122">
+regex</text>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="148" x="931" y="106"/>
+<text x="1005" y="122">
+^[a-z_][a-z_-]*$</text>
+</g>
+<path d=" M 921 117 h 10"/>
+</g>
+<g class="optional">
+<path d=" M 1089 117 h 24 m -24 0 a 12 12 0 0 0 12 -12 v -35 a 12 12 0 0 1 12 -12 h 367 m -180 0 l -5 -5 m 0 10 l 5 -5 m 180 0 a 12 12 0 0 1 12 12 v 35 a 12 12 0 0 0 12 12 h -24"/>
+<g class="sequence">
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="28" x="1113" y="106"/>
+<text x="1127" y="122">
+(</text>
+</g>
+<g class="repeat">
+<path d=" M 1151 117 h 12 m 267 0 h 12 m -12 0 a 12 12 0 0 1 12 12 v 92 m 0 -43 l -5 -5 m 10 0 l -5 5 m 0 43 a 12 12 0 0 1 -12 12 m -28 0 h -239 m 122 0 l 5 -5 m 0 10 l -5 -5 m -122 0 a 12 12 0 0 1 -12 -12 v -92 m 0 49 l -5 5 m 10 0 l -5 -5 m 0 -49 a 12 12 0 0 1 12 -12"/>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="28" x="1402" y="222"/>
+<text x="1416" y="238">
+,</text>
+</g>
+<g class="choice">
+<path d=" M 1163 117 h 24 m 219 0 h 24"/>
+<g class="labeledbox">
+<rect height="66" width="219" x="1187" y="70"/>
+<path d=" M 1187 117 h 8 m 203 0 h 8"/>
+<text class="comment" x="1245" y="93">
+AtomArg::Atom</text>
+<g class="sequence">
+<g class="sequence">
+<text class="comment" x="1217" y="122">
+regex</text>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="148" x="1250" y="106"/>
+<text x="1324" y="122">
+^[a-z_][a-z_-]*$</text>
+</g>
+<path d=" M 1240 117 h 10"/>
+</g>
+</g>
+</g>
+<path d=" M 1163 117 a 12 12 0 0 1 12 12 v 17 m 243 0 v -17 a 12 12 0 0 1 12 -12"/>
+<path d=" M 1175 146 v 35 a 12 12 0 0 0 12 12 m 219 0 h 0 a 12 12 0 0 0 12 -12 v -35"/>
+<g class="labeledbox">
+<rect height="66" width="219" x="1187" y="146"/>
+<path d=" M 1187 193 h 8 m 203 0 h 8"/>
+<text class="comment" x="1242" y="169">
+AtomArg::Var</text>
+<g class="sequence">
+<g class="sequence">
+<text class="comment" x="1217" y="198">
+regex</text>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="148" x="1250" y="182"/>
+<text x="1324" y="198">
+^[a-z_][a-z_-]*$</text>
+</g>
+<path d=" M 1240 193 h 10"/>
+</g>
+</g>
+</g>
+</g>
+</g>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="28" x="1452" y="106"/>
+<text x="1466" y="122">
+)</text>
+</g>
+<path d=" M 1141 117 h 10"/>
+<path d=" M 1442 117 h 10"/>
+</g>
+</g>
+<path d=" M 1079 117 h 10"/>
+</g>
+</g>
+</g>
+<path d=" M 844 117 a 12 12 0 0 1 12 12 v 133 m 0 -63 l -5 -5 m 10 0 l -5 5 m 0 63 m 722 0 v -133 m 0 69 l -5 5 m 10 0 l -5 -5 m 0 -69 a 12 12 0 0 1 12 -12"/>
+<path d=" M 856 262 v 83 m 0 -38 l -5 -5 m 10 0 l -5 5 m 0 38 a 12 12 0 0 0 12 12 m 698 0 h 0 a 12 12 0 0 0 12 -12 v -83 m 0 44 l -5 5 m 10 0 l -5 -5 m 0 -44"/>
+<g class="labeledbox">
+<rect height="230" width="698" x="868" y="262"/>
+<path d=" M 868 357 h 8 m 682 0 h 8"/>
+<text class="comment" x="937" y="285">
+Literal::NegAtom</text>
+<g class="sequence">
+<g class="sequence">
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="44" x="876" y="346"/>
+<text x="898" y="362">
+not</text>
+</g>
+<g class="sequence">
+<g class="sequence">
+<text class="comment" x="952" y="362">
+regex</text>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="148" x="985" y="346"/>
+<text x="1059" y="362">
+^[a-z_][a-z_-]*$</text>
+</g>
+<path d=" M 975 357 h 10"/>
+</g>
+<g class="optional">
+<path d=" M 1143 357 h 24 m -24 0 a 12 12 0 0 0 12 -12 v -35 a 12 12 0 0 1 12 -12 h 367 m -180 0 l -5 -5 m 0 10 l 5 -5 m 180 0 a 12 12 0 0 1 12 12 v 35 a 12 12 0 0 0 12 12 h -24"/>
+<g class="sequence">
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="28" x="1167" y="346"/>
+<text x="1181" y="362">
+(</text>
+</g>
+<g class="repeat">
+<path d=" M 1205 357 h 12 m 267 0 h 12 m -12 0 a 12 12 0 0 1 12 12 v 92 m 0 -43 l -5 -5 m 10 0 l -5 5 m 0 43 a 12 12 0 0 1 -12 12 m -28 0 h -239 m 122 0 l 5 -5 m 0 10 l -5 -5 m -122 0 a 12 12 0 0 1 -12 -12 v -92 m 0 49 l -5 5 m 10 0 l -5 -5 m 0 -49 a 12 12 0 0 1 12 -12"/>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="28" x="1456" y="462"/>
+<text x="1470" y="478">
+,</text>
+</g>
+<g class="choice">
+<path d=" M 1217 357 h 24 m 219 0 h 24"/>
+<g class="labeledbox">
+<rect height="66" width="219" x="1241" y="310"/>
+<path d=" M 1241 357 h 8 m 203 0 h 8"/>
+<text class="comment" x="1299" y="333">
+AtomArg::Atom</text>
+<g class="sequence">
+<g class="sequence">
+<text class="comment" x="1271" y="362">
+regex</text>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="148" x="1304" y="346"/>
+<text x="1378" y="362">
+^[a-z_][a-z_-]*$</text>
+</g>
+<path d=" M 1294 357 h 10"/>
+</g>
+</g>
+</g>
+<path d=" M 1217 357 a 12 12 0 0 1 12 12 v 17 m 243 0 v -17 a 12 12 0 0 1 12 -12"/>
+<path d=" M 1229 386 v 35 a 12 12 0 0 0 12 12 m 219 0 h 0 a 12 12 0 0 0 12 -12 v -35"/>
+<g class="labeledbox">
+<rect height="66" width="219" x="1241" y="386"/>
+<path d=" M 1241 433 h 8 m 203 0 h 8"/>
+<text class="comment" x="1296" y="409">
+AtomArg::Var</text>
+<g class="sequence">
+<g class="sequence">
+<text class="comment" x="1271" y="438">
+regex</text>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="148" x="1304" y="422"/>
+<text x="1378" y="438">
+^[a-z_][a-z_-]*$</text>
+</g>
+<path d=" M 1294 433 h 10"/>
+</g>
+</g>
+</g>
+</g>
+</g>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="28" x="1506" y="346"/>
+<text x="1520" y="362">
+)</text>
+</g>
+<path d=" M 1195 357 h 10"/>
+<path d=" M 1496 357 h 10"/>
+</g>
+</g>
+<path d=" M 1133 357 h 10"/>
+</g>
+<path d=" M 920 357 h 10"/>
+</g>
+</g>
+</g>
+</g>
+</g>
+<path d=" M 822 117 h 10"/>
+</g>
+</g>
+<g class="terminal">
+<rect height="22" rx="10" ry="10" width="28" x="1636" y="106"/>
+<text x="1650" y="122">
+.</text>
+</g>
+<path d=" M 752 117 h 10"/>
+<path d=" M 1626 117 h 10"/>
+</g>
+</g>
+</g>
+<path d=" M 1686 117 h 20 m -10 -10 v 20 m 10 -20 v 20"/>
+<path d=" M 48 117 h 10"/>
+<path d=" M 78 117 h 10"/>
+<path d=" M 1676 117 h 10"/>
+</g>
+</g>
+</svg>

@@ -1,0 +1,17 @@
+[package]
+name = "datalog-macros"
+version = "0.1.0"
+edition = "2021"
+authors = ["Tim Müller"]
+repository = "https://github.com/Lut99/datalog-rs"
+description = "Implements the `datalog!{}`-macro for the `justact-datalog`-crate."
+
+
+[lib]
+proc-macro = true
+
+
+[dependencies]
+proc-macro2 = "1.0.92"
+quote = "1.0.37"
+syn = "2.0.89"
