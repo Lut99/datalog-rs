@@ -52,7 +52,7 @@ The following represents the concrete syntax of $Datalog^\neg$ as a railroad dia
 
 ## Features
 This crate supports the following features:
-- `interpreter`: Enables the `alternating_fixpoint`-functions to allow derivation for the $Datalog^\neg$-programs.
+- `interpreter`: Enables the `alternating_fixpoint`-functions to allow derivation for the $Datalog^\neg$-programs using the alternating fixpoint semantics[\[2\]](#references).
 - `log`: Enables `log`-traces during the derivation process for debugging purposes.
 - `macros`: Enables the `datalog!()`-macro for writing $Datalog^\neg$-programs as a Rust embedded DSL.
 - `parser`: Enables a parser that can parse $Datalog^\neg$-programs from source text.
@@ -74,3 +74,9 @@ Contributions to this crate are welcome! If you have any suggestions, fixes or i
 
 ## License
 This project is licensed under Apache 2.0. See [LICENSE](./LICENSE) for more details.
+
+
+## References
+\[1\] Esterhuyse, C.A., Müller, T., van Binsbergen, L.T. (2024). _JustAct: Actions Universally Justified by Partial Dynamic Policies._ In: Castiglioni, V., Francalanza, A. (eds) Formal Techniques for Distributed Objects, Components, and Systems. FORTE 2024. Lecture Notes in Computer Science, vol 14678. Springer, Cham. <https://doi.org/10.1007/978-3-031-62645-6_4>
+
+\[2\] A. Van Gelder. 1989. _The alternating fixpoint of logic programs with negation._ In Proceedings of the eighth ACM SIGACT-SIGMOD-SIGART symposium on Principles of database systems (PODS '89). Association for Computing Machinery, New York, NY, USA, 1–10. <https://doi.org/10.1145/73721.73722>
