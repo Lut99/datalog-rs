@@ -4,7 +4,7 @@
 //  Created:
 //    03 May 2024, 13:42:38
 //  Last edited:
-//    17 May 2024, 18:17:35
+//    26 Nov 2024, 14:01:07
 //  Auto updated?
 //    Yes
 //
@@ -16,6 +16,8 @@
 // Declare appropriate submodules
 pub mod atoms;
 pub mod literals;
+#[cfg(feature = "eflint-transitions")]
+pub mod phrases;
 pub mod rules;
 pub mod specs;
 pub mod tokens;

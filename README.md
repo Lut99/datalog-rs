@@ -52,6 +52,7 @@ The following represents the concrete syntax of $Datalog^\neg$ as a railroad dia
 
 ## Features
 This crate supports the following features:
+- `eflint-transitions`: Enables an extension to the $Datalog^\neg$-language that allows one to write [eFLINT transitions](https://gitlab.com/eflint) on top of datalog programs.
 - `interpreter`: Enables the `alternating_fixpoint`-functions to allow derivation for the $Datalog^\neg$-programs using the alternating fixpoint semantics[\[2\]](#references).
 - `log`: Enables `log`-traces during the derivation process for debugging purposes.
 - `macros`: Enables the `datalog!()`-macro for writing $Datalog^\neg$-programs as a Rust embedded DSL.

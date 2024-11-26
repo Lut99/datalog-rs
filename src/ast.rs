@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    26 Nov 2024, 11:25:17
+//    26 Nov 2024, 13:57:33
 //  Auto updated?
 //    Yes
 //
@@ -293,14 +293,22 @@ pub fn diagram_to_path(path: impl AsRef<std::path::Path>) -> Result<(), std::io:
 #[cfg_attr(feature = "railroad", derive(ToNonTerm))]
 pub struct Spec<'f, 's> {
     /// The list of rules in this program.
-    pub rules: Vec<Rule<'f, 's>>,
+    #[cfg(not(feature = "eflint-transitions"))]
+    pub rules:   Vec<Rule<'f, 's>>,
+    /// The list of phrases (rules|transitions) in this program.
+    #[cfg(feature = "eflint-transitions")]
+    pub phrases: Vec<Phrase<'f, 's>>,
 }
-impl<'f, 's> Spec<'f, 's> {}
 impl<'f, 's> Display for Spec<'f, 's> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        #[cfg(not(feature = "eflint-transitions"))]
         for rule in &self.rules {
             writeln!(f, "{rule}")?;
+        }
+        #[cfg(feature = "eflint-transitions")]
+        for phrase in &self.phrases {
+            writeln!(f, "{phrase}")?;
         }
         Ok(())
     }
@@ -309,14 +317,311 @@ impl<'f, 's> Display for Spec<'f, 's> {
 impl<'f, 's> Reserialize for Spec<'f, 's> {
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
+        #[cfg(not(feature = "eflint-transitions"))]
         for rule in &self.rules {
             rule.reserialize_fmt(f)?;
+            writeln!(f)?;
+        }
+        #[cfg(feature = "eflint-transitions")]
+        for phrase in &self.phrases {
+            phrase.reserialize_fmt(f)?;
             writeln!(f)?;
         }
         Ok(())
     }
 }
+#[cfg(not(feature = "eflint-transitions"))]
 impl_map!(Spec, rules);
+#[cfg(feature = "eflint-transitions")]
+impl_map!(Spec, phrases);
+
+
+
+/// Specifies a single phrase.
+///
+/// # Syntax
+/// ```plain
+/// #foo {
+///     +{ foo. }
+///     ~{ bar :- baz(quz). }
+/// }.
+/// !{ #foo }.
+/// foo :- bar, baz(quz).
+/// ```
+#[cfg(feature = "eflint-transitions")]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "railroad", derive(ToNode))]
+pub enum Phrase<'f, 's> {
+    /// It's a postulation of zero or more rules.
+    Postulation(Postulation<'f, 's>),
+    /// It's a plain rule.
+    Rule(Rule<'f, 's>),
+    /// It's the definition of a transition.
+    Transition(Transition<'f, 's>),
+    /// It's the trigger of zero or more transitions.
+    Trigger(Trigger<'f, 's>),
+}
+#[cfg(feature = "eflint-transitions")]
+impl<'f, 's> Display for Phrase<'f, 's> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        match self {
+            Self::Postulation(p) => writeln!(f, "{p}"),
+            Self::Rule(r) => writeln!(f, "{r}"),
+            Self::Transition(t) => writeln!(f, "{t}"),
+            Self::Trigger(t) => writeln!(f, "{t}"),
+        }
+    }
+}
+#[cfg(all(feature = "eflint-transitions", feature = "reserialize"))]
+impl<'f, 's> Reserialize for Phrase<'f, 's> {
+    #[inline]
+    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
+        match self {
+            Self::Postulation(p) => p.reserialize_fmt(f),
+            Self::Rule(r) => r.reserialize_fmt(f),
+            Self::Transition(t) => t.reserialize_fmt(f),
+            Self::Trigger(t) => t.reserialize_fmt(f),
+        }
+    }
+}
+#[cfg(feature = "eflint-transitions")]
+impl_enum_map!(Phrase, Postulation(nested), Rule(nested), Transition(nested), Trigger(nested));
+
+
+
+/// Specifies a postulation of some kind.
+///
+/// # Syntax
+/// ```plain
+/// +{ foo. }
+/// ~{ bar :- baz(quz). }
+/// ```
+#[cfg(feature = "eflint-transitions")]
+#[derive(Clone, Debug)]
+pub struct Postulation<'f, 's> {
+    /// The operator.
+    pub op: PostulationOp<'f, 's>,
+    /// The curly brackets wrapping the rules.
+    pub curly_tokens: Curly<'f, 's>,
+    /// The rule(s) postulated.
+    pub rules: Vec<Rule<'f, 's>>,
+}
+#[cfg(feature = "eflint-transitions")]
+impl<'f, 's> Display for Postulation<'f, 's> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "{}{{", self.op)?;
+        if !self.rules.is_empty() {
+            writeln!(f)?;
+        }
+        for rule in &self.rules {
+            writeln!(f, "    {rule}")?;
+        }
+        write!(f, "}}")
+    }
+}
+#[cfg(all(feature = "eflint-transitions", feature = "reserialize"))]
+impl<'f, 's> Reserialize for Postulation<'f, 's> {
+    #[inline]
+    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
+        self.op.reserialize_fmt(f)?;
+        self.curly_tokens.reserialize_open_fmt(f)?;
+        if !self.rules.is_empty() {
+            writeln!(f)?;
+        }
+        for rule in &self.rules {
+            write!(f, "    ")?;
+            rule.reserialize_fmt(f)?;
+            writeln!(f)?;
+        }
+        self.curly_tokens.reserialize_close_fmt(f)
+    }
+}
+#[cfg(all(feature = "eflint-transitions", feature = "railroad"))]
+impl<'f, 's> ToNode for Postulation<'f, 's> {
+    type Node = rr::Sequence<Box<dyn rr::Node>>;
+
+    #[inline]
+    fn railroad() -> Self::Node {
+        rr::Sequence::new(vec![
+            Box::new(PostulationOp::railroad()) as Box<dyn rr::Node>,
+            Box::new(Curly::railroad_open()),
+            Box::new(rr::Repeat::new(Rule::railroad(), rr::Empty)),
+            Box::new(Curly::railroad_close()),
+        ])
+    }
+}
+#[cfg(feature = "eflint-transitions")]
+impl_map!(Postulation, rules);
+
+/// Specifies the possible postulation types.
+#[cfg(feature = "eflint-transitions")]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "railroad", derive(ToNode))]
+pub enum PostulationOp<'f, 's> {
+    /// Creates facts.
+    Create(Add<'f, 's>),
+    /// Hides previously created facts.
+    Obfuscate(Dash<'f, 's>),
+}
+#[cfg(feature = "eflint-transitions")]
+impl<'f, 's> Display for PostulationOp<'f, 's> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        match self {
+            Self::Create(_) => write!(f, "+"),
+            Self::Obfuscate(_) => write!(f, "-"),
+        }
+    }
+}
+#[cfg(all(feature = "eflint-transitions", feature = "reserialize"))]
+impl<'f, 's> Reserialize for PostulationOp<'f, 's> {
+    #[inline]
+    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
+        match self {
+            Self::Create(c) => c.reserialize_fmt(f),
+            Self::Obfuscate(o) => o.reserialize_fmt(f),
+        }
+    }
+}
+#[cfg(feature = "eflint-transitions")]
+impl_enum_map!(PostulationOp, Create(op), Obfuscate(op));
+
+
+
+/// Specifies the definition of a transition.
+///
+/// # Syntax
+/// ```plain
+/// #foo {
+///     +{ foo. }
+///     ~{ bar :- baz(quz). }
+/// }.
+/// ```
+#[cfg(feature = "eflint-transitions")]
+#[derive(Clone, Debug)]
+pub struct Transition<'f, 's> {
+    /// The identifier of the transition.
+    pub ident: TransIdent<'f, 's>,
+    /// The curly brackets wrapping the postulations.
+    pub curly_tokens: Curly<'f, 's>,
+    /// The posulations nested inside.
+    pub postulations: Vec<Postulation<'f, 's>>,
+}
+#[cfg(feature = "eflint-transitions")]
+impl<'f, 's> Display for Transition<'f, 's> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "{} {{", self.ident)?;
+        if !self.postulations.is_empty() {
+            writeln!(f)?;
+        }
+        for post in &self.postulations {
+            writeln!(f, "    {post}")?;
+        }
+        write!(f, "}}")
+    }
+}
+#[cfg(all(feature = "eflint-transitions", feature = "reserialize"))]
+impl<'f, 's> Reserialize for Transition<'f, 's> {
+    #[inline]
+    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
+        self.ident.reserialize_fmt(f)?;
+        self.curly_tokens.reserialize_open_fmt(f)?;
+        if !self.postulations.is_empty() {
+            writeln!(f)?;
+        }
+        for post in &self.postulations {
+            write!(f, "    ")?;
+            post.reserialize_fmt(f)?;
+            writeln!(f)?;
+        }
+        self.curly_tokens.reserialize_close_fmt(f)
+    }
+}
+#[cfg(all(feature = "eflint-transitions", feature = "railroad"))]
+impl<'f, 's> ToNode for Transition<'f, 's> {
+    type Node = rr::Sequence<Box<dyn rr::Node>>;
+
+    #[inline]
+    fn railroad() -> Self::Node {
+        rr::Sequence::new(vec![
+            Box::new(TransIdent::railroad()) as Box<dyn rr::Node>,
+            Box::new(Curly::railroad_open()),
+            Box::new(rr::Repeat::new(Postulation::railroad(), rr::Empty)),
+            Box::new(Curly::railroad_close()),
+        ])
+    }
+}
+#[cfg(feature = "eflint-transitions")]
+impl_map!(Transition, ident, postulations);
+
+
+
+/// Specifies the triggering of a transition.
+///
+/// # Syntax
+/// ```plain
+/// !{ #foo }.
+/// ```
+#[cfg(feature = "eflint-transitions")]
+#[derive(Clone, Debug)]
+pub struct Trigger<'f, 's> {
+    /// The exclamation mark.
+    pub exclaim_token: Exclaim<'f, 's>,
+    /// The curly brackets wrapping the transition identifiers.
+    pub curly_tokens: Curly<'f, 's>,
+    /// The list of transition identifiers triggered.
+    pub idents: Vec<TransIdent<'f, 's>>,
+}
+#[cfg(feature = "eflint-transitions")]
+impl<'f, 's> Display for Trigger<'f, 's> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "!{{")?;
+        if !self.idents.is_empty() {
+            writeln!(f)?;
+        }
+        for ident in &self.idents {
+            writeln!(f, "    {ident}")?;
+        }
+        write!(f, "}}")
+    }
+}
+#[cfg(all(feature = "eflint-transitions", feature = "reserialize"))]
+impl<'f, 's> Reserialize for Trigger<'f, 's> {
+    #[inline]
+    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
+        self.exclaim_token.reserialize_fmt(f)?;
+        self.curly_tokens.reserialize_open_fmt(f)?;
+        if !self.idents.is_empty() {
+            writeln!(f)?;
+        }
+        for ident in &self.idents {
+            write!(f, "    ")?;
+            ident.reserialize_fmt(f)?;
+            writeln!(f)?;
+        }
+        self.curly_tokens.reserialize_close_fmt(f)
+    }
+}
+#[cfg(all(feature = "eflint-transitions", feature = "railroad"))]
+impl<'f, 's> ToNode for Trigger<'f, 's> {
+    type Node = rr::Sequence<Box<dyn rr::Node>>;
+
+    #[inline]
+    fn railroad() -> Self::Node {
+        rr::Sequence::new(vec![
+            Box::new(Exclaim::railroad()) as Box<dyn rr::Node>,
+            Box::new(Curly::railroad_open()),
+            Box::new(rr::Repeat::new(TransIdent::railroad(), rr::Empty)),
+            Box::new(Curly::railroad_close()),
+        ])
+    }
+}
+#[cfg(feature = "eflint-transitions")]
+impl_map!(Trigger, idents);
 
 
 
@@ -732,7 +1037,53 @@ impl<'f, 's> Reserialize for Ident<'f, 's> {
 }
 impl_map!(Ident, value);
 
+/// An [`Ident`]ifier prefixed by a `#`.
+///
+/// # Syntax
+/// ```plain
+/// #foo
+/// ```
+#[cfg(feature = "eflint-transitions")]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "railroad", derive(ToNode))]
+#[cfg_attr(feature = "railroad", railroad(regex = "^#[a-z_][a-z_-]*$"))]
+pub struct TransIdent<'f, 's> {
+    /// The value of the identifier itself, including the pound.
+    pub value: Span<&'f str, &'s str>,
+}
+#[cfg(feature = "eflint-transitions")]
+impl<'f, 's> Display for TransIdent<'f, 's> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", self.value.value()) }
+}
+#[cfg(all(feature = "eflint-transitions", feature = "reserialize"))]
+impl<'f, 's> Reserialize for TransIdent<'f, 's> {
+    #[inline]
+    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", self.value) }
+}
+impl_map!(TransIdent, value);
 
+
+
+/// Defines a plus-token.
+///
+/// # Syntax
+/// ```plain
+/// +
+/// ```
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "railroad", derive(ToNode))]
+#[cfg_attr(feature = "railroad", railroad(term = "+"))]
+pub struct Add<'f, 's> {
+    /// The source of this arrow in the source.
+    pub span: Span<&'f str, &'s str>,
+}
+#[cfg(feature = "reserialize")]
+impl<'f, 's> Reserialize for Add<'f, 's> {
+    #[inline]
+    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "+") }
+}
+impl_map_invariant!(Add);
 
 /// Defines an arrow token.
 ///
@@ -774,6 +1125,26 @@ impl<'f, 's> Reserialize for Comma<'f, 's> {
 }
 impl_map_invariant!(Comma);
 
+/// Defines a minus-token.
+///
+/// # Syntax
+/// ```plain
+/// -
+/// ```
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "railroad", derive(ToNode))]
+#[cfg_attr(feature = "railroad", railroad(term = "-"))]
+pub struct Dash<'f, 's> {
+    /// The source of this arrow in the source.
+    pub span: Span<&'f str, &'s str>,
+}
+#[cfg(feature = "reserialize")]
+impl<'f, 's> Reserialize for Dash<'f, 's> {
+    #[inline]
+    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "-") }
+}
+impl_map_invariant!(Dash);
+
 /// Defines a dot token.
 ///
 /// # Syntax
@@ -793,6 +1164,26 @@ impl<'f, 's> Reserialize for Dot<'f, 's> {
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ".") }
 }
 impl_map_invariant!(Dot);
+
+/// Defines an exclaimation mark-token.
+///
+/// # Syntax
+/// ```plain
+/// !
+/// ```
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "railroad", derive(ToNode))]
+#[cfg_attr(feature = "railroad", railroad(term = "!"))]
+pub struct Exclaim<'f, 's> {
+    /// The source of this arrow in the source.
+    pub span: Span<&'f str, &'s str>,
+}
+#[cfg(feature = "reserialize")]
+impl<'f, 's> Reserialize for Exclaim<'f, 's> {
+    #[inline]
+    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "!") }
+}
+impl_map_invariant!(Exclaim);
 
 /// Defines a not token.
 ///
@@ -845,3 +1236,36 @@ impl<'f, 's> ReserializeDelim for Parens<'f, 's> {
     fn reserialize_close_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ")") }
 }
 impl_map_invariant!(Parens);
+
+/// Defines curly brackets.
+///
+/// # Syntax
+/// ```plain
+/// {}
+/// ```
+#[cfg(feature = "eflint-transitions")]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "railroad", derive(ToDelimNode))]
+#[cfg_attr(feature = "railroad", railroad(open = "{", close = "}"))]
+pub struct Curly<'f, 's> {
+    /// The opening-parenthesis.
+    pub open:  Span<&'f str, &'s str>,
+    /// The closing-parenthesis.
+    pub close: Span<&'f str, &'s str>,
+}
+impl<'f, 's> Curly<'f, 's> {
+    /// Creates a new [`Span`] that covers the entire curlies' range.
+    ///
+    /// # Returns
+    /// A new [`Span`] that wraps these curlies.
+    #[inline]
+    pub fn span(&self) -> Span<&'f str, &'s str> { self.open.join(&self.close).unwrap_or_else(|| self.open.clone()) }
+}
+#[cfg(feature = "reserialize")]
+impl<'f, 's> ReserializeDelim for Curly<'f, 's> {
+    #[inline]
+    fn reserialize_open_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{{") }
+    #[inline]
+    fn reserialize_close_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "}}") }
+}
+impl_map_invariant!(Curly);

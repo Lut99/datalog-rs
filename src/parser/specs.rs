@@ -4,7 +4,7 @@
 //  Created:
 //    08 May 2024, 11:12:42
 //  Last edited:
-//    17 May 2024, 18:07:38
+//    26 Nov 2024, 14:00:35
 //  Auto updated?
 //    Yes
 //
@@ -21,6 +21,9 @@ use ast_toolkit_snack::error::{Common, Failure};
 use ast_toolkit_snack::{combinator as comb, error, multi, sequence as seq, utf8, Combinator, Expects, ExpectsFormatter, Result as SResult};
 use ast_toolkit_span::Spanning;
 
+#[cfg(feature = "eflint-transitions")]
+use super::phrases;
+#[cfg(not(feature = "eflint-transitions"))]
 use super::rules;
 use crate::ast;
 
@@ -204,6 +207,7 @@ impl<'f, 's> Combinator<'static, &'f str, &'s str> for Spec<'f, 's> {
 
     #[inline]
     fn parse(&mut self, input: Span<'f, 's>) -> SResult<'static, Self::Output, &'f str, &'s str, Self::Error> {
+        #[cfg(not(feature = "eflint-transitions"))]
         match comb::all(multi::many0(seq::delimited(
             error::transmute(utf8::whitespace0()),
             comb::map_err(rules::rule(), |err| ParseError::Rule { span: err.span() }),
@@ -212,6 +216,20 @@ impl<'f, 's> Combinator<'static, &'f str, &'s str> for Spec<'f, 's> {
         .parse(input)
         {
             SResult::Ok(rem, rules) => SResult::Ok(rem, ast::Spec { rules }),
+            SResult::Fail(Failure::Common(Common::All { span })) => SResult::Fail(Failure::Common(Common::Custom(ParseError::Rule { span }))),
+            SResult::Fail(fail) => SResult::Fail(fail),
+            SResult::Error(err) => SResult::Error(err),
+        }
+
+        #[cfg(feature = "eflint-transitions")]
+        match comb::all(multi::many0(seq::delimited(
+            error::transmute(utf8::whitespace0()),
+            comb::map_err(phrases::phrase(), |err| ParseError::Rule { span: err.span() }),
+            error::transmute(utf8::whitespace0()),
+        )))
+        .parse(input)
+        {
+            SResult::Ok(rem, phrases) => SResult::Ok(rem, ast::Spec { phrases }),
             SResult::Fail(Failure::Common(Common::All { span })) => SResult::Fail(Failure::Common(Common::Custom(ParseError::Rule { span }))),
             SResult::Fail(fail) => SResult::Fail(fail),
             SResult::Error(err) => SResult::Error(err),

@@ -43,6 +43,8 @@ log = "0.4.22"
 [features]
 default = []
 
+eflint-transitions = []
+
 interpreter = []
 parser = ["dep:ast-toolkit-snack"]
 reserialize = []
