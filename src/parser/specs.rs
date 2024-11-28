@@ -4,7 +4,7 @@
 //  Created:
 //    08 May 2024, 11:12:42
 //  Last edited:
-//    17 May 2024, 18:07:38
+//    28 Nov 2024, 16:46:05
 //  Auto updated?
 //    Yes
 //
@@ -14,31 +14,22 @@
 
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
-use std::marker::PhantomData;
 use std::rc::Rc;
 
-use ast_toolkit_snack::error::{Common, Failure};
-use ast_toolkit_snack::{combinator as comb, error, multi, sequence as seq, utf8, Combinator, Expects, ExpectsFormatter, Result as SResult};
-use ast_toolkit_span::Spanning;
+use ast_toolkit::snack::error::{Common, Failure};
+use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
+use ast_toolkit::snack::{comb, combinator as comb, error, multi, sequence as seq, utf8, Result as SResult};
+use ast_toolkit::span::{Span, Spannable, Spanning};
 
 use super::rules;
 use crate::ast;
 
 
-/***** TYPE ALIASES *****/
-/// Convenience alias for a [`Span`](ast_toolkit_span::Span) over static strings.
-type Span<'f, 's> = ast_toolkit_span::Span<&'f str, &'s str>;
-
-
-
-
-
 /***** ERRORS *****/
 /// Errors returned when parsing literals and related.
-#[derive(Debug)]
 pub enum ParseError<F, S> {
     /// Failed to parse a rule.
-    Rule { span: ast_toolkit_span::Span<F, S> },
+    Rule { span: Span<F, S> },
 }
 impl<F, S> ParseError<F, S> {
     /// Casts the [`Span`]s in this Failure into their owned counterparts.
@@ -56,6 +47,19 @@ impl<F, S> ParseError<F, S> {
         }
     }
 }
+impl<F, S> Debug for ParseError<F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        use ParseError::*;
+        match self {
+            Rule { span } => {
+                let mut fmt = f.debug_struct("ParseError::Rule");
+                fmt.field("span", span);
+                fmt.finish()
+            },
+        }
+    }
+}
 impl<F, S> Display for ParseError<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
@@ -65,10 +69,10 @@ impl<F, S> Display for ParseError<F, S> {
         }
     }
 }
-impl<F: Debug, S: Debug> Error for ParseError<F, S> {}
+impl<F, S> Error for ParseError<F, S> {}
 impl<F: Clone, S: Clone> Spanning<F, S> for ParseError<F, S> {
     #[inline]
-    fn span(&self) -> ast_toolkit_span::Span<F, S> {
+    fn span(&self) -> Span<F, S> {
         use ParseError::*;
         match self {
             Rule { span } => span.clone(),
@@ -91,10 +95,10 @@ impl<F: Clone, S: Clone> Spanning<F, S> for ParseError<F, S> {
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_punctuated::punct;
-/// use ast_toolkit_snack::error::{Common, Error, Failure};
-/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit::punctuated::punct;
+/// use ast_toolkit::snack::error::{Common, Error, Failure};
+/// use ast_toolkit::snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit::span::Span;
 /// use datalog::ast::{
 ///     Arrow, Atom, AtomArg, AtomArgs, Dot, Comma, Ident, Literal, NegAtom, Not, Parens, Rule,
 ///     RuleAntecedents, Spec,
@@ -161,60 +165,22 @@ impl<F: Clone, S: Clone> Spanning<F, S> for ParseError<F, S> {
 /// assert!(if let SResult::Fail(Failure::Common(Common::Custom(ParseError::Rule { span }))) = comb.parse(span4) { span == span4.slice(22..) } else { false });
 /// ```
 #[inline]
-pub const fn spec<'f, 's>() -> Spec<'f, 's> { Spec { _f: PhantomData, _s: PhantomData } }
-
-
-
-
-
-/***** LIBRARY EXPECTS *****/
-/// ExpectsFormatter for the [`Spec`]-combinator.
-#[derive(Debug)]
-pub struct SpecExpects;
-impl Display for SpecExpects {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "Expected ")?;
-        self.expects_fmt(f, 0)
-    }
-}
-impl ExpectsFormatter for SpecExpects {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "zero or more rules") }
-}
-
-
-
-
-
-/***** LIBRARY COMBINATORS *****/
-/// Combinator returned by [`spec()`].
-pub struct Spec<'f, 's> {
-    _f: PhantomData<&'f ()>,
-    _s: PhantomData<&'s ()>,
-}
-impl<'f, 's> Expects<'static> for Spec<'f, 's> {
-    type Formatter = SpecExpects;
-    #[inline]
-    fn expects(&self) -> Self::Formatter { SpecExpects }
-}
-impl<'f, 's> Combinator<'static, &'f str, &'s str> for Spec<'f, 's> {
-    type Output = ast::Spec<'f, 's>;
-    type Error = ParseError<&'f str, &'s str>;
-
-    #[inline]
-    fn parse(&mut self, input: Span<'f, 's>) -> SResult<'static, Self::Output, &'f str, &'s str, Self::Error> {
-        match comb::all(multi::many0(seq::delimited(
-            error::transmute(utf8::whitespace0()),
-            comb::map_err(rules::rule(), |err| ParseError::Rule { span: err.span() }),
-            error::transmute(utf8::whitespace0()),
-        )))
-        .parse(input)
-        {
-            SResult::Ok(rem, rules) => SResult::Ok(rem, ast::Spec { rules }),
-            SResult::Fail(Failure::Common(Common::All { span })) => SResult::Fail(Failure::Common(Common::Custom(ParseError::Rule { span }))),
-            SResult::Fail(fail) => SResult::Fail(fail),
-            SResult::Error(err) => SResult::Error(err),
-        }
+#[comb(snack = ::ast_toolkit::snack, expected = "zero or more rules", Output = ast::Spec<F, S>, Error = ParseError<F, S>)]
+pub fn spec<F, S>(input: Span<F, S>) -> _
+where
+    F: Clone,
+    S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + Spannable + WhileUtf8,
+{
+    match comb::all(multi::many0(seq::delimited(
+        error::transmute(utf8::whitespace0()),
+        comb::map_err(rules::rule(), |err| ParseError::Rule { span: err.span() }),
+        error::transmute(utf8::whitespace0()),
+    )))
+    .parse(input)
+    {
+        SResult::Ok(rem, rules) => SResult::Ok(rem, ast::Spec { rules }),
+        SResult::Fail(Failure::Common(Common::All { span })) => SResult::Fail(Failure::Common(Common::Custom(ParseError::Rule { span }))),
+        SResult::Fail(fail) => SResult::Fail(fail),
+        SResult::Error(err) => SResult::Error(err),
     }
 }

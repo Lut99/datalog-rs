@@ -4,7 +4,7 @@
 //  Created:
 //    03 May 2024, 14:14:18
 //  Last edited:
-//    26 Nov 2024, 11:18:56
+//    28 Nov 2024, 16:53:16
 //  Auto updated?
 //    Yes
 //
@@ -88,10 +88,10 @@ fn main() {
     debug!("Loaded {} file(s)", sources.len());
 
     // Attempt to parse the files
-    let mut spec: Spec = Spec { rules: Vec::new() };
+    let mut spec: Spec<&str, &str> = Spec { rules: Vec::new() };
     for (what, source) in &sources {
         debug!("Parsing file '{what}'...");
-        let file_spec: Spec = match parser::parse(&what, &source) {
+        let file_spec: Spec<&str, &str> = match parser::parse::<&str, &str>(what, source) {
             Ok(spec) => spec,
             Err(err) => {
                 error!("{err}");

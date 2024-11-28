@@ -4,7 +4,7 @@
 //  Created:
 //    26 Mar 2024, 19:36:31
 //  Last edited:
-//    26 Nov 2024, 11:25:56
+//    28 Nov 2024, 16:51:31
 //  Auto updated?
 //    Yes
 //
@@ -42,8 +42,8 @@ use crate::log::{debug, trace};
 /***** TESTS *****/
 #[cfg(all(test, feature = "macros"))]
 mod tests {
-    use ast_toolkit_punctuated::Punctuated;
-    use ast_toolkit_span::Span;
+    use ast_toolkit::punctuated::Punctuated;
+    use ast_toolkit::span::Span;
     use datalog_macros::datalog;
 
     use super::*;
@@ -67,9 +67,9 @@ mod tests {
     }
 
     /// Makes an [`Atom`] conveniently.
-    fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Atom {
+    fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Atom<&'static str, &'static str> {
         // Make the punctuation
-        let mut punct: Punctuated<AtomArg, Comma> = Punctuated::new();
+        let mut punct: Punctuated<AtomArg<_, _>, Comma<_, _>> = Punctuated::new();
         for (i, arg) in args.into_iter().enumerate() {
             if i == 0 {
                 punct.push_first(AtomArg::Atom(Ident { value: Span::new("make_atom::arg", arg) }));
@@ -99,7 +99,7 @@ mod tests {
         setup_logger();
 
         // Try some constants
-        let consts: Spec = datalog! {
+        let consts: Spec<_, _> = datalog! {
             #![crate]
             foo. bar. baz.
         };
@@ -113,7 +113,7 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("baz", None)), Some(true));
 
         // Try some functions
-        let funcs: Spec = datalog! {
+        let funcs: Spec<_, _> = datalog! {
             #![crate]
             foo(bar). bar(baz). baz(quz).
         };
@@ -127,7 +127,7 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("baz", Some("quz"))), Some(true));
 
         // Try some rules
-        let rules: Spec = datalog! {
+        let rules: Spec<_, _> = datalog! {
             #![crate]
             foo. bar(foo) :- foo.
         };
@@ -140,7 +140,7 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("bar", Some("foo"))), Some(true));
 
         // Try some rules with negation!
-        let neg_rules: Spec = datalog! {
+        let neg_rules: Spec<_, _> = datalog! {
             #![crate]
             foo. bar(foo) :- foo. bar(bar) :- not bar.
         };
@@ -155,7 +155,7 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("bar", Some("bar"))), Some(true));
 
         // Now some cool rules with variables
-        let var_rules: Spec = datalog! {
+        let var_rules: Spec<_, _> = datalog! {
             #![crate]
             foo. bar. baz(foo). quz(X) :- baz(X). qux(X) :- not baz(X).
         };
@@ -174,7 +174,7 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("qux", Some("bar"))), Some(true));
 
         // Arity > 1
-        let big_rules: Spec = datalog! {
+        let big_rules: Spec<_, _> = datalog! {
             #![crate]
             foo. bar. baz(foo). quz(X, foo) :- baz(X), foo. qux(X, Y) :- not quz(X, Y).
         };
@@ -197,7 +197,7 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("qux", ["bar", "bar"])), Some(true));
 
         // Impossible rules
-        let con_rules: Spec = datalog! {
+        let con_rules: Spec<_, _> = datalog! {
             #![crate]
             foo :- not foo.
         };
@@ -217,7 +217,7 @@ mod tests {
 
 
         // Example 5.1
-        let five_one: Spec = datalog! {
+        let five_one: Spec<_, _> = datalog! {
             #![crate]
             a :- c, not b.
             b :- not a.
@@ -247,7 +247,7 @@ mod tests {
 
         // Example 5.2 (a)
         // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
-        let five_two_a: Spec = datalog! {
+        let five_two_a: Spec<_, _> = datalog! {
             #![crate]
             wins(X) :- mov(X, Y), not wins(Y).
 
@@ -274,7 +274,7 @@ mod tests {
 
         // Example 5.2 (b)
         // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
-        let five_two_b: Spec = datalog! {
+        let five_two_b: Spec<_, _> = datalog! {
             #![crate]
             wins(X) :- mov(X, Y), not wins(Y).
 
@@ -298,7 +298,7 @@ mod tests {
 
         // Example 5.2 (b)
         // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
-        let five_two_c: Spec = datalog! {
+        let five_two_c: Spec<_, _> = datalog! {
             #![crate]
             wins(X) :- mov(X, Y), not wins(Y).
 
@@ -327,7 +327,7 @@ mod tests {
 /// Defines logic errors over the quantification in rules.
 #[derive(Debug)]
 pub enum Error<'f, 's> {
-    QuantifyOverflow { rule: Rule<'f, 's>, max: usize },
+    QuantifyOverflow { rule: Rule<&'f str, &'s str>, max: usize },
 }
 impl<'f, 's> Display for Error<'f, 's> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
@@ -355,7 +355,7 @@ impl<'f, 's> error::Error for Error<'f, 's> {}
 /// # Returns
 /// A [`String`] representing the format.
 #[cfg(feature = "log")]
-fn format_rule_assign(rule: &Rule, assign: &HashMap<Ident, Ident>) -> String {
+fn format_rule_assign(rule: &Rule<&str, &str>, assign: &HashMap<Ident<&str, &str>, Ident<&str, &str>>) -> String {
     let mut buf: String = String::new();
 
     // Consequences
@@ -411,7 +411,7 @@ fn format_rule_assign(rule: &Rule, assign: &HashMap<Ident, Ident>) -> String {
 /// # Returns
 /// A [`String`] representing the format.
 #[cfg(feature = "log")]
-fn format_lit_assign(lit: &crate::ast::Literal, assign: &HashMap<Ident, Ident>) -> String {
+fn format_lit_assign(lit: &crate::ast::Literal<&str, &str>, assign: &HashMap<Ident<&str, &str>, Ident<&str, &str>>) -> String {
     format!(
         "{}{}({})",
         if lit.polarity() { "" } else { "not " },
@@ -438,7 +438,7 @@ fn format_lit_assign(lit: &crate::ast::Literal, assign: &HashMap<Ident, Ident>) 
 /// # Returns
 /// A [`String`] representing the format.
 #[cfg(feature = "log")]
-fn format_atom_assign(atom: &crate::ast::Atom, assign: &HashMap<Ident, Ident>) -> String {
+fn format_atom_assign(atom: &crate::ast::Atom<&str, &str>, assign: &HashMap<Ident<&str, &str>, Ident<&str, &str>>) -> String {
     format!(
         "{}({})",
         atom.ident,
@@ -478,18 +478,18 @@ fn format_atom_assign(atom: &crate::ast::Atom, assign: &HashMap<Ident, Ident>) -
 /// This function can error if the total number of arguments in a rule exceeds `LEN`,
 pub fn immediate_consequence<'f: 'r, 's: 'r, 'r, 'i, I>(rules: I, int: &'i mut Interpretation<'f, 's>) -> Result<bool, Error<'f, 's>>
 where
-    I: IntoIterator<Item = &'r Rule<'f, 's>>,
+    I: IntoIterator<Item = &'r Rule<&'f str, &'s str>>,
     I::IntoIter: Clone,
 {
     let rules = rules.into_iter();
     debug!("Running immediate consequent transformation");
 
     // Some buffer referring to all the constants in the interpretation.
-    let consts: IndexSet<Ident<'f, 's>> = int.find_existing_consts();
+    let consts: IndexSet<Ident<_, _>> = int.find_existing_consts();
     // Some buffer for holding variable quantifiers
-    let mut vars: HashMap<Ident, VarQuantifier> = HashMap::new();
+    let mut vars: HashMap<Ident<_, _>, VarQuantifier> = HashMap::new();
     // Some buffer for holding variable assignments
-    let mut assign: HashMap<Ident, Ident> = HashMap::new();
+    let mut assign: HashMap<Ident<_, _>, Ident<_, _>> = HashMap::new();
 
     // This transformation is saturating, so continue until the database did not change anymore.
     // NOTE: Monotonic because we can never remove truths, inferring the same fact does not count as a change and we are iterating over a Herbrand instantiation so our search space is finite (for $Datalog^\neg$, at least).
@@ -599,7 +599,7 @@ where
 /// This function can error if the total number of arguments in a rule exceeds `LEN`.
 pub fn alternating_fixpoint<'f: 'r, 's: 'r, 'r, I>(rules: I) -> Result<Interpretation<'f, 's>, Error<'f, 's>>
 where
-    I: IntoIterator<Item = &'r Rule<'f, 's>>,
+    I: IntoIterator<Item = &'r Rule<&'f str, &'s str>>,
     I::IntoIter: Clone,
 {
     let mut int: Interpretation = Interpretation::new();
@@ -623,7 +623,7 @@ where
 /// This function can error if the total number of arguments in a rule exceeds `LEN`.
 pub fn alternating_fixpoint_mut<'f: 'r, 's: 'r, 'r, 'i, I>(rules: I, int: &'i mut Interpretation<'f, 's>) -> Result<(), Error<'f, 's>>
 where
-    I: IntoIterator<Item = &'r Rule<'f, 's>>,
+    I: IntoIterator<Item = &'r Rule<&'f str, &'s str>>,
     I::IntoIter: Clone,
 {
     let rules = rules.into_iter();
@@ -676,7 +676,7 @@ where
 
 /***** LIBRARY *****/
 // Interpreter extensions for the [`Spec`].
-impl<'f, 's> Spec<'f, 's> {
+impl<'f, 's> Spec<&'f str, &'s str> {
     /// Performs forward derivation of the Spec.
     ///
     /// In the paper, this is called the _immediate consequence operator_. It is simply defined as

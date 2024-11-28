@@ -4,7 +4,7 @@
 //  Created:
 //    18 Mar 2024, 12:04:42
 //  Last edited:
-//    08 May 2024, 11:25:19
+//    28 Nov 2024, 17:00:01
 //  Auto updated?
 //    Yes
 //
@@ -12,37 +12,34 @@
 //!   Defines parsers for $Datalog^\neg$ keywords.
 //
 
-use ast_toolkit_snack::combinator::{self as comb, Map};
-use ast_toolkit_snack::error::{self, Transmute};
-use ast_toolkit_snack::sequence::{self as seq, Delim};
-use ast_toolkit_snack::utf8::complete::{self as utf8, Tag};
-use ast_toolkit_snack::Combinator;
+use ast_toolkit::snack::combinator::{self as comb};
+use ast_toolkit::snack::span::{LenBytes, MatchBytes, WhileUtf8};
+use ast_toolkit::snack::utf8::complete::{self as utf8};
+use ast_toolkit::snack::{comb, Combinator};
+use ast_toolkit::span::Span;
+use ast_toolkit::tokens::snack::complete::{utf8_delimiter, utf8_token, Utf8Delimiter, Utf8Token};
 
-use crate::ast;
+use crate::ast::{Arrow, Comma, Dot, Not, Parens};
 
 
-/***** TYPE ALIASES *****/
-/// The returned type of various token combinators.
-pub type Token<'f, 's, T> = Map<&'f str, &'s str, Tag<'static, &'f str, &'s str>, fn(Span<'f, 's>) -> T>;
-
-/// The returned type of the [`parens()`]-combinator.
-pub type Parens<'t, 'f, 's, C> = Map<
-    &'f str,
-    &'s str,
-    Delim<
-        &'f str,
-        &'s str,
-        Transmute<&'f str, &'s str, Tag<'static, &'f str, &'s str>, <C as Combinator<'t, &'f str, &'s str>>::Error>,
-        C,
-        Transmute<&'f str, &'s str, Tag<'static, &'f str, &'s str>, <C as Combinator<'t, &'f str, &'s str>>::Error>,
-    >,
-    fn(
-        (Span<'f, 's>, <C as Combinator<'t, &'f str, &'s str>>::Output, Span<'f, 's>),
-    ) -> (ast::Parens<'f, 's>, <C as Combinator<'t, &'f str, &'s str>>::Output),
->;
-
-/// Convenience alias for a [`Span`](ast_toolkit_span::Span) over static strings.
-type Span<'f, 's> = ast_toolkit_span::Span<&'f str, &'s str>;
+/***** HELPER FUNCTIONS *****/
+/// Combinator that we use to match the end of a token.
+#[inline]
+#[comb(snack = ::ast_toolkit::snack, expected = "the end of a token")]
+pub fn token_end<F, S>(input: Span<F, S>) -> _
+where
+    F: Clone,
+    S: Clone + LenBytes + WhileUtf8,
+{
+    comb::not(utf8::while1(|c: &str| -> bool {
+        if c.len() != 1 {
+            return false;
+        }
+        let c: char = c.chars().next().unwrap();
+        (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_'
+    }))
+    .parse(input)
+}
 
 
 
@@ -59,9 +56,10 @@ type Span<'f, 's> = ast_toolkit_span::Span<&'f str, &'s str>;
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::error::{Common, Failure};
-/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit::snack::error::{Common, Failure};
+/// use ast_toolkit::snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit::span::Span;
+/// use ast_toolkit::tokens::snack::complete::ParseError;
 /// use datalog::ast::Arrow;
 /// use datalog::parser::tokens::arrow;
 ///
@@ -70,9 +68,19 @@ type Span<'f, 's> = ast_toolkit_span::Span<&'f str, &'s str>;
 ///
 /// let mut comb = arrow();
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(2..), Arrow { span: span1.slice(..2) }));
-/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// assert!(matches!(
+///     comb.parse(span2),
+///     SResult::Fail(Failure::Common(Common::Custom(ParseError::Utf8Token { .. })))
+/// ));
 /// ```
-pub const fn arrow<'f, 's>() -> Token<'f, 's, ast::Arrow<'f, 's>> { comb::map(utf8::tag(":-"), |span| ast::Arrow { span }) }
+#[inline]
+pub const fn arrow<'t, F, S>() -> Utf8Token<F, S, Arrow<F, S>, TokenEnd<F, S>>
+where
+    F: Clone,
+    S: Clone + LenBytes + MatchBytes + WhileUtf8,
+{
+    utf8_token(token_end())
+}
 
 /// Combinator for parsing a `,`.
 ///
@@ -84,9 +92,10 @@ pub const fn arrow<'f, 's>() -> Token<'f, 's, ast::Arrow<'f, 's>> { comb::map(ut
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::error::{Common, Failure};
-/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit::snack::error::{Common, Failure};
+/// use ast_toolkit::snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit::span::Span;
+/// use ast_toolkit::tokens::snack::complete::ParseError;
 /// use datalog::ast::Comma;
 /// use datalog::parser::tokens::comma;
 ///
@@ -95,9 +104,19 @@ pub const fn arrow<'f, 's>() -> Token<'f, 's, ast::Arrow<'f, 's>> { comb::map(ut
 ///
 /// let mut comb = comma();
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(1..), Comma { span: span1.slice(..1) }));
-/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// assert!(matches!(
+///     comb.parse(span2),
+///     SResult::Fail(Failure::Common(Common::Custom(ParseError::Utf8Token { .. })))
+/// ));
 /// ```
-pub const fn comma<'f, 's>() -> Token<'f, 's, ast::Comma<'f, 's>> { comb::map(utf8::tag(","), |span| ast::Comma { span }) }
+#[inline]
+pub const fn comma<'t, F, S>() -> Utf8Token<F, S, Comma<F, S>, TokenEnd<F, S>>
+where
+    F: Clone,
+    S: Clone + LenBytes + MatchBytes + WhileUtf8,
+{
+    utf8_token(token_end())
+}
 
 /// Combinator for parsing a `.`.
 ///
@@ -109,9 +128,10 @@ pub const fn comma<'f, 's>() -> Token<'f, 's, ast::Comma<'f, 's>> { comb::map(ut
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::error::{Common, Failure};
-/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit::snack::error::{Common, Failure};
+/// use ast_toolkit::snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit::span::Span;
+/// use ast_toolkit::tokens::snack::complete::ParseError;
 /// use datalog::ast::Dot;
 /// use datalog::parser::tokens::dot;
 ///
@@ -120,9 +140,19 @@ pub const fn comma<'f, 's>() -> Token<'f, 's, ast::Comma<'f, 's>> { comb::map(ut
 ///
 /// let mut comb = dot();
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(1..), Dot { span: span1.slice(..1) }));
-/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// assert!(matches!(
+///     comb.parse(span2),
+///     SResult::Fail(Failure::Common(Common::Custom(ParseError::Utf8Token { .. })))
+/// ));
 /// ```
-pub const fn dot<'f, 's>() -> Token<'f, 's, ast::Dot<'f, 's>> { comb::map(utf8::tag("."), |span| ast::Dot { span }) }
+#[inline]
+pub const fn dot<'t, F, S>() -> Utf8Token<F, S, Dot<F, S>, TokenEnd<F, S>>
+where
+    F: Clone,
+    S: Clone + LenBytes + MatchBytes + WhileUtf8,
+{
+    utf8_token(token_end())
+}
 
 /// Combinator for parsing a `not`-keyword.
 ///
@@ -134,9 +164,10 @@ pub const fn dot<'f, 's>() -> Token<'f, 's, ast::Dot<'f, 's>> { comb::map(utf8::
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::error::{Common, Failure};
-/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit::snack::error::{Common, Failure};
+/// use ast_toolkit::snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit::span::Span;
+/// use ast_toolkit::tokens::snack::complete::ParseError;
 /// use datalog::ast::Not;
 /// use datalog::parser::tokens::not;
 ///
@@ -145,9 +176,19 @@ pub const fn dot<'f, 's>() -> Token<'f, 's, ast::Dot<'f, 's>> { comb::map(utf8::
 ///
 /// let mut comb = not();
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(3..), Not { span: span1.slice(..3) }));
-/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::TagUtf8 { .. }))));
+/// assert!(matches!(
+///     comb.parse(span2),
+///     SResult::Fail(Failure::Common(Common::Custom(ParseError::Utf8Token { .. })))
+/// ));
 /// ```
-pub const fn not<'f, 's>() -> Token<'f, 's, ast::Not<'f, 's>> { comb::map(utf8::tag("not"), |span| ast::Not { span }) }
+#[inline]
+pub const fn not<'t, F, S>() -> Utf8Token<F, S, Not<F, S>, TokenEnd<F, S>>
+where
+    F: Clone,
+    S: Clone + LenBytes + MatchBytes + WhileUtf8,
+{
+    utf8_token(token_end())
+}
 
 /// Combinator for parsing parenthesis with something else in between.
 ///
@@ -162,10 +203,11 @@ pub const fn not<'f, 's>() -> Token<'f, 's, ast::Not<'f, 's>> { comb::map(utf8::
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_snack::combinator::nop;
-/// use ast_toolkit_snack::error::{Common, Failure};
-/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit::snack::combinator::nop;
+/// use ast_toolkit::snack::error::{Common, Failure};
+/// use ast_toolkit::snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit::span::Span;
+/// use ast_toolkit::tokens::snack::complete::ParseError;
 /// use datalog::ast::Parens;
 /// use datalog::parser::tokens::parens;
 ///
@@ -175,15 +217,19 @@ pub const fn not<'f, 's>() -> Token<'f, 's, ast::Not<'f, 's>> { comb::map(utf8::
 /// let mut comb = parens(nop());
 /// assert_eq!(
 ///     comb.parse(span1).unwrap(),
-///     (span1.slice(2..), (Parens { open: span1.slice(..1), close: span1.slice(1..2) }, ()))
+///     (span1.slice(2..), ((), Parens { open: span1.slice(..1), close: span1.slice(1..2) }))
 /// );
-/// assert!(matches!(comb.parse(span2), SResult::Fail(Failure::Common(Common::DelimOpen { .. }))));
+/// assert!(matches!(
+///     comb.parse(span2),
+///     SResult::Fail(Failure::Common(Common::Custom(ParseError::Utf8OpenToken { .. })))
+/// ));
 /// ```
-pub const fn parens<'t, 'f, 's, C>(comb: C) -> Parens<'t, 'f, 's, C>
+#[inline]
+pub const fn parens<'t, F, S, C>(comb: C) -> Utf8Delimiter<F, S, Parens<F, S>, C>
 where
-    C: Combinator<'t, &'f str, &'s str>,
+    F: Clone,
+    S: Clone + MatchBytes,
+    C: Combinator<'t, F, S>,
 {
-    comb::map(seq::delim(error::transmute(utf8::tag("(")), comb, error::transmute(utf8::tag(")"))), |(open, middle, close)| {
-        (ast::Parens { open, close }, middle)
-    })
+    utf8_delimiter(comb)
 }

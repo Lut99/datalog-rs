@@ -4,7 +4,7 @@
 //  Created:
 //    03 May 2024, 13:42:38
 //  Last edited:
-//    17 May 2024, 18:17:35
+//    28 Nov 2024, 16:46:57
 //  Auto updated?
 //    Yes
 //
@@ -20,16 +20,17 @@ pub mod rules;
 pub mod specs;
 pub mod tokens;
 
+use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
 // Imports
-use ast_toolkit_snack::{Combinator as _, Result as SResult};
-use ast_toolkit_span::Span;
+use ast_toolkit::snack::{Combinator as _, Result as SResult};
+use ast_toolkit::span::{Span, Spannable};
 
 use crate::ast::Spec;
 
 
 /***** ERRORS *****/
 /// The concrete error type returned by the [`parse()`] function.
-pub type Error<'f, 's> = ast_toolkit_snack::error::Error<'static, &'f str, &'s str, specs::ParseError<&'f str, &'s str>>;
+pub type Error<F, S> = ast_toolkit::snack::error::Error<'static, F, S, specs::ParseError<F, S>>;
 
 
 
@@ -48,7 +49,11 @@ pub type Error<'f, 's> = ast_toolkit_snack::error::Error<'static, &'f str, &'s s
 /// # Errors
 /// This function returns an [`Error`] if the given `input` was not a valid $Datalog^\neg$-program.
 #[inline]
-pub fn parse<'f, 's>(what: &'f str, source: &'s str) -> Result<Spec<'f, 's>, Error<'f, 's>> {
+pub fn parse<F, S>(what: F, source: S) -> Result<Spec<F, S>, Error<F, S>>
+where
+    F: Clone,
+    S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + Spannable + WhileUtf8,
+{
     // Simply parse as a literal
     match specs::spec().parse(Span::new(what, source)) {
         SResult::Ok(_, res) => Ok(res),

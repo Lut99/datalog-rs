@@ -1,6 +1,6 @@
 [package]
 name = "datalog"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Tim Müller"]
 repository = "https://github.com/Lut99/datalog-rs"
@@ -19,10 +19,7 @@ required-features = ["railroad"]
 
 
 [dependencies]
-ast-toolkit-punctuated = { git = "https://github.com/Lut99/ast-toolkit-rs", branch = "snack" }
-ast-toolkit-railroad = { git = "https://github.com/Lut99/ast-toolkit-rs", branch = "snack", features = ["derive"], optional = true }
-ast-toolkit-snack = { git = "https://github.com/Lut99/ast-toolkit-rs", branch = "snack", features = ["derive", "punctuated"], optional = true }
-ast-toolkit-span = { git = "https://github.com/Lut99/ast-toolkit-rs", branch = "snack" }
+ast-toolkit = { git = "https://github.com/Lut99/ast-toolkit-rs", features = ["derive", "punctuated", "span", "tokens"] }
 enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
 indexmap = "2.6.0"
 itertools = "0.13.0"
@@ -43,13 +40,15 @@ log = "0.4.22"
 [features]
 default = []
 
+transitions = []
+
 interpreter = []
-parser = ["dep:ast-toolkit-snack"]
+parser = ["ast-toolkit/snack"]
 reserialize = []
 
 macros = ["dep:datalog-macros"]
 log = ["dep:log"]
-railroad = ["dep:ast-toolkit-railroad"]
+railroad = ["ast-toolkit/railroad"]
 
 
 [workspace]

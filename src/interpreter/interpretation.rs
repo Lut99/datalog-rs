@@ -4,7 +4,7 @@
 //  Created:
 //    21 Mar 2024, 10:22:40
 //  Last edited:
-//    26 Nov 2024, 11:25:27
+//    28 Nov 2024, 16:49:09
 //  Auto updated?
 //    Yes
 //
@@ -25,7 +25,7 @@ use crate::log::warn;
 /***** TESTS *****/
 #[cfg(all(test, feature = "macros"))]
 mod tests {
-    use ast_toolkit_punctuated::Punctuated;
+    use ast_toolkit::punctuated::Punctuated;
     use datalog_macros::datalog;
 
     use super::*;
@@ -52,9 +52,9 @@ mod tests {
     // fn make_ident(name: &'static str) -> Ident { Ident { value: Span::new("make_ident::value", name) } }
 
     /// Makes an [`Atom`] conveniently.
-    fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Atom {
+    fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Atom<&'static str, &'static str> {
         // Make the punctuation
-        let mut punct: Punctuated<AtomArg, Comma> = Punctuated::new();
+        let mut punct: Punctuated<AtomArg<&'static str, &'static str>, Comma<&'static str, &'static str>> = Punctuated::new();
         for (i, arg) in args.into_iter().enumerate() {
             if i == 0 {
                 punct.push_first(AtomArg::Atom(Ident { value: Span::new("make_atom::arg", arg) }));
@@ -84,14 +84,14 @@ mod tests {
         setup_logger();
 
         // Empty spec first
-        let empty: Spec = datalog! {
+        let empty: Spec<_, _> = datalog! {
             #![crate]
         };
         let int: Interpretation = Interpretation::from_universe(&empty);
         assert!(int.is_empty());
 
         // Spec with only constants (one, first)
-        let one: Spec = datalog! {
+        let one: Spec<_, _> = datalog! {
             #![crate]
             foo.
         };
@@ -103,7 +103,7 @@ mod tests {
         assert_eq!(int.closed_world_truth(&make_atom("bingo", ["boingo"])), Some(false));
 
         // Multiple constants
-        let consts: Spec = datalog! {
+        let consts: Spec<_, _> = datalog! {
             #![crate]
             foo. bar. baz.
         };
@@ -115,7 +115,7 @@ mod tests {
         assert_eq!(int.closed_world_truth(&make_atom("bingo", ["boingo"])), Some(false));
 
         // Duplicate constants
-        let dups: Spec = datalog! {
+        let dups: Spec<_, _> = datalog! {
             #![crate]
             foo. foo. bar.
         };
@@ -127,7 +127,7 @@ mod tests {
         assert_eq!(int.closed_world_truth(&make_atom("bingo", ["boingo"])), Some(false));
 
         // Spec with arity-1 atoms (functions)
-        let funcs: Spec = datalog! {
+        let funcs: Spec<_, _> = datalog! {
             #![crate]
             foo(bar). bar(baz). baz(quz).
         };
@@ -143,7 +143,7 @@ mod tests {
         assert_eq!(int.closed_world_truth(&make_atom("bingo", ["boingo"])), Some(false));
 
         // Mixed arity
-        let arity: Spec = datalog! {
+        let arity: Spec<_, _> = datalog! {
             #![crate]
             foo. bar(). baz(quz). quz(qux, quux). corge(grault, garply, waldo).
         };
@@ -159,7 +159,7 @@ mod tests {
         assert_eq!(int.closed_world_truth(&make_atom("bingo", ["boingo"])), Some(false));
 
         // Full rules
-        let rules: Spec = datalog! {
+        let rules: Spec<_, _> = datalog! {
             #![crate]
             foo. bar(baz). quz(X) :- bar(X), qux(quux).
         };
@@ -220,7 +220,7 @@ impl VarQuantifier {
     /// # Returns
     /// The next [`Ident`] in line.
     #[cfg_attr(debug_assertions, track_caller)]
-    pub fn next<'f, 's, 'c>(&mut self, consts: &'c IndexSet<Ident<'f, 's>>, n_vars: usize) -> Option<Ident<'f, 's>> {
+    pub fn next<'f, 's, 'c>(&mut self, consts: &'c IndexSet<Ident<&'f str, &'s str>>, n_vars: usize) -> Option<Ident<&'f str, &'s str>> {
         // Check if `i` isn't too large
         #[cfg(debug_assertions)]
         if self.i >= n_vars {
@@ -313,7 +313,7 @@ pub struct Interpretation<'f, 's, R = RandomState> {
     /// The elements in this set for which the truth value is ambigious or contradictory.
     unknown: HashSet<u64>,
     /// All definitions in the Interpretation.
-    defs:    HashMap<u64, Atom<'f, 's>>,
+    defs:    HashMap<u64, Atom<&'f str, &'s str>>,
     /// The random state used to compute hashes.
     state:   R,
 }
@@ -354,7 +354,7 @@ impl<'f, 's, R: BuildHasher + Default> Interpretation<'f, 's, R> {
     /// # Returns
     /// An Interpretation with a lot of unknown atoms in it.
     #[inline]
-    pub fn from_universe(spec: &Spec<'f, 's>) -> Self {
+    pub fn from_universe(spec: &Spec<&'f str, &'s str>) -> Self {
         // Built an empty self first
         let mut res: Self = Self::new();
         res.extend_universe(&spec.rules);
@@ -469,8 +469,8 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
     /// # Returns
     /// An [`IndexSet`] that can be used to generate, say, [`VarQuantifier`]s.
     #[inline]
-    pub fn find_existing_consts(&self) -> IndexSet<Ident<'f, 's>> {
-        let mut consts: IndexSet<Ident<'f, 's>> = IndexSet::new();
+    pub fn find_existing_consts(&self) -> IndexSet<Ident<&'f str, &'s str>> {
+        let mut consts: IndexSet<Ident<&'f str, &'s str>> = IndexSet::new();
         for atom in self.defs.values() {
             if atom.args.as_ref().map(|a| a.args.len()).unwrap_or(0) == 0 {
                 consts.insert(atom.ident);
@@ -490,7 +490,7 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
     /// # Returns
     /// Some [`u64`] encoding the `atom`'s hash.
     #[inline]
-    pub fn hash_atom(&self, atom: &Atom) -> u64 {
+    pub fn hash_atom(&self, atom: &Atom<&'f str, &'s str>) -> u64 {
         let mut state: R::Hasher = self.state.build_hasher();
 
         // Hash the identifier, then all arguments
@@ -524,7 +524,7 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
     /// This function can panic if there is a variable in the `atom` that is not in the `assignment`.
     #[inline]
     #[track_caller]
-    pub fn hash_atom_with_assign(&self, atom: &Atom, assign: &HashMap<Ident, Ident>) -> u64 {
+    pub fn hash_atom_with_assign(&self, atom: &Atom<&'f str, &'s str>, assign: &HashMap<Ident<&'f str, &'s str>, Ident<&'f str, &'s str>>) -> u64 {
         let mut state: R::Hasher = self.state.build_hasher();
 
         // Hash the identifier, then all arguments
@@ -559,7 +559,7 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
     /// This function can panic if the atom is not in the list of unknown truths.
     #[inline]
     #[track_caller]
-    pub fn learn(&mut self, atom: &Atom, truth: bool) -> Option<bool> {
+    pub fn learn(&mut self, atom: &Atom<&'f str, &'s str>, truth: bool) -> Option<bool> {
         let hash: u64 = self.hash_atom(&atom);
 
         // Attempt to find the atom in the list of truths
@@ -615,7 +615,12 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
     /// This function can panic if the atom is not in the list of unknown truths, or if there was a variable in `atom` that was not in the `assign`ment.
     #[inline]
     #[track_caller]
-    pub fn learn_with_assign(&mut self, atom: &Atom, assign: &HashMap<Ident, Ident>, truth: bool) -> Option<bool> {
+    pub fn learn_with_assign(
+        &mut self,
+        atom: &Atom<&'f str, &'s str>,
+        assign: &HashMap<Ident<&'f str, &'s str>, Ident<&'f str, &'s str>>,
+        truth: bool,
+    ) -> Option<bool> {
         let hash: u64 = self.hash_atom_with_assign(atom, assign);
 
         // Attempt to find the atom in the list of truths
@@ -667,7 +672,7 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
     /// # Returns
     /// True if we already considered this atom in the universe, or false otherwise.
     #[inline]
-    pub fn insert(&mut self, atom: Atom<'f, 's>) -> bool {
+    pub fn insert(&mut self, atom: Atom<&'f str, &'s str>) -> bool {
         let hash: u64 = self.hash_atom(&atom);
 
         // Just to be sure, remove it from the true & false lists
@@ -691,13 +696,13 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
     where
         'f: 'r,
         's: 'r,
-        I: IntoIterator<Item = &'r Rule<'f, 's>>,
+        I: IntoIterator<Item = &'r Rule<&'f str, &'s str>>,
         I::IntoIter: Clone,
     {
         let rules = rules.into_iter();
 
         // First, find the Herbrand 0-base of the spec (i.e., constants only)
-        let mut consts: IndexSet<Ident<'f, 's>> = IndexSet::new();
+        let mut consts: IndexSet<Ident<&'f str, &'s str>> = IndexSet::new();
         for rule in rules.clone() {
             // Go over the consequences only (since these are the only ones that can be true)
             for cons in rule.consequences.values() {
@@ -711,7 +716,7 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
         // Then, go over the rules to instantiate any variables in the rules with the assignment
         // NOTE: Is an IndexMap to have predictable assignment order, nice for testing
         let mut vars: IndexMap<&str, VarQuantifier> = IndexMap::new();
-        let mut assign: HashMap<&str, Ident<'f, 's>> = HashMap::new();
+        let mut assign: HashMap<&str, Ident<&'f str, &'s str>> = HashMap::new();
         for rule in rules {
             // Build quantifiers over the variables in the rule
             vars.clear();
@@ -755,12 +760,12 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
                         })
                     })) {
                         // Turn this atom into a concrete instance, if it has variables
-                        let atom: Atom<'f, 's> = if atom.has_vars() {
+                        let atom: Atom<&'f str, &'s str> = if atom.has_vars() {
                             // Apply that assignment to the variables
-                            let mut atom: Atom = atom.clone();
+                            let mut atom: Atom<_, _> = atom.clone();
                             for arg in atom.args.iter_mut().flat_map(|a| a.args.values_mut()) {
                                 // Get the identifier of this variable (if it is any)
-                                let v: Ident = if let AtomArg::Var(v) = arg {
+                                let v: Ident<_, _> = if let AtomArg::Var(v) = arg {
                                     *v
                                 } else {
                                     continue;
@@ -813,7 +818,7 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
     /// # Returns
     /// True if we know that this atom has this truth value, or false otherwise. This may mean we know it has the other truth value (which is _not_ mutually exclusive with the first case! I.e., we may know of it _both_ existing!).
     #[inline]
-    pub fn knows_about_atom(&self, atom: &Atom, truth: bool) -> bool {
+    pub fn knows_about_atom(&self, atom: &Atom<&'f str, &'s str>, truth: bool) -> bool {
         let hash: u64 = self.hash_atom(&atom);
 
         // Do the procedure above
@@ -833,7 +838,12 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
     /// # Returns
     /// True if we know that this atom has this truth value, or false otherwise. This may mean we know it has the other truth value (which is _not_ mutually exclusive with the first case! I.e., we may know of it _both_ existing!).
     #[inline]
-    pub fn knows_about_atom_with_assign(&self, atom: &Atom, assign: &HashMap<Ident, Ident>, truth: bool) -> bool {
+    pub fn knows_about_atom_with_assign(
+        &self,
+        atom: &Atom<&'f str, &'s str>,
+        assign: &HashMap<Ident<&'f str, &'s str>, Ident<&'f str, &'s str>>,
+        truth: bool,
+    ) -> bool {
         let hash: u64 = self.hash_atom_with_assign(&atom, assign);
 
         // Do the procedure above
@@ -851,7 +861,7 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
     /// - If the atom is unknown, returns [`None`]; or
     /// - Returns [`Some(false)`] if the atom doesn't exist in the universe.
     #[inline]
-    pub fn closed_world_truth(&self, atom: &Atom) -> Option<bool> {
+    pub fn closed_world_truth(&self, atom: &Atom<&'f str, &'s str>) -> Option<bool> {
         let hash: u64 = self.hash_atom(&atom);
 
         // Do the procedure above
@@ -877,7 +887,7 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
     /// - If the atom is unknown, returns [`None`]; or
     /// - Returns [`None`] if the atom doesn't exist in the universe.
     #[inline]
-    pub fn open_world_truth(&self, atom: &Atom) -> Option<bool> {
+    pub fn open_world_truth(&self, atom: &Atom<&'f str, &'s str>) -> Option<bool> {
         let hash: u64 = self.hash_atom(&atom);
 
         // Do the procedure above
@@ -908,7 +918,11 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
     /// This function panics if there was a variable in `atom` that was not in the `assign`ment.
     #[inline]
     #[track_caller]
-    pub fn open_world_truth_with_assign(&self, atom: &Atom, assign: &HashMap<Ident, Ident>) -> Option<bool> {
+    pub fn open_world_truth_with_assign(
+        &self,
+        atom: &Atom<&'f str, &'s str>,
+        assign: &HashMap<Ident<&'f str, &'s str>, Ident<&'f str, &'s str>>,
+    ) -> Option<bool> {
         let hash: u64 = self.hash_atom_with_assign(&atom, assign);
 
         // Do the procedure above
@@ -928,9 +942,9 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
 impl<'f, 's, R: BuildHasher> Display for Interpretation<'f, 's, R> {
     fn fmt(&self, f: &mut Formatter) -> FResult {
         // Get a sorted list of both kinds of atoms
-        let mut tknown: Vec<&Atom> = self.tknown.iter().map(|h| self.defs.get(h).unwrap()).collect();
-        let mut fknown: Vec<&Atom> = self.fknown.iter().map(|h| self.defs.get(h).unwrap()).collect();
-        let mut unknown: Vec<&Atom> = self.unknown.iter().map(|h| self.defs.get(h).unwrap()).collect();
+        let mut tknown: Vec<&Atom<_, _>> = self.tknown.iter().map(|h| self.defs.get(h).unwrap()).collect();
+        let mut fknown: Vec<&Atom<_, _>> = self.fknown.iter().map(|h| self.defs.get(h).unwrap()).collect();
+        let mut unknown: Vec<&Atom<_, _>> = self.unknown.iter().map(|h| self.defs.get(h).unwrap()).collect();
         tknown.sort_by(|i1, i2| {
             i1.ident
                 .value

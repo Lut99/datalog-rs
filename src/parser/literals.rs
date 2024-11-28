@@ -4,7 +4,7 @@
 //  Created:
 //    07 May 2024, 14:20:04
 //  Last edited:
-//    08 May 2024, 11:25:47
+//    28 Nov 2024, 17:13:28
 //  Auto updated?
 //    Yes
 //
@@ -13,48 +13,76 @@
 //
 
 use std::error::Error;
-use std::fmt::{Display, Formatter, Result as FResult};
-use std::marker::PhantomData;
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
-use ast_toolkit_snack::utf8::complete as utf8;
-use ast_toolkit_snack::{branch, combinator as comb, error, sequence as seq, Combinator, Expects, ExpectsFormatter, Result as SResult};
-use ast_toolkit_span::Spanning;
+use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
+use ast_toolkit::snack::utf8::complete as utf8;
+use ast_toolkit::snack::{branch, comb, combinator as comb, error, sequence as seq, Result as SResult};
+use ast_toolkit::span::{Span, Spanning};
 
 use super::{atoms, tokens};
 use crate::ast;
 
 
-/***** TYPE ALIASES *****/
-/// Convenience alias for a [`Span`](ast_toolkit_span::Span) over static strings.
-type Span<'f, 's> = ast_toolkit_span::Span<&'f str, &'s str>;
-
-
-
-
-
 /***** ERRORS *****/
 /// Errors returned when parsing literals and related.
-#[derive(Debug)]
-pub enum ParseError<'f, 's> {
+pub enum ParseError<F, S> {
     /// Failed to parse an atom.
-    Atom { span: Span<'f, 's> },
+    Atom { span: Span<F, S> },
+    /// Failed to parse a `not`-keyword.
+    Not { span: Span<F, S> },
 }
-impl<'f, 's> Display for ParseError<'f, 's> {
+impl<F, S> Debug for ParseError<F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        use ParseError::*;
+        match self {
+            Atom { span } => {
+                let mut fmt = f.debug_struct("ParseError::Atom");
+                fmt.field("span", span);
+                fmt.finish()
+            },
+            Not { span } => {
+                let mut fmt = f.debug_struct("ParseError::Not");
+                fmt.field("span", span);
+                fmt.finish()
+            },
+        }
+    }
+}
+impl<F, S> Display for ParseError<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         use ParseError::*;
         match self {
             Atom { .. } => write!(f, "Expected an atom"),
+            Not { .. } => write!(f, "Expected a \"not\""),
         }
     }
 }
-impl<'f, 's> Error for ParseError<'f, 's> {}
-impl<'f, 's> Spanning<&'f str, &'s str> for ParseError<'f, 's> {
+impl<F, S> Error for ParseError<F, S> {}
+impl<F, S> Spanning<F, S> for ParseError<F, S>
+where
+    F: Clone,
+    S: Clone,
+{
     #[inline]
-    fn span(&self) -> Span<'f, 's> {
+    fn span(&self) -> Span<F, S> {
         use ParseError::*;
         match self {
-            Atom { span } => *span,
+            Atom { span } => span.clone(),
+            Not { span } => span.clone(),
+        }
+    }
+
+    #[inline]
+    fn into_span(self) -> Span<F, S>
+    where
+        Self: Sized,
+    {
+        match self {
+            Self::Atom { span } => span,
+            Self::Not { span } => span,
         }
     }
 }
@@ -74,10 +102,10 @@ impl<'f, 's> Spanning<&'f str, &'s str> for ParseError<'f, 's> {
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_punctuated::punct;
-/// use ast_toolkit_snack::error::{Common, Error, Failure};
-/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit::punctuated::punct;
+/// use ast_toolkit::snack::error::{Common, Error, Failure};
+/// use ast_toolkit::snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit::span::Span;
 /// use datalog::ast::{Literal, Atom, AtomArg, AtomArgs, Comma, Ident, NegAtom, Not, Parens};
 /// use datalog::parser::literals::{literal, ParseError};
 ///
@@ -134,7 +162,18 @@ impl<'f, 's> Spanning<&'f str, &'s str> for ParseError<'f, 's> {
 /// ));
 /// ```
 #[inline]
-pub const fn literal<'f, 's>() -> Literal<'f, 's> { Literal { _f: PhantomData, _s: PhantomData } }
+#[comb(snack = ::ast_toolkit::snack, expected = "either a positive or negative atom", Output = ast::Literal<F, S>, Error = ParseError<F, S>)]
+pub fn literal<F, S>(input: Span<F, S>) -> _
+where
+    F: Clone,
+    S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + WhileUtf8,
+{
+    branch::alt((
+        comb::map(neg_atom(), ast::Literal::NegAtom),
+        comb::map(comb::map_err(atoms::atom(), |err| ParseError::Atom { span: err.into_span() }), ast::Literal::Atom),
+    ))
+    .parse(input)
+}
 
 /// Parses a negated literal, which can only occur as antecedent.
 ///
@@ -146,10 +185,10 @@ pub const fn literal<'f, 's>() -> Literal<'f, 's> { Literal { _f: PhantomData, _
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_punctuated::punct;
-/// use ast_toolkit_snack::error::{Common, Error, Failure};
-/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit::punctuated::punct;
+/// use ast_toolkit::snack::error::{Common, Error, Failure};
+/// use ast_toolkit::snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit::span::Span;
 /// use datalog::ast::{Atom, AtomArg, AtomArgs, Comma, Ident, NegAtom, Not, Parens};
 /// use datalog::parser::literals::{neg_atom, ParseError};
 ///
@@ -195,109 +234,29 @@ pub const fn literal<'f, 's>() -> Literal<'f, 's> { Literal { _f: PhantomData, _
 /// );
 /// assert!(matches!(
 ///     comb.parse(span4),
-///     SResult::Fail(Failure::Common(Common::TagUtf8 { .. })),
+///     SResult::Fail(Failure::Common(Common::Custom(ParseError::Not { .. }))),
 /// ));
-/// println!("{:?}", comb.parse(span5));
 /// assert!(matches!(
 ///     comb.parse(span5),
-///     SResult::Fail(Failure::Common(Common::TagUtf8 { .. })),
+///     SResult::Fail(Failure::Common(Common::Custom(ParseError::Not { .. }))),
 /// ));
 /// ```
 #[inline]
-pub const fn neg_atom<'f, 's>() -> NegAtom<'f, 's> { NegAtom { _f: PhantomData, _s: PhantomData } }
-
-
-
-
-
-/***** LIBRARY EXPECTS *****/
-/// ExpectsForamtter for the [`Literal`] combinator.
-#[derive(Debug)]
-pub struct LiteralExpects;
-impl Display for LiteralExpects {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "Expected ")?;
-        self.expects_fmt(f, 0)
-    }
-}
-impl ExpectsFormatter for LiteralExpects {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "either a positive or a negative atom") }
-}
-
-/// ExpectsForamtter for the [`NegAtom`] combinator.
-#[derive(Debug)]
-pub struct NegAtomExpects;
-impl Display for NegAtomExpects {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "Expected ")?;
-        self.expects_fmt(f, 0)
-    }
-}
-impl ExpectsFormatter for NegAtomExpects {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "a negated atom") }
-}
-
-
-
-
-
-/***** LIBRARY COMBINATORS *****/
-/// Combinator returned by [`literal()`].
-pub struct Literal<'f, 's> {
-    _f: PhantomData<&'f ()>,
-    _s: PhantomData<&'s ()>,
-}
-impl<'f, 's> Expects<'static> for Literal<'f, 's> {
-    type Formatter = LiteralExpects;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { LiteralExpects }
-}
-impl<'f, 's> Combinator<'static, &'f str, &'s str> for Literal<'f, 's> {
-    type Output = ast::Literal<'f, 's>;
-    type Error = ParseError<'f, 's>;
-
-    #[inline]
-    fn parse(&mut self, input: Span<'f, 's>) -> SResult<'static, Self::Output, &'f str, &'s str, Self::Error> {
-        branch::alt((
-            comb::map(neg_atom(), ast::Literal::NegAtom),
-            comb::map(comb::map_err(atoms::atom(), |err| ParseError::Atom { span: err.span() }), ast::Literal::Atom),
-        ))
-        .parse(input)
-    }
-}
-
-/// Combinator returned by [`neg_atom()`].
-pub struct NegAtom<'f, 's> {
-    _f: PhantomData<&'f ()>,
-    _s: PhantomData<&'s ()>,
-}
-impl<'f, 's> Expects<'static> for NegAtom<'f, 's> {
-    type Formatter = NegAtomExpects;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { NegAtomExpects }
-}
-impl<'f, 's> Combinator<'static, &'f str, &'s str> for NegAtom<'f, 's> {
-    type Output = ast::NegAtom<'f, 's>;
-    type Error = ParseError<'f, 's>;
-
-    #[inline]
-    fn parse(&mut self, input: Span<'f, 's>) -> SResult<'static, Self::Output, &'f str, &'s str, Self::Error> {
-        match seq::separated_pair(
-            error::transmute(tokens::not()),
-            error::transmute(utf8::whitespace1()),
-            comb::map_err(atoms::atom(), |err| ParseError::Atom { span: err.span() }),
-        )
-        .parse(input)
-        {
-            SResult::Ok(rem, (not_token, atom)) => SResult::Ok(rem, ast::NegAtom { not_token, atom }),
-            SResult::Fail(fail) => SResult::Fail(fail),
-            SResult::Error(err) => SResult::Error(err),
-        }
+#[comb(snack = ::ast_toolkit::snack, expected = "a negated atom", Output = ast::NegAtom<F, S>, Error = ParseError<F, S>)]
+pub fn neg_atom<F, S>(input: Span<F, S>) -> _
+where
+    F: Clone,
+    S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + WhileUtf8,
+{
+    match seq::separated_pair(
+        comb::map_err(tokens::not(), |err| ParseError::Not { span: err.into_span() }),
+        error::transmute(utf8::whitespace1()),
+        comb::map_err(atoms::atom(), |err| ParseError::Atom { span: err.into_span() }),
+    )
+    .parse(input)
+    {
+        SResult::Ok(rem, (not_token, atom)) => SResult::Ok(rem, ast::NegAtom { not_token, atom }),
+        SResult::Fail(fail) => SResult::Fail(fail),
+        SResult::Error(err) => SResult::Error(err),
     }
 }

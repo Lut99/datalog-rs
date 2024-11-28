@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    26 Nov 2024, 11:25:17
+//    28 Nov 2024, 16:10:09
 //  Auto updated?
 //    Yes
 //
@@ -15,10 +15,12 @@
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 
-pub use ast_toolkit_punctuated::Punctuated;
+pub use ast_toolkit::punctuated::Punctuated;
 #[cfg(feature = "railroad")]
-use ast_toolkit_railroad::{railroad as rr, ToDelimNode, ToNode, ToNonTerm};
-pub use ast_toolkit_span::Span;
+use ast_toolkit::railroad::{railroad as rr, ToDelimNode, ToNode, ToNonTerm};
+pub use ast_toolkit::span::{Span, Spanning as _};
+use ast_toolkit::span::{Spannable, SpannableDisplay, SpannableEq, SpannableHash};
+use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
 // Re-export the derive macro
 #[cfg(feature = "macros")]
 pub use datalog_macros::datalog;
@@ -27,12 +29,13 @@ use paste::paste;
 
 
 /***** HELPER MACROS *****/
-/// Automatically implements `Eq`, `Hash` and `PartialEq` for the given fields in the given struct.
+/// Automatically implements [`Eq`], [`Hash`] and [`PartialEq`] for the given fields in the given
+/// struct.
 macro_rules! impl_map {
     ($for:ident, $($fields:ident),+) => {
-        impl<'f, 's> Eq for $for<'f, 's> {}
+        impl<F, S> Eq for $for<F, S> where S: SpannableEq {}
 
-        impl<'f, 's> Hash for $for<'f, 's> {
+        impl<F, S> Hash for $for<F, S> where S: SpannableHash {
             #[inline]
             fn hash<H: Hasher>(&self, state: &mut H) {
                 $(
@@ -41,7 +44,7 @@ macro_rules! impl_map {
             }
         }
 
-        impl<'f, 's> PartialEq for $for<'f, 's> {
+        impl<F, S> PartialEq for $for<F, S> where S: SpannableEq {
             #[inline]
             fn eq(&self, other: &Self) -> bool {
                 $(
@@ -51,30 +54,15 @@ macro_rules! impl_map {
         }
     };
 }
-/// Automatically implements `Eq`, `Hash` and `PartialEq` for a type that is semantically always the same.
-///
-/// Examples: tokens (no value to change them).
-macro_rules! impl_map_invariant {
-    ($name:ident) => {
-        impl<'f, 's> Eq for $name<'f, 's> {}
-        impl<'f, 's> Hash for $name<'f, 's> {
-            #[inline]
-            fn hash<H: Hasher>(&self, _state: &mut H) {}
-        }
-        impl<'f, 's> PartialEq for $name<'f, 's> {
-            #[inline]
-            fn eq(&self, _other: &Self) -> bool { true }
+pub(crate) use impl_map;
 
-            #[inline]
-            fn ne(&self, _other: &Self) -> bool { false }
-        }
-    };
-}
+/// Automatically implements [`Eq`], [`Hash`] and [`PartialEq`] for the given fields of the given
+/// variants in the given enum.
 macro_rules! impl_enum_map {
     ($for:ident, $($variants:ident($($fields:ident),+)),+) => {
-        impl<'f, 's> Eq for $for<'f, 's> {}
+        impl<F, S> Eq for $for<F, S> where S: SpannableEq {}
 
-        impl<'f, 's> Hash for $for<'f, 's> {
+        impl<F, S> Hash for $for<F, S> where S: SpannableHash {
             #[inline]
             fn hash<H: Hasher>(&self, state: &mut H) {
                 match self {
@@ -89,7 +77,7 @@ macro_rules! impl_enum_map {
         }
 
         paste! {
-            impl<'f, 's> PartialEq for $for<'f, 's> {
+            impl<F, S> PartialEq for $for<F, S> where S: SpannableEq {
                 #[inline]
                 fn eq(&self, other: &Self) -> bool {
                     match (self, other) {
@@ -107,6 +95,7 @@ macro_rules! impl_enum_map {
         }
     };
 }
+pub(crate) use impl_enum_map;
 
 
 
@@ -252,8 +241,8 @@ impl<T: ReserializeDelim> ReserializableDelim for T {
 #[cfg(feature = "railroad")]
 #[inline]
 pub fn diagram() -> rr::Diagram<rr::VerticalGrid<Box<dyn rr::Node>>> {
-    ast_toolkit_railroad::diagram!(
-        Spec as "Spec",
+    ast_toolkit::railroad::diagram!(
+        Spec::<(), ()> as "Spec",
     )
 }
 
@@ -291,12 +280,16 @@ pub fn diagram_to_path(path: impl AsRef<std::path::Path>) -> Result<(), std::io:
 /// ```
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "railroad", derive(ToNonTerm))]
-pub struct Spec<'f, 's> {
+#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
+pub struct Spec<F, S> {
     /// The list of rules in this program.
-    pub rules: Vec<Rule<'f, 's>>,
+    pub rules: Vec<Rule<F, S>>,
 }
-impl<'f, 's> Spec<'f, 's> {}
-impl<'f, 's> Display for Spec<'f, 's> {
+impl<F, S> Spec<F, S> {}
+impl<F, S> Display for Spec<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         for rule in &self.rules {
@@ -306,7 +299,10 @@ impl<'f, 's> Display for Spec<'f, 's> {
     }
 }
 #[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Spec<'f, 's> {
+impl<F, S> Reserialize for Spec<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
         for rule in &self.rules {
@@ -328,15 +324,18 @@ impl_map!(Spec, rules);
 /// foo.
 /// ```
 #[derive(Clone, Debug)]
-pub struct Rule<'f, 's> {
+pub struct Rule<F, S> {
     /// A list of consequences (i.e., instances produced by this rule).
-    pub consequences: Punctuated<Atom<'f, 's>, Comma<'f, 's>>,
+    pub consequences: Punctuated<Atom<F, S>, Comma<F, S>>,
     /// An optional second part that describes the antecedents.
-    pub tail: Option<RuleAntecedents<'f, 's>>,
+    pub tail: Option<RuleAntecedents<F, S>>,
     /// The closing dot after each rule.
-    pub dot: Dot<'f, 's>,
+    pub dot: Dot<F, S>,
 }
-impl<'f, 's> Display for Rule<'f, 's> {
+impl<F, S> Display for Rule<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(
@@ -348,7 +347,10 @@ impl<'f, 's> Display for Rule<'f, 's> {
     }
 }
 #[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Rule<'f, 's> {
+impl<F, S> Reserialize for Rule<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
         for (value, punct) in self.consequences.pairs() {
@@ -365,15 +367,15 @@ impl<'f, 's> Reserialize for Rule<'f, 's> {
     }
 }
 #[cfg(feature = "railroad")]
-impl<'f, 's> ToNode for Rule<'f, 's> {
+impl<F, S> ToNode for Rule<F, S> {
     type Node = rr::Sequence<Box<dyn rr::Node>>;
 
     #[inline]
     fn railroad() -> Self::Node {
         rr::Sequence::new(vec![
-            Box::new(rr::Repeat::new(Atom::railroad(), Comma::railroad())),
-            Box::new(rr::Optional::new(RuleAntecedents::railroad())),
-            Box::new(Dot::railroad()),
+            Box::new(rr::Repeat::new(Atom::<F, S>::railroad(), Comma::<F, S>::railroad())),
+            Box::new(rr::Optional::new(RuleAntecedents::<F, S>::railroad())),
+            Box::new(Dot::<F, S>::railroad()),
         ])
     }
 }
@@ -386,29 +388,38 @@ impl_map!(Rule, consequences, tail);
 /// :- foo, bar(baz)
 /// ```
 #[derive(Clone, Debug)]
-pub struct RuleAntecedents<'f, 's> {
+pub struct RuleAntecedents<F, S> {
     /// The arrow token.
-    pub arrow_token: Arrow<'f, 's>,
+    pub arrow_token: Arrow<F, S>,
     /// The list of antecedents.
-    pub antecedents: Punctuated<Literal<'f, 's>, Comma<'f, 's>>,
+    pub antecedents: Punctuated<Literal<F, S>, Comma<F, S>>,
 }
 #[cfg(feature = "railroad")]
-impl<'f, 's> ToNode for RuleAntecedents<'f, 's> {
+impl<F, S> ToNode for RuleAntecedents<F, S> {
     type Node = rr::Sequence<Box<dyn rr::Node>>;
 
     #[inline]
     fn railroad() -> Self::Node {
-        rr::Sequence::new(vec![Box::new(Arrow::railroad()), Box::new(rr::Repeat::new(Literal::railroad(), Comma::railroad()))])
+        rr::Sequence::new(vec![
+            Box::new(Arrow::<F, S>::railroad()),
+            Box::new(rr::Repeat::new(Literal::<F, S>::railroad(), Comma::<F, S>::railroad())),
+        ])
     }
 }
-impl<'f, 's> Display for RuleAntecedents<'f, 's> {
+impl<F, S> Display for RuleAntecedents<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, " :- {}", self.antecedents.values().map(|a| a.to_string()).collect::<Vec<String>>().join(", "))
     }
 }
 #[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for RuleAntecedents<'f, 's> {
+impl<F, S> Reserialize for RuleAntecedents<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
         self.arrow_token.reserialize_fmt(f)?;
@@ -437,7 +448,8 @@ impl_map!(RuleAntecedents, antecedents);
 /// ```
 #[derive(Clone, Debug, EnumDebug)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
-pub enum Literal<'f, 's> {
+#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
+pub enum Literal<F, S> {
     /// Non-negated atom.
     ///
     /// # Syntax
@@ -445,16 +457,20 @@ pub enum Literal<'f, 's> {
     /// foo
     /// foo(bar)
     /// ```
-    Atom(Atom<'f, 's>),
+    Atom(Atom<F, S>),
     /// Negated atom.
     ///
     /// # Syntax
     /// ```plain
     /// not foo
     /// ```
-    NegAtom(NegAtom<'f, 's>),
+    NegAtom(NegAtom<F, S>),
 }
-impl<'f, 's> Literal<'f, 's> {
+impl<F, S> Literal<F, S>
+where
+    F: Clone,
+    S: Clone + Spannable,
+{
     /// Returns if there are any variables in the antecedents.
     ///
     /// # Returns
@@ -472,7 +488,7 @@ impl<'f, 's> Literal<'f, 's> {
     ///
     /// # Returns
     /// A reference to the [`Atom`] contained within.
-    pub fn atom(&self) -> &Atom<'f, 's> {
+    pub fn atom(&self) -> &Atom<F, S> {
         match self {
             Self::Atom(a) => a,
             Self::NegAtom(na) => &na.atom,
@@ -483,14 +499,17 @@ impl<'f, 's> Literal<'f, 's> {
     ///
     /// # Returns
     /// A mutable reference to the [`Atom`] contained within.
-    pub fn atom_mut(&mut self) -> &mut Atom<'f, 's> {
+    pub fn atom_mut(&mut self) -> &mut Atom<F, S> {
         match self {
             Self::Atom(a) => a,
             Self::NegAtom(na) => &mut na.atom,
         }
     }
 }
-impl<'f, 's> Display for Literal<'f, 's> {
+impl<F, S> Display for Literal<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -500,7 +519,10 @@ impl<'f, 's> Display for Literal<'f, 's> {
     }
 }
 #[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Literal<'f, 's> {
+impl<F, S> Reserialize for Literal<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
         match self {
@@ -520,18 +542,25 @@ impl_enum_map!(Literal, Atom(atom), NegAtom(atom));
 /// ```
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
-pub struct NegAtom<'f, 's> {
+#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
+pub struct NegAtom<F, S> {
     /// The not-token.
-    pub not_token: Not<'f, 's>,
+    pub not_token: Not<F, S>,
     /// The atom that was negated.
-    pub atom:      Atom<'f, 's>,
+    pub atom:      Atom<F, S>,
 }
-impl<'f, 's> Display for NegAtom<'f, 's> {
+impl<F, S> Display for NegAtom<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "not {}", self.atom) }
 }
 #[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for NegAtom<'f, 's> {
+impl<F, S> Reserialize for NegAtom<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
         self.not_token.reserialize_fmt(f)?;
@@ -552,13 +581,18 @@ impl_map!(NegAtom, atom);
 /// ```
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
-pub struct Atom<'f, 's> {
+#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
+pub struct Atom<F, S> {
     /// The identifier itself.
-    pub ident: Ident<'f, 's>,
+    pub ident: Ident<F, S>,
     /// Any arguments.
-    pub args:  Option<AtomArgs<'f, 's>>,
+    pub args:  Option<AtomArgs<F, S>>,
 }
-impl<'f, 's> Atom<'f, 's> {
+impl<F, S> Atom<F, S>
+where
+    F: Clone,
+    S: Clone + Spannable,
+{
     /// Returns if there are any variables in the antecedents.
     ///
     /// # Returns
@@ -570,21 +604,27 @@ impl<'f, 's> Atom<'f, 's> {
     ///
     /// # Returns
     /// A new [`Span`] that is this atom.
-    pub fn span(&self) -> Span<&'f str, &'s str> {
+    pub fn span(&self) -> Span<F, S> {
         match &self.args {
             Some(args) => self.ident.value.join(&args.paren_tokens.span()).unwrap_or_else(|| self.ident.value.clone()),
             None => self.ident.value.clone(),
         }
     }
 }
-impl<'f, 's> Display for Atom<'f, 's> {
+impl<F, S> Display for Atom<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "{}{}", self.ident, if let Some(args) = &self.args { args.to_string() } else { String::new() })
     }
 }
 #[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Atom<'f, 's> {
+impl<F, S> Reserialize for Atom<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
         self.ident.reserialize_fmt(f)?;
@@ -603,20 +643,26 @@ impl_map!(Atom, ident, args);
 /// (foo, bar(baz))
 /// ```
 #[derive(Clone, Debug)]
-pub struct AtomArgs<'f, 's> {
+pub struct AtomArgs<F, S> {
     /// The parenthesis wrapping the arguments.
-    pub paren_tokens: Parens<'f, 's>,
+    pub paren_tokens: Parens<F, S>,
     /// The arguments contained within.
-    pub args: Punctuated<AtomArg<'f, 's>, Comma<'f, 's>>,
+    pub args: Punctuated<AtomArg<F, S>, Comma<F, S>>,
 }
-impl<'f, 's> Display for AtomArgs<'f, 's> {
+impl<F, S> Display for AtomArgs<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "({})", self.args.values().map(|a| a.to_string()).collect::<Vec<String>>().join(","))
     }
 }
 #[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for AtomArgs<'f, 's> {
+impl<F, S> Reserialize for AtomArgs<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
         self.paren_tokens.reserialize_open_fmt(f)?;
@@ -632,15 +678,15 @@ impl<'f, 's> Reserialize for AtomArgs<'f, 's> {
     }
 }
 #[cfg(feature = "railroad")]
-impl<'f, 's> ToNode for AtomArgs<'f, 's> {
+impl<F, S> ToNode for AtomArgs<F, S> {
     type Node = rr::Sequence<Box<dyn rr::Node>>;
 
     #[inline]
     fn railroad() -> Self::Node {
         rr::Sequence::new(vec![
-            Box::new(Parens::railroad_open()),
-            Box::new(rr::Repeat::new(AtomArg::railroad(), Comma::railroad())),
-            Box::new(Parens::railroad_close()),
+            Box::new(Parens::<F, S>::railroad_open()),
+            Box::new(rr::Repeat::new(AtomArg::<F, S>::railroad(), Comma::<F, S>::railroad())),
+            Box::new(Parens::<F, S>::railroad_close()),
         ])
     }
 }
@@ -655,7 +701,8 @@ impl_map!(AtomArgs, args);
 /// ```
 #[derive(Clone, Debug, EnumDebug)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
-pub enum AtomArg<'f, 's> {
+#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
+pub enum AtomArg<F, S> {
     /// It's a nested atom.
     ///
     /// Note that $Datalog^\neg$ does not support full nesting, so only direct identifiers allowed.
@@ -664,7 +711,7 @@ pub enum AtomArg<'f, 's> {
     /// ```plain
     /// foo
     /// ```
-    Atom(Ident<'f, 's>),
+    Atom(Ident<F, S>),
     /// It's a variable.
     ///
     /// # Syntax
@@ -672,14 +719,14 @@ pub enum AtomArg<'f, 's> {
     /// Foo
     /// ```
     #[cfg_attr(feature = "railroad", railroad(regex = "^[A-Z_][a-zA-Z_-]*$"))]
-    Var(Ident<'f, 's>),
+    Var(Ident<F, S>),
 }
-impl<'f, 's> AtomArg<'f, 's> {
+impl<F, S> AtomArg<F, S> {
     /// Returns the identifier that appears in all variants of the AtomArg.
     ///
     /// # Returns
     /// A reference to the [`Ident`] contained within.
-    pub fn ident(&self) -> &Ident<'f, 's> {
+    pub fn ident(&self) -> &Ident<F, S> {
         match self {
             Self::Atom(a) => a,
             Self::Var(v) => v,
@@ -690,19 +737,25 @@ impl<'f, 's> AtomArg<'f, 's> {
     ///
     /// # Returns
     /// A mutable reference to the [`Ident`] contained within.
-    pub fn ident_mut(&mut self) -> &mut Ident<'f, 's> {
+    pub fn ident_mut(&mut self) -> &mut Ident<F, S> {
         match self {
             Self::Atom(a) => a,
             Self::Var(v) => v,
         }
     }
 }
-impl<'f, 's> Display for AtomArg<'f, 's> {
+impl<F, S> Display for AtomArg<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", self.ident()) }
 }
 #[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for AtomArg<'f, 's> {
+impl<F, S> Reserialize for AtomArg<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", self.ident()) }
 }
@@ -716,17 +769,23 @@ impl_enum_map!(AtomArg, Atom(ident), Var(ident));
 /// ```
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
-#[cfg_attr(feature = "railroad", railroad(regex = "^[a-z_][a-z_-]*$"))]
-pub struct Ident<'f, 's> {
+#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad), regex = "^[a-z_][a-z_-]*$"))]
+pub struct Ident<F, S> {
     /// The value of the identifier itself.
-    pub value: Span<&'f str, &'s str>,
+    pub value: Span<F, S>,
 }
-impl<'f, 's> Display for Ident<'f, 's> {
+impl<F, S> Display for Ident<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", self.value.value()) }
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", self.value) }
 }
 #[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Ident<'f, 's> {
+impl<F, S> Reserialize for Ident<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", self.value) }
 }
@@ -734,114 +793,54 @@ impl_map!(Ident, value);
 
 
 
-/// Defines an arrow token.
-///
-/// # Syntax
-/// ```plain
-/// :-
-/// ```
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "railroad", derive(ToNode))]
-#[cfg_attr(feature = "railroad", railroad(term = ":-"))]
-pub struct Arrow<'f, 's> {
-    /// The source of this arrow in the source.
-    pub span: Span<&'f str, &'s str>,
-}
-#[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Arrow<'f, 's> {
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ":-") }
-}
-impl_map_invariant!(Arrow);
+// Implement all tokens
+utf8_token!(Arrow, ":-");
+utf8_token!(Comma, ",");
+utf8_token!(Dot, ".");
+utf8_token!(Not, "not");
+utf8_delimiter!(Parens, "(", ")");
 
-/// Defines a comma token.
-///
-/// # Syntax
-/// ```plain
-/// ,
-/// ```
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "railroad", derive(ToNode))]
-#[cfg_attr(feature = "railroad", railroad(term = ","))]
-pub struct Comma<'f, 's> {
-    /// The source of this comma in the source.
-    pub span: Span<&'f str, &'s str>,
-}
-#[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Comma<'f, 's> {
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ",") }
-}
-impl_map_invariant!(Comma);
+// Implement their railroads
+#[doc(hidden)]
+#[cfg(feature = "railroad")]
+mod railroad_impl {
+    use ast_toolkit::tokens::{utf8_delimiter_railroad, utf8_token_railroad};
 
-/// Defines a dot token.
-///
-/// # Syntax
-/// ```plain
-/// .
-/// ```
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "railroad", derive(ToNode))]
-#[cfg_attr(feature = "railroad", railroad(term = "."))]
-pub struct Dot<'f, 's> {
-    /// The source of this dot in the source.
-    pub span: Span<&'f str, &'s str>,
-}
-#[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Dot<'f, 's> {
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ".") }
-}
-impl_map_invariant!(Dot);
+    use super::*;
 
-/// Defines a not token.
-///
-/// # Syntax
-/// ```plain
-/// not
-/// ```
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "railroad", derive(ToNode))]
-#[cfg_attr(feature = "railroad", railroad(term = "not"))]
-pub struct Not<'f, 's> {
-    /// The source of this not in the source.
-    pub span: Span<&'f str, &'s str>,
+    utf8_token_railroad!(Arrow, ":-");
+    utf8_token_railroad!(Comma, ",");
+    utf8_token_railroad!(Dot, ".");
+    utf8_token_railroad!(Not, "not");
+    utf8_delimiter_railroad!(Parens, "(", ")");
 }
-#[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Not<'f, 's> {
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "not") }
-}
-impl_map_invariant!(Not);
 
-/// Defines parenthesis.
-///
-/// # Syntax
-/// ```plain
-/// ()
-/// ```
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "railroad", derive(ToDelimNode))]
-#[cfg_attr(feature = "railroad", railroad(open = "(", close = ")"))]
-pub struct Parens<'f, 's> {
-    /// The opening-parenthesis.
-    pub open:  Span<&'f str, &'s str>,
-    /// The closing-parenthesis.
-    pub close: Span<&'f str, &'s str>,
-}
-impl<'f, 's> Parens<'f, 's> {
-    /// Creates a new [`Span`] that covers the entire parentheses' range.
-    ///
-    /// # Returns
-    /// A new [`Span`] that wraps these parenthesis.
-    #[inline]
-    pub fn span(&self) -> Span<&'f str, &'s str> { self.open.join(&self.close).unwrap_or_else(|| self.open.clone()) }
-}
+// Implement reserialize
+#[doc(hidden)]
 #[cfg(feature = "reserialize")]
-impl<'f, 's> ReserializeDelim for Parens<'f, 's> {
-    #[inline]
-    fn reserialize_open_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "(") }
-    #[inline]
-    fn reserialize_close_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ")") }
+mod reserialize_impl {
+    use super::*;
+
+    impl<F, S> Reserialize for Arrow<F, S> {
+        #[inline]
+        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ":-") }
+    }
+    impl<F, S> Reserialize for Comma<F, S> {
+        #[inline]
+        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ",") }
+    }
+    impl<F, S> Reserialize for Dot<F, S> {
+        #[inline]
+        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ".") }
+    }
+    impl<F, S> Reserialize for Not<F, S> {
+        #[inline]
+        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "not") }
+    }
+    impl<F, S> ReserializeDelim for Parens<F, S> {
+        #[inline]
+        fn reserialize_open_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "(") }
+        #[inline]
+        fn reserialize_close_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ")") }
+    }
 }
-impl_map_invariant!(Parens);

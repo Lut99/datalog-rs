@@ -4,7 +4,7 @@
 //  Created:
 //    07 May 2024, 16:38:16
 //  Last edited:
-//    08 May 2024, 11:26:08
+//    28 Nov 2024, 17:21:18
 //  Auto updated?
 //    Yes
 //
@@ -13,52 +13,106 @@
 //
 
 use std::error::Error;
-use std::fmt::{Display, Formatter, Result as FResult};
-use std::marker::PhantomData;
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
-use ast_toolkit_snack::combinator::map_err;
-use ast_toolkit_snack::{combinator as comb, error, multi, sequence as seq, utf8, Combinator, Expects, ExpectsFormatter, Result as SResult};
-use ast_toolkit_span::Spanning;
+use ast_toolkit::snack::combinator::map_err;
+use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
+use ast_toolkit::snack::{comb, combinator as comb, error, multi, sequence as seq, utf8, Result as SResult};
+use ast_toolkit::span::{Span, Spanning};
 
 use super::{atoms, literals, tokens};
 use crate::ast;
 
 
-/***** TYPE ALIASES *****/
-/// Convenience alias for a [`Span`](ast_toolkit_span::Span) over static strings.
-type Span<'f, 's> = ast_toolkit_span::Span<&'f str, &'s str>;
-
-
-
-
-
 /***** ERRORS *****/
 /// Errors returned when parsing literals and related.
-#[derive(Debug)]
-pub enum ParseError<'f, 's> {
+pub enum ParseError<F, S> {
     /// Failed to parse an atom.
-    Atom { span: Span<'f, 's> },
+    Atom { span: Span<F, S> },
     /// Failed to parse a literal.
-    Literal { span: Span<'f, 's> },
+    Literal { span: Span<F, S> },
+    /// Failed to parse an arrow.
+    Arrow { span: Span<F, S> },
+    /// Failed to parse a comma.
+    Comma { span: Span<F, S> },
+    /// Failed to parse a dot.
+    Dot { span: Span<F, S> },
 }
-impl<'f, 's> Display for ParseError<'f, 's> {
+impl<F, S> Debug for ParseError<F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        use ParseError::*;
+        match self {
+            Atom { span } => {
+                let mut fmt = f.debug_struct("ParseError::Atom");
+                fmt.field("span", span);
+                fmt.finish()
+            },
+            Literal { span } => {
+                let mut fmt = f.debug_struct("ParseError::Literal");
+                fmt.field("span", span);
+                fmt.finish()
+            },
+            Arrow { span } => {
+                let mut fmt = f.debug_struct("ParseError::Arrow");
+                fmt.field("span", span);
+                fmt.finish()
+            },
+            Comma { span } => {
+                let mut fmt = f.debug_struct("ParseError::Comma");
+                fmt.field("span", span);
+                fmt.finish()
+            },
+            Dot { span } => {
+                let mut fmt = f.debug_struct("ParseError::Dot");
+                fmt.field("span", span);
+                fmt.finish()
+            },
+        }
+    }
+}
+impl<F, S> Display for ParseError<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         use ParseError::*;
         match self {
             Atom { .. } => write!(f, "Expected an atom"),
             Literal { .. } => write!(f, "Expected a literal"),
+            Arrow { .. } => write!(f, "Expected an arrow"),
+            Comma { .. } => write!(f, "Expected a comma"),
+            Dot { .. } => write!(f, "Expected a dot"),
         }
     }
 }
-impl<'f, 's> Error for ParseError<'f, 's> {}
-impl<'f, 's> Spanning<&'f str, &'s str> for ParseError<'f, 's> {
+impl<F, S> Error for ParseError<F, S> {}
+impl<F, S> Spanning<F, S> for ParseError<F, S>
+where
+    F: Clone,
+    S: Clone,
+{
     #[inline]
-    fn span(&self) -> Span<'f, 's> {
+    fn span(&self) -> Span<F, S> {
         use ParseError::*;
         match self {
-            Atom { span } => *span,
-            Literal { span } => *span,
+            Atom { span } => span.clone(),
+            Literal { span } => span.clone(),
+            Arrow { span } => span.clone(),
+            Comma { span } => span.clone(),
+            Dot { span } => span.clone(),
+        }
+    }
+
+    #[inline]
+    fn into_span(self) -> Span<F, S>
+    where
+        Self: Sized,
+    {
+        match self {
+            Self::Atom { span } => span,
+            Self::Literal { span } => span,
+            Self::Arrow { span } => span,
+            Self::Comma { span } => span,
+            Self::Dot { span } => span,
         }
     }
 }
@@ -78,10 +132,10 @@ impl<'f, 's> Spanning<&'f str, &'s str> for ParseError<'f, 's> {
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_punctuated::punct;
-/// use ast_toolkit_snack::error::{Common, Error, Failure};
-/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit::punctuated::punct;
+/// use ast_toolkit::snack::error::{Common, Error, Failure};
+/// use ast_toolkit::snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit::span::Span;
 /// use datalog::ast::{
 ///     Arrow, Atom, AtomArg, AtomArgs, Dot, Comma, Ident, Literal, NegAtom, Not, Parens, Rule,
 ///     RuleAntecedents,
@@ -149,7 +203,39 @@ impl<'f, 's> Spanning<&'f str, &'s str> for ParseError<'f, 's> {
 /// assert!(matches!(comb.parse(span5), SResult::Fail(Failure::Common(Common::PunctuatedList1 { .. }))));
 /// ```
 #[inline]
-pub const fn rule<'f, 's>() -> Rule<'f, 's> { Rule { _f: PhantomData, _s: PhantomData } }
+#[comb(snack = ::ast_toolkit::snack, expected = "a rule", Output = ast::Rule<F, S>, Error = ParseError<F, S>)]
+pub fn rule<F, S>(input: Span<F, S>) -> _
+where
+    F: Clone,
+    S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + WhileUtf8,
+{
+    match seq::tuple((
+        multi::punctuated1(
+            seq::delimited(
+                error::transmute(utf8::whitespace0()),
+                map_err(atoms::atom(), |err| ParseError::Atom { span: err.span() }),
+                error::transmute(comb::not(utf8::complete::while1(|c| {
+                    if c.len() != 1 {
+                        return false;
+                    }
+                    let c: char = c.chars().next().unwrap();
+                    (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_'
+                }))),
+            ),
+            comb::map_err(tokens::comma(), |err| ParseError::Comma { span: err.into_span() }),
+        ),
+        error::transmute(utf8::whitespace0()),
+        comb::opt(rule_antecedents()),
+        error::transmute(utf8::whitespace0()),
+        comb::map_err(tokens::dot(), |err| ParseError::Dot { span: err.into_span() }),
+    ))
+    .parse(input)
+    {
+        SResult::Ok(rem, (consequences, _, tail, _, dot)) => SResult::Ok(rem, ast::Rule { consequences, tail, dot }),
+        SResult::Fail(fail) => SResult::Fail(fail),
+        SResult::Error(err) => SResult::Error(err),
+    }
+}
 
 /// Parses the antecedent-part of a rule.
 ///
@@ -161,10 +247,10 @@ pub const fn rule<'f, 's>() -> Rule<'f, 's> { Rule { _f: PhantomData, _s: Phanto
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit_punctuated::punct;
-/// use ast_toolkit_snack::error::{Common, Error, Failure};
-/// use ast_toolkit_snack::{Combinator as _, Result as SResult};
-/// use ast_toolkit_span::Span;
+/// use ast_toolkit::punctuated::punct;
+/// use ast_toolkit::snack::error::{Common, Error, Failure};
+/// use ast_toolkit::snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit::span::Span;
 /// use datalog::ast::{
 ///     Arrow, Atom, AtomArg, AtomArgs, Comma, Ident, Literal, NegAtom, Not, Parens, RuleAntecedents,
 /// };
@@ -211,7 +297,7 @@ pub const fn rule<'f, 's>() -> Rule<'f, 's> { Rule { _f: PhantomData, _s: Phanto
 /// );
 /// assert!(matches!(
 ///     comb.parse(span3),
-///     SResult::Fail(Failure::Common(Common::TagUtf8 { tag: ":-", .. })),
+///     SResult::Fail(Failure::Common(Common::Custom(ParseError::Arrow { .. }))),
 /// ));
 /// assert!(matches!(
 ///     comb.parse(span4),
@@ -219,70 +305,19 @@ pub const fn rule<'f, 's>() -> Rule<'f, 's> { Rule { _f: PhantomData, _s: Phanto
 /// ));
 /// ```
 #[inline]
-pub const fn rule_antecedents<'f, 's>() -> RuleAntecedents<'f, 's> { RuleAntecedents { _f: PhantomData, _s: PhantomData } }
-
-
-
-
-
-/***** LIBRARY EXPECTS *****/
-/// ExpectsForamtter for the [`Rule`] combinator.
-#[derive(Debug)]
-pub struct RuleExpects;
-impl Display for RuleExpects {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "Expected ")?;
-        self.expects_fmt(f, 0)
-    }
-}
-impl ExpectsFormatter for RuleExpects {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "a rule") }
-}
-
-/// ExpectsForamtter for the [`RuleAntecedents`] combinator.
-#[derive(Debug)]
-pub struct RuleAntecedentsExpects;
-impl Display for RuleAntecedentsExpects {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "Expected ")?;
-        self.expects_fmt(f, 0)
-    }
-}
-impl ExpectsFormatter for RuleAntecedentsExpects {
-    #[inline]
-    fn expects_fmt(&self, f: &mut Formatter, _indent: usize) -> FResult { write!(f, "an arrow symbol followed by antecedents") }
-}
-
-
-
-
-
-/***** LIBRARY COMBINATORS *****/
-/// Combinator returned by [`rule()`].
-pub struct Rule<'f, 's> {
-    _f: PhantomData<&'f ()>,
-    _s: PhantomData<&'s ()>,
-}
-impl<'f, 's> Expects<'static> for Rule<'f, 's> {
-    type Formatter = RuleExpects;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { RuleExpects }
-}
-impl<'f, 's> Combinator<'static, &'f str, &'s str> for Rule<'f, 's> {
-    type Output = ast::Rule<'f, 's>;
-    type Error = ParseError<'f, 's>;
-
-    #[inline]
-    fn parse(&mut self, input: Span<'f, 's>) -> SResult<'static, Self::Output, &'f str, &'s str, Self::Error> {
-        match seq::tuple((
-            multi::punctuated1(
+#[comb(snack = ::ast_toolkit::snack, expected = "an arrow symbol followed by antecedents", Output = ast::RuleAntecedents<F, S>, Error = ParseError<F, S>)]
+pub fn rule_antecedents<F, S>(input: Span<F, S>) -> _
+where
+    F: Clone,
+    S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + WhileUtf8,
+{
+    match seq::pair(
+        comb::map_err(tokens::arrow(), |err| ParseError::Arrow { span: err.into_span() }),
+        error::cut(multi::punctuated1(
+            comb::map_err(
                 seq::delimited(
                     error::transmute(utf8::whitespace0()),
-                    map_err(atoms::atom(), |err| ParseError::Atom { span: err.span() }),
+                    literals::literal(),
                     error::transmute(comb::not(utf8::complete::while1(|c| {
                         if c.len() != 1 {
                             return false;
@@ -291,64 +326,15 @@ impl<'f, 's> Combinator<'static, &'f str, &'s str> for Rule<'f, 's> {
                         (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_'
                     }))),
                 ),
-                error::transmute(tokens::comma()),
+                |err| ParseError::Literal { span: err.span() },
             ),
-            error::transmute(utf8::whitespace0()),
-            comb::opt(rule_antecedents()),
-            error::transmute(utf8::whitespace0()),
-            error::transmute(tokens::dot()),
-        ))
-        .parse(input)
-        {
-            SResult::Ok(rem, (consequences, _, tail, _, dot)) => SResult::Ok(rem, ast::Rule { consequences, tail, dot }),
-            SResult::Fail(fail) => SResult::Fail(fail),
-            SResult::Error(err) => SResult::Error(err),
-        }
-    }
-}
-
-/// Combinator returned by [`rule_antecedents()`].
-pub struct RuleAntecedents<'f, 's> {
-    _f: PhantomData<&'f ()>,
-    _s: PhantomData<&'s ()>,
-}
-impl<'f, 's> Expects<'static> for RuleAntecedents<'f, 's> {
-    type Formatter = RuleAntecedentsExpects;
-
-    #[inline]
-    fn expects(&self) -> Self::Formatter { RuleAntecedentsExpects }
-}
-impl<'f, 's> Combinator<'static, &'f str, &'s str> for RuleAntecedents<'f, 's> {
-    type Output = ast::RuleAntecedents<'f, 's>;
-    type Error = ParseError<'f, 's>;
-
-    #[inline]
-    fn parse(&mut self, input: Span<'f, 's>) -> SResult<'static, Self::Output, &'f str, &'s str, Self::Error> {
-        match seq::pair(
-            error::transmute(tokens::arrow()),
-            error::cut(multi::punctuated1(
-                comb::map_err(
-                    seq::delimited(
-                        error::transmute(utf8::whitespace0()),
-                        literals::literal(),
-                        error::transmute(comb::not(utf8::complete::while1(|c| {
-                            if c.len() != 1 {
-                                return false;
-                            }
-                            let c: char = c.chars().next().unwrap();
-                            (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_'
-                        }))),
-                    ),
-                    |err| ParseError::Literal { span: err.span() },
-                ),
-                error::transmute(tokens::comma()),
-            )),
-        )
-        .parse(input)
-        {
-            SResult::Ok(rem, (arrow_token, antecedents)) => SResult::Ok(rem, ast::RuleAntecedents { arrow_token, antecedents }),
-            SResult::Fail(fail) => SResult::Fail(fail),
-            SResult::Error(err) => SResult::Error(err),
-        }
+            comb::map_err(tokens::comma(), |err| ParseError::Comma { span: err.into_span() }),
+        )),
+    )
+    .parse(input)
+    {
+        SResult::Ok(rem, (arrow_token, antecedents)) => SResult::Ok(rem, ast::RuleAntecedents { arrow_token, antecedents }),
+        SResult::Fail(fail) => SResult::Fail(fail),
+        SResult::Error(err) => SResult::Error(err),
     }
 }
