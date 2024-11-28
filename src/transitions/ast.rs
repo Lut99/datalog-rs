@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    28 Nov 2024, 11:08:18
+//    28 Nov 2024, 17:31:43
 //  Auto updated?
 //    Yes
 //
@@ -16,100 +16,12 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 
 #[cfg(feature = "railroad")]
-use ast_toolkit_railroad::{railroad as rr, ToDelimNode, ToNode, ToNonTerm};
-use datalog::ast::{Reserialize, ReserializeDelim, Rule, Span};
+use ast_toolkit::railroad::{railroad as rr, ToDelimNode, ToNode, ToNonTerm};
+use ast_toolkit::span::{Span, SpannableDisplay};
+use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
 use paste::paste;
 
-
-/***** HELPER MACROS *****/
-/// Automatically implements [`Eq`], [`Hash`] and [`PartialEq`] for the given fields in the given
-/// struct.
-macro_rules! impl_map {
-    ($for:ident, $($fields:ident),+) => {
-        impl<'f, 's> Eq for $for<'f, 's> {}
-
-        impl<'f, 's> Hash for $for<'f, 's> {
-            #[inline]
-            fn hash<H: Hasher>(&self, state: &mut H) {
-                $(
-                    self.$fields.hash(state);
-                )+
-            }
-        }
-
-        impl<'f, 's> PartialEq for $for<'f, 's> {
-            #[inline]
-            fn eq(&self, other: &Self) -> bool {
-                $(
-                    self.$fields == other.$fields
-                )&&+
-            }
-        }
-    };
-}
-
-/// Automatically implements [`Eq`], [`Hash`] and [`PartialEq`] for a type which, hash-wise, is not
-/// dynamic (i.e., it always produces the same hash).
-///
-/// Examples: tokens (no value to change them).
-macro_rules! impl_map_invariant {
-    ($name:ident) => {
-        impl<'f, 's> Eq for $name<'f, 's> {}
-        impl<'f, 's> Hash for $name<'f, 's> {
-            #[inline]
-            fn hash<H: Hasher>(&self, _state: &mut H) {}
-        }
-        impl<'f, 's> PartialEq for $name<'f, 's> {
-            #[inline]
-            fn eq(&self, _other: &Self) -> bool { true }
-
-            #[inline]
-            fn ne(&self, _other: &Self) -> bool { false }
-        }
-    };
-}
-
-/// Automatically implements [`Eq`], [`Hash`] and [`PartialEq`] for the given fields in variants of the given enum.
-macro_rules! impl_enum_map {
-    ($for:ident, $($variants:ident($($fields:ident),+)),+) => {
-        impl<'f, 's> Eq for $for<'f, 's> {}
-
-        impl<'f, 's> Hash for $for<'f, 's> {
-            #[inline]
-            fn hash<H: Hasher>(&self, state: &mut H) {
-                match self {
-                    $(
-                        Self::$variants ( $($fields),+ ) => {
-                            stringify!($variants).hash(state);
-                            $($fields.hash(state);)+
-                        }
-                    ),+
-                }
-            }
-        }
-
-        paste! {
-            impl<'f, 's> PartialEq for $for<'f, 's> {
-                #[inline]
-                fn eq(&self, other: &Self) -> bool {
-                    match (self, other) {
-                        $(
-                            (Self::$variants ( $([< $fields _lhs >]),+ ), Self::$variants ( $([< $fields _rhs >]),+ )) => {
-                                $([< $fields _lhs >] == [< $fields _rhs >])&&+
-                            }
-                        ),+
-
-                        // Any other variant is inequal by default
-                        (_, _) => false,
-                    }
-                }
-            }
-        }
-    };
-}
-
-
-
+use crate::ast::{impl_enum_map, impl_map, Reserialize, ReserializeDelim, Rule};
 
 
 /***** TOPLEVEL *****/
@@ -122,11 +34,15 @@ macro_rules! impl_enum_map {
 /// ```
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "railroad", derive(ToNonTerm))]
-pub struct Spec<'f, 's> {
+#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
+pub struct Spec<F, S> {
     /// The list of phrases (rules|transitions) in this program.
-    pub phrases: Vec<Phrase<'f, 's>>,
+    pub phrases: Vec<Phrase<F, S>>,
 }
-impl<'f, 's> Display for Spec<'f, 's> {
+impl<F, S> Display for Spec<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         for phrase in &self.phrases {
@@ -136,7 +52,10 @@ impl<'f, 's> Display for Spec<'f, 's> {
     }
 }
 #[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Spec<'f, 's> {
+impl<F, S> Reserialize for Spec<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
         for phrase in &self.phrases {
@@ -161,17 +80,21 @@ impl_map!(Spec, phrases);
 /// ```
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
-pub enum Phrase<'f, 's> {
+#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
+pub enum Phrase<F, S> {
     /// It's a postulation of zero or more rules.
-    Postulation(Postulation<'f, 's>),
+    Postulation(Postulation<F, S>),
     /// It's a plain rule.
-    Rule(Rule<'f, 's>),
+    Rule(Rule<F, S>),
     /// It's the definition of a transition.
-    Transition(Transition<'f, 's>),
+    Transition(Transition<F, S>),
     /// It's the trigger of zero or more transitions.
-    Trigger(Trigger<'f, 's>),
+    Trigger(Trigger<F, S>),
 }
-impl<'f, 's> Display for Phrase<'f, 's> {
+impl<F, S> Display for Phrase<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -183,7 +106,10 @@ impl<'f, 's> Display for Phrase<'f, 's> {
     }
 }
 #[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Phrase<'f, 's> {
+impl<F, S> Reserialize for Phrase<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
         match self {
@@ -206,15 +132,18 @@ impl_enum_map!(Phrase, Postulation(nested), Rule(nested), Transition(nested), Tr
 /// ~{ bar :- baz(quz). }
 /// ```
 #[derive(Clone, Debug)]
-pub struct Postulation<'f, 's> {
+pub struct Postulation<F, S> {
     /// The operator.
-    pub op: PostulationOp<'f, 's>,
+    pub op: PostulationOp<F, S>,
     /// The curly brackets wrapping the rules.
-    pub curly_tokens: Curly<'f, 's>,
+    pub curly_tokens: Curly<F, S>,
     /// The rule(s) postulated.
-    pub rules: Vec<Rule<'f, 's>>,
+    pub rules: Vec<Rule<F, S>>,
 }
-impl<'f, 's> Display for Postulation<'f, 's> {
+impl<F, S> Display for Postulation<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "{}{{", self.op)?;
@@ -228,7 +157,10 @@ impl<'f, 's> Display for Postulation<'f, 's> {
     }
 }
 #[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Postulation<'f, 's> {
+impl<F, S> Reserialize for Postulation<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
         self.op.reserialize_fmt(f)?;
@@ -245,16 +177,16 @@ impl<'f, 's> Reserialize for Postulation<'f, 's> {
     }
 }
 #[cfg(feature = "railroad")]
-impl<'f, 's> ToNode for Postulation<'f, 's> {
+impl<F, S> ToNode for Postulation<F, S> {
     type Node = rr::Sequence<Box<dyn rr::Node>>;
 
     #[inline]
     fn railroad() -> Self::Node {
         rr::Sequence::new(vec![
-            Box::new(PostulationOp::railroad()) as Box<dyn rr::Node>,
-            Box::new(Curly::railroad_open()),
-            Box::new(rr::Repeat::new(Rule::railroad(), rr::Empty)),
-            Box::new(Curly::railroad_close()),
+            Box::new(PostulationOp::<F, S>::railroad()) as Box<dyn rr::Node>,
+            Box::new(Curly::<F, S>::railroad_open()),
+            Box::new(rr::Repeat::new(Rule::<F, S>::railroad(), rr::Empty)),
+            Box::new(Curly::<F, S>::railroad_close()),
         ])
     }
 }
@@ -263,13 +195,14 @@ impl_map!(Postulation, rules);
 /// Specifies the possible postulation types.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
-pub enum PostulationOp<'f, 's> {
+#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
+pub enum PostulationOp<F, S> {
     /// Creates facts.
-    Create(Add<'f, 's>),
+    Create(Add<F, S>),
     /// Hides previously created facts.
-    Obfuscate(Dash<'f, 's>),
+    Obfuscate(Dash<F, S>),
 }
-impl<'f, 's> Display for PostulationOp<'f, 's> {
+impl<F, S> Display for PostulationOp<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -279,7 +212,7 @@ impl<'f, 's> Display for PostulationOp<'f, 's> {
     }
 }
 #[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for PostulationOp<'f, 's> {
+impl<F, S> Reserialize for PostulationOp<F, S> {
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
         match self {
@@ -292,97 +225,221 @@ impl_enum_map!(PostulationOp, Create(op), Obfuscate(op));
 
 
 
+/// Specifies the definition of a transition.
+///
+/// # Syntax
+/// ```plain
+/// #foo {
+///     +{ foo. }
+///     ~{ bar :- baz(quz). }
+/// }.
+/// ```
+#[derive(Clone, Debug)]
+pub struct Transition<F, S> {
+    /// The identifier of the transition.
+    pub ident: TransIdent<F, S>,
+    /// The curly brackets wrapping the postulations.
+    pub curly_tokens: Curly<F, S>,
+    /// The posulations nested inside.
+    pub postulations: Vec<Postulation<F, S>>,
+}
+impl<F, S> Display for Transition<F, S>
+where
+    S: SpannableDisplay,
+{
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "{} {{", self.ident)?;
+        if !self.postulations.is_empty() {
+            writeln!(f)?;
+        }
+        for post in &self.postulations {
+            writeln!(f, "    {post}")?;
+        }
+        write!(f, "}}")
+    }
+}
+#[cfg(feature = "reserialize")]
+impl<F, S> Reserialize for Transition<F, S>
+where
+    S: SpannableDisplay,
+{
+    #[inline]
+    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
+        self.ident.reserialize_fmt(f)?;
+        self.curly_tokens.reserialize_open_fmt(f)?;
+        if !self.postulations.is_empty() {
+            writeln!(f)?;
+        }
+        for post in &self.postulations {
+            write!(f, "    ")?;
+            post.reserialize_fmt(f)?;
+            writeln!(f)?;
+        }
+        self.curly_tokens.reserialize_close_fmt(f)
+    }
+}
+#[cfg(feature = "railroad")]
+impl<F, S> ToNode for Transition<F, S> {
+    type Node = rr::Sequence<Box<dyn rr::Node>>;
+
+    #[inline]
+    fn railroad() -> Self::Node {
+        rr::Sequence::new(vec![
+            Box::new(TransIdent::<F, S>::railroad()) as Box<dyn rr::Node>,
+            Box::new(Curly::<F, S>::railroad_open()),
+            Box::new(rr::Repeat::new(Postulation::<F, S>::railroad(), rr::Empty)),
+            Box::new(Curly::<F, S>::railroad_close()),
+        ])
+    }
+}
+impl_map!(Transition, ident, postulations);
+
+/// An [`Ident`]ifier prefixed by a `#`.
+///
+/// # Syntax
+/// ```plain
+/// #foo
+/// ```
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "railroad", derive(ToNode))]
+#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad), regex = "^#[a-z_][a-z_-]*$"))]
+pub struct TransIdent<F, S> {
+    /// The value of the identifier itself, including the pound.
+    pub value: Span<F, S>,
+}
+impl<F, S> Display for TransIdent<F, S>
+where
+    S: SpannableDisplay,
+{
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", self.value) }
+}
+#[cfg(feature = "reserialize")]
+impl<F, S> Reserialize for TransIdent<F, S>
+where
+    S: SpannableDisplay,
+{
+    #[inline]
+    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", self.value) }
+}
+impl_map!(TransIdent, value);
+
+
+
+/// Specifies the triggering of a transition.
+///
+/// # Syntax
+/// ```plain
+/// !{ #foo }.
+/// ```
+#[derive(Clone, Debug)]
+pub struct Trigger<F, S> {
+    /// The exclamation mark.
+    pub exclaim_token: Exclaim<F, S>,
+    /// The curly brackets wrapping the transition identifiers.
+    pub curly_tokens: Curly<F, S>,
+    /// The list of transition identifiers triggered.
+    pub idents: Vec<TransIdent<F, S>>,
+}
+impl<F, S> Display for Trigger<F, S>
+where
+    S: SpannableDisplay,
+{
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "!{{")?;
+        if !self.idents.is_empty() {
+            writeln!(f)?;
+        }
+        for ident in &self.idents {
+            writeln!(f, "    {ident}")?;
+        }
+        write!(f, "}}")
+    }
+}
+#[cfg(feature = "reserialize")]
+impl<F, S> Reserialize for Trigger<F, S>
+where
+    S: SpannableDisplay,
+{
+    #[inline]
+    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
+        self.exclaim_token.reserialize_fmt(f)?;
+        self.curly_tokens.reserialize_open_fmt(f)?;
+        if !self.idents.is_empty() {
+            writeln!(f)?;
+        }
+        for ident in &self.idents {
+            write!(f, "    ")?;
+            ident.reserialize_fmt(f)?;
+            writeln!(f)?;
+        }
+        self.curly_tokens.reserialize_close_fmt(f)
+    }
+}
+#[cfg(feature = "railroad")]
+impl<F, S> ToNode for Trigger<F, S> {
+    type Node = rr::Sequence<Box<dyn rr::Node>>;
+
+    #[inline]
+    fn railroad() -> Self::Node {
+        rr::Sequence::new(vec![
+            Box::new(Exclaim::<F, S>::railroad()) as Box<dyn rr::Node>,
+            Box::new(Curly::<F, S>::railroad_open()),
+            Box::new(rr::Repeat::new(TransIdent::<F, S>::railroad(), rr::Empty)),
+            Box::new(Curly::<F, S>::railroad_close()),
+        ])
+    }
+}
+impl_map!(Trigger, idents);
+
+
+
 
 
 /***** TOKENS *****/
-/// Defines a plus-token.
-///
-/// # Syntax
-/// ```plain
-/// +
-/// ```
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "railroad", derive(ToNode))]
-#[cfg_attr(feature = "railroad", railroad(term = "+"))]
-pub struct Add<'f, 's> {
-    /// The source of this arrow in the source.
-    pub span: Span<&'f str, &'s str>,
-}
-#[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Add<'f, 's> {
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "+") }
-}
-impl_map_invariant!(Add);
+utf8_token!(Add, "+");
+utf8_token!(Dash, "-");
+utf8_token!(Exclaim, "!");
+utf8_delimiter!(Curly, "{", "}");
 
-/// Defines a minus-token.
-///
-/// # Syntax
-/// ```plain
-/// -
-/// ```
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "railroad", derive(ToNode))]
-#[cfg_attr(feature = "railroad", railroad(term = "-"))]
-pub struct Dash<'f, 's> {
-    /// The source of this arrow in the source.
-    pub span: Span<&'f str, &'s str>,
-}
-#[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Dash<'f, 's> {
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "-") }
-}
-impl_map_invariant!(Dash);
+// Implement their railroads
+#[doc(hidden)]
+#[cfg(feature = "railroad")]
+mod railroad_impl {
+    use ast_toolkit::tokens::{utf8_delimiter_railroad, utf8_token_railroad};
 
-/// Defines an exclaimation mark-token.
-///
-/// # Syntax
-/// ```plain
-/// !
-/// ```
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "railroad", derive(ToNode))]
-#[cfg_attr(feature = "railroad", railroad(term = "!"))]
-pub struct Exclaim<'f, 's> {
-    /// The source of this arrow in the source.
-    pub span: Span<&'f str, &'s str>,
-}
-#[cfg(feature = "reserialize")]
-impl<'f, 's> Reserialize for Exclaim<'f, 's> {
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "!") }
-}
-impl_map_invariant!(Exclaim);
+    use super::*;
 
-/// Defines curly brackets.
-///
-/// # Syntax
-/// ```plain
-/// {}
-/// ```
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "railroad", derive(ToDelimNode))]
-#[cfg_attr(feature = "railroad", railroad(open = "{", close = "}"))]
-pub struct Curly<'f, 's> {
-    /// The opening-parenthesis.
-    pub open:  Span<&'f str, &'s str>,
-    /// The closing-parenthesis.
-    pub close: Span<&'f str, &'s str>,
+    utf8_token_railroad!(Add, "+");
+    utf8_token_railroad!(Dash, "-");
+    utf8_token_railroad!(Exclaim, "!");
+    utf8_delimiter_railroad!(Curly, "{", "}");
 }
-impl<'f, 's> Curly<'f, 's> {
-    /// Creates a new [`Span`] that covers the entire curlies' range.
-    ///
-    /// # Returns
-    /// A new [`Span`] that wraps these curlies.
-    #[inline]
-    pub fn span(&self) -> Span<&'f str, &'s str> { self.open.join(&self.close).unwrap_or_else(|| self.open.clone()) }
-}
+
+// Implement reserialize
+#[doc(hidden)]
 #[cfg(feature = "reserialize")]
-impl<'f, 's> ReserializeDelim for Curly<'f, 's> {
-    #[inline]
-    fn reserialize_open_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{{") }
-    #[inline]
-    fn reserialize_close_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "}}") }
+mod reserialize_impl {
+    use super::*;
+
+    impl<F, S> Reserialize for Add<F, S> {
+        #[inline]
+        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "+") }
+    }
+    impl<F, S> Reserialize for Dash<F, S> {
+        #[inline]
+        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "-") }
+    }
+    impl<F, S> Reserialize for Exclaim<F, S> {
+        #[inline]
+        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "!") }
+    }
+    impl<F, S> ReserializeDelim for Curly<F, S> {
+        #[inline]
+        fn reserialize_open_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{{") }
+        #[inline]
+        fn reserialize_close_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "}}") }
+    }
 }
-impl_map_invariant!(Curly);

@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    28 Nov 2024, 16:10:09
+//    28 Nov 2024, 17:25:13
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@ pub use ast_toolkit::punctuated::Punctuated;
 #[cfg(feature = "railroad")]
 use ast_toolkit::railroad::{railroad as rr, ToDelimNode, ToNode, ToNonTerm};
 pub use ast_toolkit::span::{Span, Spanning as _};
-use ast_toolkit::span::{Spannable, SpannableDisplay, SpannableEq, SpannableHash};
+use ast_toolkit::span::{Spannable, SpannableDisplay};
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
 // Re-export the derive macro
 #[cfg(feature = "macros")]
@@ -33,9 +33,9 @@ use paste::paste;
 /// struct.
 macro_rules! impl_map {
     ($for:ident, $($fields:ident),+) => {
-        impl<F, S> Eq for $for<F, S> where S: SpannableEq {}
+        impl<F, S> Eq for $for<F, S> where S: ast_toolkit::span::SpannableEq {}
 
-        impl<F, S> Hash for $for<F, S> where S: SpannableHash {
+        impl<F, S> Hash for $for<F, S> where S: ast_toolkit::span::SpannableHash {
             #[inline]
             fn hash<H: Hasher>(&self, state: &mut H) {
                 $(
@@ -44,7 +44,7 @@ macro_rules! impl_map {
             }
         }
 
-        impl<F, S> PartialEq for $for<F, S> where S: SpannableEq {
+        impl<F, S> PartialEq for $for<F, S> where S: ast_toolkit::span::SpannableEq {
             #[inline]
             fn eq(&self, other: &Self) -> bool {
                 $(
@@ -60,9 +60,9 @@ pub(crate) use impl_map;
 /// variants in the given enum.
 macro_rules! impl_enum_map {
     ($for:ident, $($variants:ident($($fields:ident),+)),+) => {
-        impl<F, S> Eq for $for<F, S> where S: SpannableEq {}
+        impl<F, S> Eq for $for<F, S> where S: ast_toolkit::span::SpannableEq {}
 
-        impl<F, S> Hash for $for<F, S> where S: SpannableHash {
+        impl<F, S> Hash for $for<F, S> where S: ast_toolkit::span::SpannableHash {
             #[inline]
             fn hash<H: Hasher>(&self, state: &mut H) {
                 match self {
@@ -77,7 +77,7 @@ macro_rules! impl_enum_map {
         }
 
         paste! {
-            impl<F, S> PartialEq for $for<F, S> where S: SpannableEq {
+            impl<F, S> PartialEq for $for<F, S> where S: ast_toolkit::span::SpannableEq {
                 #[inline]
                 fn eq(&self, other: &Self) -> bool {
                     match (self, other) {
