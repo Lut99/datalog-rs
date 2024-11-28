@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    28 Nov 2024, 17:32:58
+//    28 Nov 2024, 17:52:09
 //  Auto updated?
 //    Yes
 //
@@ -17,11 +17,26 @@ use std::hash::{Hash, Hasher};
 
 #[cfg(feature = "railroad")]
 use ast_toolkit::railroad::{railroad as rr, ToDelimNode, ToNode, ToNonTerm};
-use ast_toolkit::span::{Span, SpannableDisplay};
+use ast_toolkit::span::SpannableDisplay;
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
 use paste::paste;
 
-use crate::ast::{impl_enum_map, impl_map, Reserialize, ReserializeDelim, Rule};
+use crate::ast::{impl_enum_map, impl_map, Ident, Reserialize, ReserializeDelim, Rule};
+
+
+/***** HELPERS *****/
+/// Generates the railroad node for the transition identifiers.
+#[inline]
+#[cfg(feature = "railroad")]
+fn railroad_trans_ident() -> Box<dyn rr::Node> {
+    Box::new(rr::Sequence::new(vec![
+        Box::new(rr::Comment::new("regex".into())) as Box<dyn rr::Node>,
+        Box::new(rr::Terminal::new("^#[a-z_-]*$".into())),
+    ]))
+}
+
+
+
 
 
 /***** TOPLEVEL *****/
@@ -237,7 +252,7 @@ impl_enum_map!(PostulationOp, Create(op), Obfuscate(op));
 #[derive(Clone, Debug)]
 pub struct Transition<F, S> {
     /// The identifier of the transition.
-    pub ident: TransIdent<F, S>,
+    pub ident: Ident<F, S>,
     /// The curly brackets wrapping the postulations.
     pub curly_tokens: Curly<F, S>,
     /// The posulations nested inside.
@@ -286,7 +301,7 @@ impl<F, S> ToNode for Transition<F, S> {
     #[inline]
     fn railroad() -> Self::Node {
         rr::Sequence::new(vec![
-            Box::new(TransIdent::<F, S>::railroad()) as Box<dyn rr::Node>,
+            railroad_trans_ident(),
             Box::new(Curly::<F, S>::railroad_open()),
             Box::new(rr::Repeat::new(Postulation::<F, S>::railroad(), rr::Empty)),
             Box::new(Curly::<F, S>::railroad_close()),
@@ -294,36 +309,6 @@ impl<F, S> ToNode for Transition<F, S> {
     }
 }
 impl_map!(Transition, ident, postulations);
-
-/// An [`Ident`]ifier prefixed by a `#`.
-///
-/// # Syntax
-/// ```plain
-/// #foo
-/// ```
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "railroad", derive(ToNode))]
-#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad), regex = "^#[a-z_][a-z_-]*$"))]
-pub struct TransIdent<F, S> {
-    /// The value of the identifier itself, including the pound.
-    pub value: Span<F, S>,
-}
-impl<F, S> Display for TransIdent<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", self.value) }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for TransIdent<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", self.value) }
-}
-impl_map!(TransIdent, value);
 
 
 
@@ -340,7 +325,7 @@ pub struct Trigger<F, S> {
     /// The curly brackets wrapping the transition identifiers.
     pub curly_tokens: Curly<F, S>,
     /// The list of transition identifiers triggered.
-    pub idents: Vec<TransIdent<F, S>>,
+    pub idents: Vec<Ident<F, S>>,
 }
 impl<F, S> Display for Trigger<F, S>
 where
@@ -387,7 +372,7 @@ impl<F, S> ToNode for Trigger<F, S> {
         rr::Sequence::new(vec![
             Box::new(Exclaim::<F, S>::railroad()) as Box<dyn rr::Node>,
             Box::new(Curly::<F, S>::railroad_open()),
-            Box::new(rr::Repeat::new(TransIdent::<F, S>::railroad(), rr::Empty)),
+            Box::new(rr::Repeat::new(railroad_trans_ident(), rr::Empty)),
             Box::new(Curly::<F, S>::railroad_close()),
         ])
     }
