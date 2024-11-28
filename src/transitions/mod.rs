@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:47:56
 //  Last edited:
-//    28 Nov 2024, 10:50:10
+//    28 Nov 2024, 17:32:38
 //  Auto updated?
 //    Yes
 //
@@ -15,3 +15,5 @@
 
 // Modules
 pub mod ast;
+#[cfg(feature = "parser")]
+pub mod parser;

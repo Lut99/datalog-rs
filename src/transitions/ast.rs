@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    28 Nov 2024, 17:31:43
+//    28 Nov 2024, 17:32:58
 //  Auto updated?
 //    Yes
 //
@@ -35,11 +35,11 @@ use crate::ast::{impl_enum_map, impl_map, Reserialize, ReserializeDelim, Rule};
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "railroad", derive(ToNonTerm))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
-pub struct Spec<F, S> {
+pub struct TransitionSpec<F, S> {
     /// The list of phrases (rules|transitions) in this program.
     pub phrases: Vec<Phrase<F, S>>,
 }
-impl<F, S> Display for Spec<F, S>
+impl<F, S> Display for TransitionSpec<F, S>
 where
     S: SpannableDisplay,
 {
@@ -52,7 +52,7 @@ where
     }
 }
 #[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for Spec<F, S>
+impl<F, S> Reserialize for TransitionSpec<F, S>
 where
     S: SpannableDisplay,
 {
@@ -65,7 +65,7 @@ where
         Ok(())
     }
 }
-impl_map!(Spec, phrases);
+impl_map!(TransitionSpec, phrases);
 
 /// Specifies a single phrase.
 ///
