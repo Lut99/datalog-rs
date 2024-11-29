@@ -4,7 +4,7 @@
 //  Created:
 //    18 Mar 2024, 12:04:42
 //  Last edited:
-//    28 Nov 2024, 17:38:39
+//    29 Nov 2024, 11:23:50
 //  Auto updated?
 //    Yes
 //
@@ -16,7 +16,7 @@ use ast_toolkit::snack::span::{LenBytes, MatchBytes, WhileUtf8};
 use ast_toolkit::snack::Combinator;
 use ast_toolkit::tokens::snack::complete::{utf8_delimiter, utf8_token, Utf8Delimiter, Utf8Token};
 
-use super::super::ast::{Add, Curly, Dash, Exclaim};
+use super::super::ast::{Add, Curly, Exclaim, Squiggly};
 use crate::parser::tokens::{token_end, TokenEnd};
 
 
@@ -57,13 +57,13 @@ where
     utf8_token(token_end())
 }
 
-/// Combinator for parsing a `-`.
+/// Combinator for parsing a `~`.
 ///
 /// # Returns
-/// A combinator that parses [`Dash`]s.
+/// A combinator that parses [`Squiggly`]s.
 ///
 /// # Fails
-/// The returned combinator fails if the input is not `-`.
+/// The returned combinator fails if the input is not `~`.
 ///
 /// # Example
 /// ```rust
@@ -71,21 +71,21 @@ where
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
 /// use ast_toolkit::tokens::snack::complete::ParseError;
-/// use datalog::transitions::ast::Dash;
-/// use datalog::transitions::parser::tokens::dash;
+/// use datalog::transitions::ast::Squiggly;
+/// use datalog::transitions::parser::tokens::squiggly;
 ///
-/// let span1 = Span::new("<example>", "-");
+/// let span1 = Span::new("<example>", "~");
 /// let span2 = Span::new("<example>", "foo");
 ///
-/// let mut comb = dash();
-/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(1..), Dash { span: span1.slice(..1) }));
+/// let mut comb = squiggly();
+/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(1..), Squiggly { span: span1.slice(..1) }));
 /// assert!(matches!(
 ///     comb.parse(span2),
 ///     SResult::Fail(Failure::Common(Common::Custom(ParseError::Utf8Token { .. })))
 /// ));
 /// ```
 #[inline]
-pub const fn dash<'t, F, S>() -> Utf8Token<F, S, Dash<F, S>, TokenEnd<F, S>>
+pub const fn squiggly<'t, F, S>() -> Utf8Token<F, S, Squiggly<F, S>, TokenEnd<F, S>>
 where
     F: Clone,
     S: Clone + LenBytes + MatchBytes + WhileUtf8,

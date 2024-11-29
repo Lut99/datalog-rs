@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 17:55:47
 //  Last edited:
-//    29 Nov 2024, 11:00:46
+//    29 Nov 2024, 11:03:59
 //  Auto updated?
 //    Yes
 //
@@ -184,7 +184,7 @@ where
     comb::map(
         seq::pair(
             comb::map_err(tokens::exclaim(), |err| ParseError::Exclaim { span: err.into_span() }),
-            comb::map_err(
+            error::cut(comb::map_err(
                 tokens::curly(seq::preceded(
                     error::transmute(utf8::whitespace0()),
                     multi::many0(seq::terminated(
@@ -200,7 +200,7 @@ where
                         _ => unreachable!(),
                     }
                 },
-            ),
+            )),
         ),
         |(exclaim_token, (idents, curly_tokens))| ast::Trigger { exclaim_token, curly_tokens, idents },
     )

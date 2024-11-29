@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    28 Nov 2024, 17:52:09
+//    29 Nov 2024, 11:23:22
 //  Auto updated?
 //    Yes
 //
@@ -215,7 +215,7 @@ pub enum PostulationOp<F, S> {
     /// Creates facts.
     Create(Add<F, S>),
     /// Hides previously created facts.
-    Obfuscate(Dash<F, S>),
+    Obfuscate(Squiggly<F, S>),
 }
 impl<F, S> Display for PostulationOp<F, S> {
     #[inline]
@@ -385,7 +385,7 @@ impl_map!(Trigger, idents);
 
 /***** TOKENS *****/
 utf8_token!(Add, "+");
-utf8_token!(Dash, "-");
+utf8_token!(Squiggly, "~");
 utf8_token!(Exclaim, "!");
 utf8_delimiter!(Curly, "{", "}");
 
@@ -398,7 +398,7 @@ mod railroad_impl {
     use super::*;
 
     utf8_token_railroad!(Add, "+");
-    utf8_token_railroad!(Dash, "-");
+    utf8_token_railroad!(Squiggly, "~");
     utf8_token_railroad!(Exclaim, "!");
     utf8_delimiter_railroad!(Curly, "{", "}");
 }
@@ -413,9 +413,9 @@ mod reserialize_impl {
         #[inline]
         fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "+") }
     }
-    impl<F, S> Reserialize for Dash<F, S> {
+    impl<F, S> Reserialize for Squiggly<F, S> {
         #[inline]
-        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "-") }
+        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "~") }
     }
     impl<F, S> Reserialize for Exclaim<F, S> {
         #[inline]
