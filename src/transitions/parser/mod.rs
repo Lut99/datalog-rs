@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 17:32:22
 //  Last edited:
-//    29 Nov 2024, 11:10:00
+//    29 Nov 2024, 15:33:25
 //  Auto updated?
 //    Yes
 //
@@ -14,8 +14,8 @@
 //
 
 // Declare appropriate submodules
-pub mod ident;
-pub mod postulation;
+pub mod idents;
+pub mod postulations;
 pub mod tokens;
-pub mod transition;
-pub mod trigger;
+pub mod transitions;
+pub mod triggers;

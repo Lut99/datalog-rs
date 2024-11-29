@@ -1,10 +1,10 @@
-//  IDENT.rs
+//  IDENTS.rs
 //    by Lut99
 //
 //  Created:
 //    28 Nov 2024, 17:39:56
 //  Last edited:
-//    28 Nov 2024, 17:54:16
+//    29 Nov 2024, 15:34:23
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,7 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use ast_toolkit::snack::error::{Common, Failure};
 use ast_toolkit::snack::span::WhileUtf8;
 use ast_toolkit::snack::utf8::complete as utf8;
-use ast_toolkit::snack::{comb, Result as SResult};
+use ast_toolkit::snack::{Result as SResult, comb};
 use ast_toolkit::span::{Span, Spanning};
 
 use crate::ast;
@@ -80,7 +80,7 @@ where
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
 /// use datalog::ast::Ident;
-/// use datalog::transitions::parser::ident::{trans_ident, ParseError};
+/// use datalog::transitions::parser::idents::{ParseError, trans_ident};
 ///
 /// let span1 = Span::new("<example>", "#foo");
 /// let span2 = Span::new("<example>", "bar");

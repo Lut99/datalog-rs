@@ -1,10 +1,10 @@
-//  POSTULATION.rs
+//  POSTULATIONS.rs
 //    by Lut99
 //
 //  Created:
 //    29 Nov 2024, 11:10:12
 //  Last edited:
-//    29 Nov 2024, 14:11:03
+//    29 Nov 2024, 15:34:39
 //  Auto updated?
 //    Yes
 //
@@ -123,12 +123,12 @@ where
 /// # Example
 /// ```rust
 /// use ast_toolkit::punctuated::punct;
-/// use ast_toolkit::snack::error::{Common, Failure};
+/// use ast_toolkit::snack::error::{Common, Error, Failure};
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
-/// use datalog::ast::{Arrow, Ident, Rule, RuleAntecedents, Dot, Atom, Literal};
+/// use datalog::ast::{Arrow, Atom, AtomArg, AtomArgs, Dot, Ident, Literal, Parens, Rule, RuleAntecedents};
 /// use datalog::transitions::ast::{Add, Curly, Postulation, PostulationOp, Squiggly};
-/// use datalog::transitions::parser::postulation::{postulation, ParseError};
+/// use datalog::transitions::parser::postulations::{postulation, ParseError};
 ///
 /// let span1 = Span::new("<example>", "+{ foo. }");
 /// let span2 = Span::new("<example>", "~{ bar :- baz(quz). }");
@@ -153,24 +153,53 @@ where
 /// assert_eq!(
 ///     comb.parse(span2).unwrap(),
 ///     (span2.slice(21..), Postulation {
-///         op: PostulationOp::Obfuscate(AddSquiggly { span: span2.slice(..1) }),
+///         op: PostulationOp::Obfuscate(Squiggly { span: span2.slice(..1) }),
 ///         curly_tokens: Curly { open: span2.slice(1..2), close: span2.slice(20..21) },
 ///         rules: vec![Rule {
 ///             consequences: punct![v => Atom { ident: Ident { value: span2.slice(3..6) }, args: None }],
 ///             tail: Some(RuleAntecedents {
-///                 arrow_token: Arrow { span: span1.slice(7..9) },
-///                 antecedents: punct![v => Literal {  }]
+///                 arrow_token: Arrow { span: span2.slice(7..9) },
+///                 antecedents: punct![v => Literal::Atom(Atom {
+///                     ident: Ident { value: span2.slice(10..13) },
+///                     args: Some(AtomArgs {
+///                         paren_tokens: Parens { open: span2.slice(13..14), close: span2.slice(17..18) },
+///                         args: punct![v => AtomArg::Atom(Ident { value: span2.slice(14..17) })]
+///                     })
+///                 })]
 ///             }),
 ///             dot: Dot { span: span2.slice(18..19) }
 ///         }],
 ///     })
 /// );
-/// // assert_eq!(
-/// //     comb.parse(span2).unwrap(),
-/// //     (span2.slice(1..), PostulationOp::Obfuscate(Squiggly { span: span2.slice(..1) }))
-/// // );
-/// // assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Alt { .. }))));
-/// // assert!(matches!(comb.parse(span4), SResult::Fail(Failure::Common(Common::Alt { .. }))));
+/// assert_eq!(
+///     comb.parse(span3).unwrap(),
+///     (span3.slice(3..), Postulation {
+///         op: PostulationOp::Create(Add { span: span3.slice(..1) }),
+///         curly_tokens: Curly { open: span3.slice(1..2), close: span3.slice(2..3) },
+///         rules: vec![],
+///     })
+/// );
+/// assert_eq!(
+///     comb.parse(span4).unwrap(),
+///     (span4.slice(14..), Postulation {
+///         op: PostulationOp::Create(Add { span: span4.slice(..1) }),
+///         curly_tokens: Curly { open: span4.slice(1..2), close: span4.slice(2..3) },
+///         rules: vec![
+///             Rule {
+///                 consequences: punct![v => Atom { ident: Ident { value: span4.slice(3..6) }, args: None }],
+///                 tail: None,
+///                 dot: Dot { span: span4.slice(6..7) }
+///             },
+///             Rule {
+///                 consequences: punct![v => Atom { ident: Ident { value: span4.slice(8..11) }, args: None }],
+///                 tail: None,
+///                 dot: Dot { span: span4.slice(11..12) }
+///             },
+///         ],
+///     })
+/// );
+/// assert!(matches!(comb.parse(span5), SResult::Fail(Failure::Common(Common::Alt { .. }))));
+/// assert!(matches!(comb.parse(span6), SResult::Error(Error::Common(Common::Custom(ParseError::CurlyClose { .. })))));
 /// ```
 #[comb(snack = ::ast_toolkit::snack, expected = "a transition definition", Output = ast::Postulation<F, S>, Error = ParseError<F, S>)]
 pub fn postulation<F, S>(input: Span<F, S>) -> _
@@ -218,7 +247,7 @@ where
 /// use ast_toolkit::span::Span;
 /// use datalog::ast::Ident;
 /// use datalog::transitions::ast::{Add, PostulationOp, Squiggly};
-/// use datalog::transitions::parser::postulation::{postulation_op, ParseError};
+/// use datalog::transitions::parser::postulations::{ParseError, postulation_op};
 ///
 /// let span1 = Span::new("<example>", "+");
 /// let span2 = Span::new("<example>", "~");

@@ -1,10 +1,10 @@
-//  TRIGGER.rs
+//  TRIGGERS.rs
 //    by Lut99
 //
 //  Created:
 //    28 Nov 2024, 17:55:47
 //  Last edited:
-//    29 Nov 2024, 11:03:59
+//    29 Nov 2024, 15:34:31
 //  Auto updated?
 //    Yes
 //
@@ -21,8 +21,8 @@ use ast_toolkit::snack::{comb, combinator as comb, error, multi, sequence as seq
 use ast_toolkit::span::{Span, Spanning};
 
 use super::super::ast;
-use super::{ident, tokens};
-use crate::transitions::parser::ident::TransIdentExpectsFormatter;
+use super::{idents, tokens};
+use crate::transitions::parser::idents::TransIdentExpectsFormatter;
 
 
 /***** ERRORS *****/
@@ -128,7 +128,7 @@ where
 /// use ast_toolkit::span::Span;
 /// use datalog::ast::Ident;
 /// use datalog::transitions::ast::{Curly, Exclaim, Trigger};
-/// use datalog::transitions::parser::trigger::{trigger, ParseError};
+/// use datalog::transitions::parser::triggers::{ParseError, trigger};
 ///
 /// let span1 = Span::new("<example>", "!{ #foo }");
 /// let span2 = Span::new("<example>", "!{}");
@@ -188,7 +188,7 @@ where
                 tokens::curly(seq::preceded(
                     error::transmute(utf8::whitespace0()),
                     multi::many0(seq::terminated(
-                        comb::map_err(ident::trans_ident(), |err| ParseError::TransIdent { span: err.into_span() }),
+                        comb::map_err(idents::trans_ident(), |err| ParseError::TransIdent { span: err.into_span() }),
                         error::transmute(utf8::whitespace0()),
                     )),
                 )),
