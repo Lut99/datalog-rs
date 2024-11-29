@@ -4,7 +4,7 @@
 //  Created:
 //    26 Mar 2024, 19:36:31
 //  Last edited:
-//    28 Nov 2024, 16:51:31
+//    29 Nov 2024, 17:02:12
 //  Auto updated?
 //    Yes
 //
@@ -475,7 +475,7 @@ fn format_atom_assign(atom: &crate::ast::Atom<&str, &str>, assign: &HashMap<Iden
 /// Whether any new facts were derived or not.
 ///
 /// # Errors
-/// This function can error if the total number of arguments in a rule exceeds `LEN`,
+/// This function can error if the total number of arguments in a rule exceeds [`STACK_VEC_LEN`](interpretation::STACK_VEC_LEN),
 pub fn immediate_consequence<'f: 'r, 's: 'r, 'r, 'i, I>(rules: I, int: &'i mut Interpretation<'f, 's>) -> Result<bool, Error<'f, 's>>
 where
     I: IntoIterator<Item = &'r Rule<&'f str, &'s str>>,
@@ -596,7 +596,7 @@ where
 /// A new [`Interpretation`] that contains the things we derived about the facts in the [`Spec`].
 ///
 /// # Errors
-/// This function can error if the total number of arguments in a rule exceeds `LEN`.
+/// This function can error if the total number of arguments in a rule exceeds [`STACK_VEC_LEN`](interpretation::STACK_VEC_LEN).
 pub fn alternating_fixpoint<'f: 'r, 's: 'r, 'r, I>(rules: I) -> Result<Interpretation<'f, 's>, Error<'f, 's>>
 where
     I: IntoIterator<Item = &'r Rule<&'f str, &'s str>>,
@@ -620,7 +620,7 @@ where
 /// - `int`: Some existing [`Interpretation`] to [`clear()`](Interpretation::clear()) and then populate again. Might be more efficient than allocating a new one if you already have one lying around.
 ///
 /// # Errors
-/// This function can error if the total number of arguments in a rule exceeds `LEN`.
+/// This function can error if the total number of arguments in a rule exceeds [`STACK_VEC_LEN`](interpretation::STACK_VEC_LEN).
 pub fn alternating_fixpoint_mut<'f: 'r, 's: 'r, 'r, 'i, I>(rules: I, int: &'i mut Interpretation<'f, 's>) -> Result<(), Error<'f, 's>>
 where
     I: IntoIterator<Item = &'r Rule<&'f str, &'s str>>,
@@ -693,7 +693,7 @@ impl<'f, 's> Spec<&'f str, &'s str> {
     /// Whether any new facts were derived or not.
     ///
     /// # Errors
-    /// This function can error if the total number of arguments in a rule exceeds `LEN`,
+    /// This function can error if the total number of arguments in a rule exceeds [`STACK_VEC_LEN`](interpretation::STACK_VEC_LEN),
     #[inline]
     pub fn immediate_consequence(&self, int: &mut Interpretation<'f, 's>) -> Result<bool, Error> { immediate_consequence(&self.rules, int) }
 
@@ -710,7 +710,7 @@ impl<'f, 's> Spec<&'f str, &'s str> {
     /// A new [`Interpretation`] that contains the things we derived about the facts in the [`Spec`].
     ///
     /// # Errors
-    /// This function can error if the total number of arguments in a rule exceeds `LEN`.
+    /// This function can error if the total number of arguments in a rule exceeds [`STACK_VEC_LEN`](interpretation::STACK_VEC_LEN).
     #[inline]
     pub fn alternating_fixpoint(&self) -> Result<Interpretation<'f, 's>, Error> { alternating_fixpoint(&self.rules) }
 
@@ -727,7 +727,7 @@ impl<'f, 's> Spec<&'f str, &'s str> {
     /// - `int`: Some existing [`Interpretation`] to [`clear()`](Interpretation::clear()) and then populate again. Might be more efficient than allocating a new one if you already have one lying around.
     ///
     /// # Errors
-    /// This function can error if the total number of arguments in a rule exceeds `LEN`.
+    /// This function can error if the total number of arguments in a rule exceeds [`STACK_VEC_LEN`](interpretation::STACK_VEC_LEN).
     #[inline]
     pub fn alternating_fixpoint_mut(&self, int: &mut Interpretation<'f, 's>) -> Result<(), Error> { alternating_fixpoint_mut(&self.rules, int) }
 }
