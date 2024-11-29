@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 15:45:02
 //  Last edited:
-//    29 Nov 2024, 16:11:46
+//    29 Nov 2024, 16:23:54
 //  Auto updated?
 //    Yes
 //
@@ -16,8 +16,8 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
-use ast_toolkit::snack::{branch, comb, combinator as comb};
-use ast_toolkit::span::{Span, Spanning};
+use ast_toolkit::snack::{branch, comb, combinator as comb, error, multi, sequence as seq, utf8};
+use ast_toolkit::span::{Span, Spannable, Spanning};
 
 use super::super::ast;
 use super::postulations::PostulationExpectsFormatter;
@@ -117,6 +117,128 @@ where
 
 
 /***** LIBRARY *****/
+/// Parses a whole specification with both transitions and rules.
+///
+/// # Returns
+/// A [`TransitionSpec`](ast::TransitionSpec) that represents rules and transitions.
+///
+/// # Fails
+/// This combinator fails if the head of the input as a whole does not contain valid datalog.
+///
+/// # Example
+/// ```rust
+/// use ast_toolkit::punctuated::punct;
+/// use ast_toolkit::snack::Combinator as _;
+/// use ast_toolkit::span::Span;
+/// use datalog::ast::{Arrow, Atom, AtomArg, AtomArgs, Comma, Dot, Ident, Literal, Parens, Rule, RuleAntecedents};
+/// use datalog::transitions::ast::{Add, Curly, Exclaim, Phrase, Postulation, PostulationOp, Squiggly, Transition, TransitionSpec, Trigger};
+/// use datalog::transitions::parser::specs::{ParseError, trans_spec};
+///
+/// let span1 = Span::new("<example>", r#"#foo {
+///     +{ foo. }
+///     ~{ bar :- baz(quz). }
+/// }
+/// !{ #foo }
+/// +{ foo. }
+/// foo :- bar, baz(quz)."#);
+///
+/// let mut comb = trans_spec();
+/// println!("{:?}", comb.parse(span1));
+/// assert_eq!(
+///     comb.parse(span1).unwrap(),
+///     (
+///         span1.slice(90..),
+///         TransitionSpec {
+///             phrases: vec![
+///                 Phrase::Transition(Transition {
+///                     ident: Ident { value: span1.slice(..4) },
+///                     curly_tokens: Curly { open: span1.slice(5..6), close: span1.slice(47..48) },
+///                     postulations: vec![
+///                         Postulation {
+///                             op: PostulationOp::Create(Add { span: span1.slice(11..12) }),
+///                             curly_tokens: Curly { open: span1.slice(12..13), close: span1.slice(19..20) },
+///                             rules: vec![Rule {
+///                                 consequences: punct![v => Atom { ident: Ident { value: span1.slice(14..17) }, args: None }],
+///                                 tail: None,
+///                                 dot: Dot { span: span1.slice(17..18) },
+///                             }],
+///                         },
+///                         Postulation {
+///                             op: PostulationOp::Obfuscate(Squiggly { span: span1.slice(25..26) }),
+///                             curly_tokens: Curly { open: span1.slice(26..27), close: span1.slice(45..46) },
+///                             rules: vec![Rule {
+///                                 consequences: punct![v => Atom { ident: Ident { value: span1.slice(28..31) }, args: None }],
+///                                 tail: Some(RuleAntecedents {
+///                                     arrow_token: Arrow { span: span1.slice(32..34) },
+///                                     antecedents: punct![v => Literal::Atom(Atom {
+///                                         ident: Ident { value: span1.slice(35..38) },
+///                                         args: Some(AtomArgs {
+///                                             paren_tokens: Parens { open: span1.slice(38..39), close: span1.slice(42..43) },
+///                                             args: punct![v => AtomArg::Atom(Ident { value: span1.slice(39..42) })],
+///                                         }),
+///                                     })],
+///                                 }),
+///                                 dot: Dot { span: span1.slice(43..44) },
+///                             }],
+///                         },
+///                     ],
+///                 }),
+///                 Phrase::Trigger(Trigger {
+///                     exclaim_token: Exclaim { span: span1.slice(49..50) },
+///                     curly_tokens: Curly { open: span1.slice(50..51), close: span1.slice(57..58) },
+///                     idents: vec![Ident { value: span1.slice(52..56) }],
+///                 }),
+///                 Phrase::Postulation(Postulation {
+///                     op: PostulationOp::Create(Add { span: span1.slice(59..60) }),
+///                     curly_tokens: Curly { open: span1.slice(60..61), close: span1.slice(67..68) },
+///                     rules: vec![Rule {
+///                         consequences: punct![v => Atom { ident: Ident { value: span1.slice(62..65) }, args: None }],
+///                         tail: None,
+///                         dot: Dot { span: span1.slice(65..66) }
+///                     }],
+///                 }),
+///                 Phrase::Rule(Rule {
+///                     consequences: punct![v => Atom { ident: Ident { value: span1.slice(69..72) }, args: None }],
+///                     tail: Some(RuleAntecedents {
+///                         arrow_token: Arrow { span: span1.slice(73..75) },
+///                         antecedents: punct![
+///                             v => Literal::Atom(Atom {
+///                                 ident: Ident { value: span1.slice(76..79) },
+///                                 args: None,
+///                             }),
+///                             p => Comma { span: span1.slice(79..80) },
+///                             v => Literal::Atom(Atom {
+///                                 ident: Ident { value: span1.slice(81..84) },
+///                                 args: Some(AtomArgs {
+///                                     paren_tokens: Parens { open: span1.slice(84..85), close: span1.slice(88..89) },
+///                                     args: punct![v => AtomArg::Atom(Ident { value: span1.slice(85..88) })],
+///                                 }),
+///                             })
+///                         ],
+///                     }),
+///                     dot: Dot { span: span1.slice(89..90) },
+///                 }),
+///             ]
+///         }
+///     )
+/// );
+/// ```
+#[inline]
+#[comb(snack = ::ast_toolkit::snack, expected = "zero or more postulations, rules, transition definitions or triggers", Output = ast::TransitionSpec<F, S>, Error = ParseError<F, S>)]
+pub fn trans_spec<F, S>(input: Span<F, S>) -> _
+where
+    F: Clone,
+    S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + Spannable + WhileUtf8,
+{
+    comb::map(
+        comb::all(multi::many0(seq::delimited(error::transmute(utf8::whitespace0()), phrase(), error::transmute(utf8::whitespace0())))),
+        |phrases| ast::TransitionSpec { phrases },
+    )
+    .parse(input)
+}
+
+
+
 /// Parses a phrase.
 ///
 /// # Returns
