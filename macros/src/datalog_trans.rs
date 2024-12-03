@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 11:04:28
 //  Last edited:
-//    03 Dec 2024, 11:29:51
+//    03 Dec 2024, 12:12:32
 //  Auto updated?
 //    Yes
 //
@@ -22,7 +22,7 @@ use syn::spanned::Spanned as _;
 use syn::token::{Brace, Minus, Plus, Pound};
 use syn::{Error, Ident, LitStr, Path, Token, braced};
 
-use crate::common::{DatalogAttributes, Rule, parse_rule, serialize_rule};
+use crate::common::{DatalogAttributes, Rule};
 
 
 /***** TYPE ALIASES *****/
@@ -44,7 +44,6 @@ type Trigger = (Token![!], Brace, Vec<TransIdent>);
 
 /***** HELPERS *****/
 /// One of the possible phrase types.
-#[derive(Clone, Debug)]
 enum Phrase {
     Postulation(Postulation),
     Rule(Rule),
@@ -59,7 +58,7 @@ impl Parse for Phrase {
             Ok(pos) => return Ok(Self::Postulation(pos)),
             Err(_) => {},
         }
-        match parse_rule(input) {
+        match Rule::parse(input) {
             Ok(rule) => return Ok(Self::Rule(rule)),
             Err(_) => {},
         }
@@ -152,7 +151,7 @@ fn parse_postulation(input: ParseStream) -> Result<Postulation, Error> {
     // Finally, parse the rest as a repeated bunch of rules
     let mut rules: Vec<Rule> = Vec::new();
     while !content.is_empty() {
-        rules.push(parse_rule(&content)?);
+        rules.push(Rule::parse(&content)?);
     }
     Ok((op, brace, rules))
 }
@@ -200,7 +199,7 @@ fn parse_trigger(input: ParseStream) -> Result<Trigger, Error> {
 ///
 /// # Returns
 /// A [`TokenStream2`] that encodes building the matching struct.
-pub fn serialize_transition(crate_path: &Path, from_str: &LitStr) -> TokenStream2 {}
+pub fn serialize_transition(crate_path: &Path, from_str: &LitStr) -> TokenStream2 { todo!() }
 
 
 
@@ -223,23 +222,5 @@ pub fn datalog_trans(input: ParseStream) -> Result<TokenStream2, Error> {
     let attrs: DatalogAttributes = input.parse()?;
 
     // Next, start building the tokens
-    let crate_path: &Path = &attrs.crate_path;
-    let mut rules: Vec<TokenStream2> = Vec::new();
-    while !input.is_empty() {
-        let (consequences, antecedents, _) = parse_rule(input)?;
-
-        // Now we re-serialize.
-        rules.push(serialize_rule(crate_path, &attrs.from, consequences, antecedents));
-    }
-
-    // Write the remainder
-    let span: Span = if let Some(first) = rules.first() { first.span() } else { Span::call_site() };
-    Ok(quote_spanned! {
-        span =>
-        #crate_path::ast::Spec {
-            rules: ::std::vec![
-                #(#rules),*
-            ]
-        }
-    })
+    todo!()
 }
