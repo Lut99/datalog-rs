@@ -4,7 +4,7 @@
 //  Created:
 //    26 Mar 2024, 19:36:31
 //  Last edited:
-//    29 Nov 2024, 17:02:12
+//    03 Dec 2024, 10:44:59
 //  Auto updated?
 //    Yes
 //
@@ -52,7 +52,7 @@ mod tests {
 
     /// Sets up a logger if wanted.
     #[cfg(feature = "log")]
-    fn setup_logger() {
+    pub(crate) fn setup_logger() {
         use humanlog::{DebugMode, HumanLogger};
 
         // Check if the envs tell us to
@@ -67,7 +67,7 @@ mod tests {
     }
 
     /// Makes an [`Atom`] conveniently.
-    fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Atom<&'static str, &'static str> {
+    pub(crate) fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Atom<&'static str, &'static str> {
         // Make the punctuation
         let mut punct: Punctuated<AtomArg<_, _>, Comma<_, _>> = Punctuated::new();
         for (i, arg) in args.into_iter().enumerate() {
@@ -296,7 +296,7 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("wins", ["d"])), Some(false));
 
 
-        // Example 5.2 (b)
+        // Example 5.2 (c)
         // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
         let five_two_c: Spec<_, _> = datalog! {
             #![crate]
@@ -695,7 +695,7 @@ impl<'f, 's> Spec<&'f str, &'s str> {
     /// # Errors
     /// This function can error if the total number of arguments in a rule exceeds [`STACK_VEC_LEN`](interpretation::STACK_VEC_LEN),
     #[inline]
-    pub fn immediate_consequence(&self, int: &mut Interpretation<'f, 's>) -> Result<bool, Error> { immediate_consequence(&self.rules, int) }
+    pub fn immediate_consequence(&self, int: &mut Interpretation<'f, 's>) -> Result<bool, Error<'f, 's>> { immediate_consequence(&self.rules, int) }
 
     /// Performs a proper derivation using the full well-founded semantics.
     ///
@@ -712,7 +712,7 @@ impl<'f, 's> Spec<&'f str, &'s str> {
     /// # Errors
     /// This function can error if the total number of arguments in a rule exceeds [`STACK_VEC_LEN`](interpretation::STACK_VEC_LEN).
     #[inline]
-    pub fn alternating_fixpoint(&self) -> Result<Interpretation<'f, 's>, Error> { alternating_fixpoint(&self.rules) }
+    pub fn alternating_fixpoint(&self) -> Result<Interpretation<'f, 's>, Error<'f, 's>> { alternating_fixpoint(&self.rules) }
 
     /// Performs a proper derivation using the full well-founded semantics.
     ///
@@ -729,5 +729,7 @@ impl<'f, 's> Spec<&'f str, &'s str> {
     /// # Errors
     /// This function can error if the total number of arguments in a rule exceeds [`STACK_VEC_LEN`](interpretation::STACK_VEC_LEN).
     #[inline]
-    pub fn alternating_fixpoint_mut(&self, int: &mut Interpretation<'f, 's>) -> Result<(), Error> { alternating_fixpoint_mut(&self.rules, int) }
+    pub fn alternating_fixpoint_mut(&self, int: &mut Interpretation<'f, 's>) -> Result<(), Error<'f, 's>> {
+        alternating_fixpoint_mut(&self.rules, int)
+    }
 }

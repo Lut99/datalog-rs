@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 16:32:11
 //  Last edited:
-//    29 Nov 2024, 17:13:19
+//    03 Dec 2024, 10:31:31
 //  Auto updated?
 //    Yes
 //
@@ -27,11 +27,9 @@ use crate::ast::{Ident, Rule, Spec};
 #[derive(Clone, Debug)]
 pub struct State<'f, 's> {
     /// Currently defined transitions.
-    pub(crate) trans: HashMap<Ident<&'f str, &'s str>, Transition<&'f str, &'s str>>,
-    /// A list of rules that are from the spec.
-    pub(crate) spec_rules: IndexSet<Rule<&'f str, &'s str>>,
-    /// A list of rules that are from transitions.
-    pub(crate) trans_rules: IndexSet<Rule<&'f str, &'s str>>,
+    pub trans: HashMap<Ident<&'f str, &'s str>, Transition<&'f str, &'s str>>,
+    /// Currently defined rules.
+    pub rules: Rules<'f, 's>,
 }
 impl<'f, 's> Default for State<'f, 's> {
     #[inline]
@@ -43,19 +41,36 @@ impl<'f, 's> State<'f, 's> {
     /// # Returns
     /// A new State ready to [`run()`](super::super::ast::TransitionSpec::run_mut()).
     #[inline]
-    pub fn new() -> Self { Self { trans: HashMap::new(), spec_rules: IndexSet::new(), trans_rules: IndexSet::new() } }
+    pub fn new() -> Self { Self { trans: HashMap::new(), rules: Rules::new() } }
+}
 
 
 
-    /// Stores a new transition from the specification.
-    ///
-    /// # Arguments
-    /// - `trans`: The [`Transition`] to store.
+/// Implements a store for rules that remembers which are given in the spec and which are results
+/// of transitions.
+///
+/// This mostly exists as one to be able to correct borrow the transitions as read while writing to
+/// the rules.
+#[derive(Clone, Debug)]
+pub struct Rules<'f, 's> {
+    /// A list of rules that are from the spec.
+    pub(crate) spec_rules:  IndexSet<Rule<&'f str, &'s str>>,
+    /// A list of rules that are from transitions.
+    pub(crate) trans_rules: IndexSet<Rule<&'f str, &'s str>>,
+}
+impl<'f, 's> Default for Rules<'f, 's> {
+    #[inline]
+    fn default() -> Self { Self::new() }
+}
+impl<'f, 's> Rules<'f, 's> {
+    /// Constructor for the Rules.
     ///
     /// # Returns
-    /// True if a transition with the same identifier was already present in the state, or false otherwise.
+    /// A new Rules without any rules in it yet.
     #[inline]
-    pub fn add_transition(&mut self, trans: Transition<&'f str, &'s str>) -> bool { self.trans.insert(trans.ident.clone(), trans).is_some() }
+    pub fn new() -> Self { Self { spec_rules: IndexSet::new(), trans_rules: IndexSet::new() } }
+
+
 
     /// Stores a new rule from the specification.
     ///
@@ -96,18 +111,6 @@ impl<'f, 's> State<'f, 's> {
         let exists: bool = self.spec_rules.contains(rule);
         self.trans_rules.swap_remove(rule) && !exists
     }
-
-
-
-    /// Retrieves the transition matching the given identifier.
-    ///
-    /// # Arguments
-    /// - `ident`: The [`Ident`]ifier of the transition to retrieve.
-    ///
-    /// # Returns
-    /// The found [`Transition`] if any, or else [`None`].
-    #[inline]
-    pub fn get_transition(&self, ident: &Ident<&'f str, &'s str>) -> Option<&Transition<&'f str, &'s str>> { self.trans.get(ident) }
 
 
 
