@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    29 Nov 2024, 11:23:22
+//    03 Dec 2024, 15:34:46
 //  Auto updated?
 //    Yes
 //
@@ -16,12 +16,14 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 
 #[cfg(feature = "railroad")]
-use ast_toolkit::railroad::{railroad as rr, ToDelimNode, ToNode, ToNonTerm};
+use ast_toolkit::railroad::{ToDelimNode, ToNode, ToNonTerm, railroad as rr};
 use ast_toolkit::span::SpannableDisplay;
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
 use paste::paste;
 
-use crate::ast::{impl_enum_map, impl_map, Ident, Reserialize, ReserializeDelim, Rule};
+use crate::ast::{Ident, Rule, impl_enum_map, impl_map};
+#[cfg(feature = "reserialize")]
+use crate::ast::{Reserialize, ReserializeDelim};
 
 
 /***** HELPERS *****/

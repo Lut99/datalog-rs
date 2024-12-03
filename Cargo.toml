@@ -40,7 +40,7 @@ log = "0.4.22"
 [features]
 default = []
 
-transitions = []
+transitions = ["datalog-macros/transitions"]
 
 interpreter = []
 parser = ["ast-toolkit/snack"]

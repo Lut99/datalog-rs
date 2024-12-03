@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 11:04:28
 //  Last edited:
-//    03 Dec 2024, 12:12:32
+//    03 Dec 2024, 14:53:19
 //  Auto updated?
 //    Yes
 //
@@ -12,37 +12,51 @@
 //!   Implements the embedded DSL macro for datalog's transition dialect.
 //
 
-
-/***** PARSE FUNCTIONS *****/
-
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{ToTokens, quote, quote_spanned};
+use quote::{ToTokens, quote_spanned};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned as _;
-use syn::token::{Brace, Minus, Plus, Pound};
-use syn::{Error, Ident, LitStr, Path, Token, braced};
+use syn::token::Brace;
+use syn::{Error, Ident, LitStr, Token, braced};
 
-use crate::common::{DatalogAttributes, Rule};
-
-
-/***** TYPE ALIASES *****/
-/// Represents a Datalog postulation.
-type Postulation = (PostulationOp, Brace, Vec<Rule>);
-
-/// Represents a Datalog transition identifier.
-type TransIdent = (Pound, Ident);
-
-/// Represents a Datalog transition definition.
-type Transition = (TransIdent, Brace, Vec<Postulation>);
-
-/// Represents a Datalog trigger.
-type Trigger = (Token![!], Brace, Vec<TransIdent>);
+use crate::common::{CratePath, DatalogAttributes, FromStr, Rule, resolve_placeholders};
 
 
+/***** HELPER FUNCTIONS *****/
+/// Serializes a not-token appropriately.
+///
+/// # Arguments
+/// - `not`: The [`Not`] who's span we will use for the resulting span.
+///
+/// # Returns
+/// A [`TokenStream2`] that represents the serialized curly brackets.
+fn serialize_not(not: &Token![!]) -> TokenStream2 {
+    let (crate_path, from_str): (CratePath, FromStr) = Default::default();
+    quote_spanned! { not.span => #crate_path::transitions::ast::Exclaim {
+        span: #crate_path::ast::Span::new(#from_str, "!"),
+    } }
+}
+
+/// Serializes a brace-token appropriately.
+///
+/// # Arguments
+/// - `brace`: The [`Brace`] who's span we will use for the resulting span.
+///
+/// # Returns
+/// A [`TokenStream2`] that represents the serialized curly brackets.
+fn serialize_brace(brace: &Brace) -> TokenStream2 {
+    let (crate_path, from_str): (CratePath, FromStr) = Default::default();
+    quote_spanned! { brace.span.join() => #crate_path::transitions::ast::Curly {
+        open: #crate_path::ast::Span::new(#from_str, "{"),
+        close: #crate_path::ast::Span::new(#from_str, "}"),
+    } }
+}
 
 
 
-/***** HELPERS *****/
+
+
+/***** AST *****/
 /// One of the possible phrase types.
 enum Phrase {
     Postulation(Postulation),
@@ -54,7 +68,7 @@ impl Parse for Phrase {
     #[inline]
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // They should all be unique, so just try
-        match parse_postulation(input) {
+        match Postulation::parse(input) {
             Ok(pos) => return Ok(Self::Postulation(pos)),
             Err(_) => {},
         }
@@ -62,144 +76,232 @@ impl Parse for Phrase {
             Ok(rule) => return Ok(Self::Rule(rule)),
             Err(_) => {},
         }
-        match parse_transition(input) {
+        match Transition::parse(input) {
             Ok(trans) => return Ok(Self::Transition(trans)),
             Err(_) => {},
         }
-        Ok(Self::Trigger(parse_trigger(input)?))
+        Ok(Self::Trigger(Trigger::parse(input)?))
+    }
+}
+impl ToTokens for Phrase {
+    #[inline]
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let crate_path: CratePath = Default::default();
+
+        tokens.extend(match self {
+            Self::Postulation(p) => quote_spanned! { p.span() => #crate_path::transitions::ast::Phrase::Postulation(#p) },
+            Self::Rule(r) => quote_spanned! { r.span() => #crate_path::transitions::ast::Phrase::Rule(#r) },
+            Self::Transition(t) => quote_spanned! { t.span() => #crate_path::transitions::ast::Phrase::Transition(#t) },
+            Self::Trigger(t) => quote_spanned! { t.span() => #crate_path::transitions::ast::Phrase::Trigger(#t) },
+        });
     }
 }
 
+/// Represents a postulation.
+struct Postulation {
+    /// The symbol at the start of it.
+    op:    PostulationOp,
+    /// The curly brackets wrapping...
+    brace: Brace,
+    /// The list of rules to postulate.
+    rules: Vec<Rule>,
+}
+impl Parse for Postulation {
+    #[inline]
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        // Parse the postulation op first
+        let op: PostulationOp = input.parse()?;
+
+        // Then the curly braces
+        let content;
+        let brace: Brace = braced!(content in input);
+
+        // Finally, parse the rest as a repeated bunch of rules
+        let mut rules: Vec<Rule> = Vec::new();
+        while !content.is_empty() {
+            rules.push(Rule::parse(&content)?);
+        }
+
+        // Done!
+        Ok(Self { op, brace, rules })
+    }
+}
+impl ToTokens for Postulation {
+    #[inline]
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let crate_path: CratePath = Default::default();
+
+        // OK, write the final struct
+        let op: &PostulationOp = &self.op;
+        let curly_tokens: TokenStream2 = serialize_brace(&self.brace);
+        let rules: Vec<TokenStream2> = self.rules.iter().map(Rule::to_token_stream).collect();
+        tokens.extend(quote_spanned! { Span::call_site() =>
+            #crate_path::transitions::ast::Postulation {
+                op: #op,
+                curly_tokens: #curly_tokens,
+                rules: ::std::vec![#(#rules),*],
+            }
+        })
+    }
+}
+
+/// Represents a transition definition.
+struct Transition {
+    /// The identifier at the start of the transition.
+    ident: TransIdent,
+    /// The curly brackets wrapping...
+    brace: Brace,
+    /// The list of postulations within.
+    posts: Vec<Postulation>,
+}
+impl Parse for Transition {
+    #[inline]
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        // Parse the identifier first
+        let ident: TransIdent = input.parse()?;
+
+        // Then the curly braces
+        let content;
+        let brace: Brace = braced!(content in input);
+
+        // Finally, parse the rest as a repeated bunch of postulations
+        let mut posts: Vec<Postulation> = Vec::new();
+        while !content.is_empty() {
+            posts.push(Postulation::parse(&content)?);
+        }
+
+        // Done!
+        Ok(Self { ident, brace, posts })
+    }
+}
+impl ToTokens for Transition {
+    #[inline]
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let crate_path: CratePath = Default::default();
+
+        // OK, write the final struct
+        let ident: &TransIdent = &self.ident;
+        let curly_tokens: TokenStream2 = serialize_brace(&self.brace);
+        let posts: Vec<TokenStream2> = self.posts.iter().map(Postulation::to_token_stream).collect();
+        tokens.extend(quote_spanned! { Span::call_site() =>
+            #crate_path::transitions::ast::Transition {
+                ident: #ident,
+                curly_tokens: #curly_tokens,
+                postulations: ::std::vec![#(#posts),*],
+            }
+        })
+    }
+}
+
+/// Represents a transition trigger.
+struct Trigger {
+    /// The not token at the start.
+    not:    Token![!],
+    /// The curly brackets wrapping...
+    brace:  Brace,
+    /// The list of transition identifiers within.
+    idents: Vec<TransIdent>,
+}
+impl Parse for Trigger {
+    #[inline]
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        // Parse the not first
+        let not: Token![!] = input.parse()?;
+
+        // Then the curly braces
+        let content;
+        let brace: Brace = braced!(content in input);
+
+        // Finally, parse the rest as a repeated bunch of postulations
+        let mut idents: Vec<TransIdent> = Vec::new();
+        while !content.is_empty() {
+            idents.push(TransIdent::parse(&content)?);
+        }
+
+        // Done!
+        Ok(Self { not, brace, idents })
+    }
+}
+impl ToTokens for Trigger {
+    #[inline]
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let crate_path: CratePath = Default::default();
+
+        // OK, write the final struct
+        let exclaim: TokenStream2 = serialize_not(&self.not);
+        let curly_tokens: TokenStream2 = serialize_brace(&self.brace);
+        let idents: Vec<TokenStream2> = self.idents.iter().map(TransIdent::to_token_stream).collect();
+        tokens.extend(quote_spanned! { Span::call_site() =>
+            #crate_path::transitions::ast::Transition {
+                exclaim_token: #exclaim,
+                curly_tokens: #curly_tokens,
+                idents: ::std::vec![#(#idents),*],
+            }
+        })
+    }
+}
+
+
+
 /// One of the two postulation tokens.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum PostulationOp {
-    Create(Plus),
-    Obfuscate(Minus),
+    Create(Token![+]),
+    Obfuscate(Token![~]),
 }
 impl Parse for PostulationOp {
     #[inline]
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        match Plus::parse(input) {
+        match <Token![+]>::parse(input) {
             Ok(plus) => Ok(Self::Create(plus)),
-            Err(_) => Ok(Self::Obfuscate(Minus::parse(input)?)),
+            Err(_) => Ok(Self::Obfuscate(<Token![~]>::parse(input)?)),
         }
     }
 }
 impl ToTokens for PostulationOp {
     #[inline]
     fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let (crate_path, from_str): (CratePath, FromStr) = Default::default();
+
+        // Write the appropriate postulation op
         match self {
-            Self::Create(p) => tokens.extend(quote! { #p }),
-            Self::Obfuscate(m) => tokens.extend(quote! { #m }),
+            Self::Create(p) => tokens.extend(quote_spanned! { p.span() =>
+                #crate_path::transitions::ast::PostulationOp::Create(#crate_path::transitions::ast::Add { span: #crate_path::ast::Span::new(#from_str, "+") })
+            }),
+            Self::Obfuscate(t) => tokens.extend(quote_spanned! { t.span() =>
+                #crate_path::transitions::ast::PostulationOp::Obfuscate(#crate_path::transitions::ast::Squiggly { span: #crate_path::ast::Span::new(#from_str, "~") })
+            }),
         }
     }
 }
 
-
-
-
-
-/***** PARSE FUNCTIONS *****/
-/// Parses a transition definition.
-///
-/// # Arguments
-/// - `input`: The [`ParseStream`] to parse from.
-///
-/// # Returns
-/// The transition as a bunch of tokens.
-///
-/// # Errors
-/// This function errors if we failed to parse the head of the input as a transition.
-fn parse_transition(input: ParseStream) -> Result<Transition, Error> {
-    // Parse the identifier first
-    let ident: TransIdent = {
-        let pound: Pound = input.parse()?;
+/// Special identifier for transitions.
+struct TransIdent {
+    /// The pound token preceding the identifier
+    pound: Token![#],
+    /// The identifier itself.
+    ident: Ident,
+}
+impl Parse for TransIdent {
+    #[inline]
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let pound: Token![#] = input.parse()?;
         let ident: Ident = input.parse()?;
-        (pound, ident)
-    };
-
-    // Then the curly braces
-    let content;
-    let brace: Brace = braced!(content in input);
-
-    // Finally, parse the rest as a repeated bunch of postulations
-    let mut posts: Vec<Postulation> = Vec::new();
-    while !content.is_empty() {
-        posts.push(parse_postulation(&content)?);
+        Ok(Self { pound, ident })
     }
-    Ok((ident, brace, posts))
 }
+impl ToTokens for TransIdent {
+    #[inline]
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let (crate_path, from_str): (CratePath, FromStr) = Default::default();
 
-/// Parses a postulation.
-///
-/// # Arguments
-/// - `input`: The [`ParseStream`] to parse from.
-///
-/// # Returns
-/// The postulation as a bunch of tokens.
-///
-/// # Errors
-/// This function errors if we failed to parse the head of the input as a postulation.
-fn parse_postulation(input: ParseStream) -> Result<Postulation, Error> {
-    // Parse the postulation op first
-    let op: PostulationOp = input.parse()?;
+        // Craft a string literal with the appropriate value
+        let span: Span = self.pound.span().join(self.ident.span()).unwrap_or_else(Span::call_site);
+        let value: LitStr = LitStr::new(&format!("#{}", self.ident.to_string()), span);
 
-    // Then the curly braces
-    let content;
-    let brace: Brace = braced!(content in input);
-
-    // Finally, parse the rest as a repeated bunch of rules
-    let mut rules: Vec<Rule> = Vec::new();
-    while !content.is_empty() {
-        rules.push(Rule::parse(&content)?);
+        // We can write it in one go
+        tokens.extend(quote_spanned! { span => #crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #value) } });
     }
-    Ok((op, brace, rules))
 }
-
-/// Parses a trigger.
-///
-/// # Arguments
-/// - `input`: The [`ParseStream`] to parse from.
-///
-/// # Returns
-/// The trigger as a bunch of tokens.
-///
-/// # Errors
-/// This function errors if we failed to parse the head of the input as a trigger.
-fn parse_trigger(input: ParseStream) -> Result<Trigger, Error> {
-    // Parse the exclaim first
-    let exclaim: Token![!] = input.parse()?;
-
-    // Then the curly braces
-    let content;
-    let brace: Brace = braced!(content in input);
-
-    // Finally, parse the rest as a repeated bunch of transition identifier
-    let mut trans_idents: Vec<TransIdent> = Vec::new();
-    while !content.is_empty() {
-        let pound: Pound = content.parse()?;
-        let ident: Ident = content.parse()?;
-        trans_idents.push((pound, ident));
-    }
-    Ok((exclaim, brace, trans_idents))
-}
-
-
-
-
-
-/***** SERIALIZATION FUNCTIONS *****/
-/// Serializes a given [transition](parse_transition()) into tokens representing a `datalog`
-/// `Transition`.
-///
-/// # Arguments
-/// - `crate_path`: A prefix that allows one to change where to get the datalog structs from.
-/// - `from_str`: The string that is given as the from string in `Span` creations.
-/// - `transition`: The parsed transition.
-///
-/// # Returns
-/// A [`TokenStream2`] that encodes building the matching struct.
-pub fn serialize_transition(crate_path: &Path, from_str: &LitStr) -> TokenStream2 { todo!() }
 
 
 
@@ -218,9 +320,28 @@ pub fn serialize_transition(crate_path: &Path, from_str: &LitStr) -> TokenStream
 /// This function may error if the input had an invalid stream of tokens for Datalog with negation
 /// and transitions.
 pub fn datalog_trans(input: ParseStream) -> Result<TokenStream2, Error> {
+    let crate_path: CratePath = Default::default();
+
     // Parse from the input first: attributes
     let attrs: DatalogAttributes = input.parse()?;
 
     // Next, start building the tokens
-    todo!()
+    let mut phrases: Vec<TokenStream2> = Vec::new();
+    while !input.is_empty() {
+        phrases.push(input.parse::<Phrase>()?.into_token_stream());
+    }
+
+    // Write the remainder
+    let span: Span = if let Some(first) = phrases.first() { first.span() } else { Span::call_site() };
+    let res: TokenStream2 = quote_spanned! {
+        span =>
+        #crate_path::transitions::ast::TransitionSpec {
+            phrases: ::std::vec![
+                #(#phrases),*
+            ]
+        }
+    };
+
+    // Ensure that all the placeholders are correctly replaced
+    Ok(resolve_placeholders(&attrs, res).into())
 }

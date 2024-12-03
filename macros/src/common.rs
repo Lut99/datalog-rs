@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 10:47:06
 //  Last edited:
-//    03 Dec 2024, 12:31:57
+//    03 Dec 2024, 14:41:14
 //  Auto updated?
 //    Yes
 //
@@ -423,7 +423,7 @@ pub fn resolve_placeholders(attrs: &DatalogAttributes, stream: TokenStream2) -> 
                     Delimiter::Brace => quote! { { #inner } },
                     Delimiter::Bracket => quote! { [ #inner ] },
                     Delimiter::Parenthesis => quote! { ( #inner ) },
-                    Delimiter::None => unimplemented!(),
+                    Delimiter::None => quote! { #inner },
                 });
             },
 

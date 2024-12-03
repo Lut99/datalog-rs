@@ -4,7 +4,7 @@
 //  Created:
 //    26 Mar 2024, 19:36:31
 //  Last edited:
-//    03 Dec 2024, 10:44:59
+//    03 Dec 2024, 14:46:55
 //  Auto updated?
 //    Yes
 //
@@ -42,61 +42,16 @@ use crate::log::{debug, trace};
 /***** TESTS *****/
 #[cfg(all(test, feature = "macros"))]
 mod tests {
-    use ast_toolkit::punctuated::Punctuated;
-    use ast_toolkit::span::Span;
     use datalog_macros::datalog;
 
     use super::*;
-    use crate::ast::{Atom, AtomArgs, Comma, Parens};
-
-
-    /// Sets up a logger if wanted.
-    #[cfg(feature = "log")]
-    pub(crate) fn setup_logger() {
-        use humanlog::{DebugMode, HumanLogger};
-
-        // Check if the envs tell us to
-        if let Ok(logger) = std::env::var("LOGGER") {
-            if logger == "1" || logger == "true" {
-                // Create the logger
-                if let Err(err) = HumanLogger::terminal(DebugMode::Full).init() {
-                    eprintln!("WARNING: Failed to setup logger: {err} (no logging for this session)");
-                }
-            }
-        }
-    }
-
-    /// Makes an [`Atom`] conveniently.
-    pub(crate) fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Atom<&'static str, &'static str> {
-        // Make the punctuation
-        let mut punct: Punctuated<AtomArg<_, _>, Comma<_, _>> = Punctuated::new();
-        for (i, arg) in args.into_iter().enumerate() {
-            if i == 0 {
-                punct.push_first(AtomArg::Atom(Ident { value: Span::new("make_atom::arg", arg) }));
-            } else {
-                punct.push(Comma { span: Span::new("make_atom::arg::comma", ",") }, AtomArg::Atom(Ident { value: Span::new("make_atom::arg", arg) }));
-            }
-        }
-
-        // Make the atom
-        Atom {
-            ident: Ident { value: Span::new("make_atom::name", name) },
-            args:  if !punct.is_empty() {
-                Some(AtomArgs {
-                    paren_tokens: Parens { open: Span::new("make_atom::parens::open", "("), close: Span::new("make_atom::parens::close", ")") },
-                    args: punct,
-                })
-            } else {
-                None
-            },
-        }
-    }
+    use crate::tests::make_atom;
 
 
     #[test]
-    fn test_spec_alternating_fixpoint() {
+    fn test_alternating_fixpoint_constants() {
         #[cfg(feature = "log")]
-        setup_logger();
+        crate::tests::setup_logger();
 
         // Try some constants
         let consts: Spec<_, _> = datalog! {
@@ -111,6 +66,12 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("foo", None)), Some(true));
         assert_eq!(res.closed_world_truth(&make_atom("bar", None)), Some(true));
         assert_eq!(res.closed_world_truth(&make_atom("baz", None)), Some(true));
+    }
+
+    #[test]
+    fn test_alternating_fixpoint_functions() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Try some functions
         let funcs: Spec<_, _> = datalog! {
@@ -125,6 +86,12 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("foo", Some("bar"))), Some(true));
         assert_eq!(res.closed_world_truth(&make_atom("bar", Some("baz"))), Some(true));
         assert_eq!(res.closed_world_truth(&make_atom("baz", Some("quz"))), Some(true));
+    }
+
+    #[test]
+    fn test_alternating_fixpoint_rules() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Try some rules
         let rules: Spec<_, _> = datalog! {
@@ -138,6 +105,12 @@ mod tests {
         assert_eq!(res.len(), 2);
         assert_eq!(res.closed_world_truth(&make_atom("foo", None)), Some(true));
         assert_eq!(res.closed_world_truth(&make_atom("bar", Some("foo"))), Some(true));
+    }
+
+    #[test]
+    fn test_alternating_fixpoint_rules_neg() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Try some rules with negation!
         let neg_rules: Spec<_, _> = datalog! {
@@ -153,6 +126,12 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("bar", None)), Some(false));
         assert_eq!(res.closed_world_truth(&make_atom("bar", Some("foo"))), Some(true));
         assert_eq!(res.closed_world_truth(&make_atom("bar", Some("bar"))), Some(true));
+    }
+
+    #[test]
+    fn test_alternating_fixpoint_rules_vars() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Now some cool rules with variables
         let var_rules: Spec<_, _> = datalog! {
@@ -172,6 +151,12 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("quz", Some("bar"))), Some(false));
         assert_eq!(res.closed_world_truth(&make_atom("qux", Some("foo"))), Some(false));
         assert_eq!(res.closed_world_truth(&make_atom("qux", Some("bar"))), Some(true));
+    }
+
+    #[test]
+    fn test_alternating_fixpoint_rules_many_arity() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Arity > 1
         let big_rules: Spec<_, _> = datalog! {
@@ -195,6 +180,12 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("qux", ["foo", "bar"])), Some(true));
         assert_eq!(res.closed_world_truth(&make_atom("qux", ["bar", "foo"])), Some(true));
         assert_eq!(res.closed_world_truth(&make_atom("qux", ["bar", "bar"])), Some(true));
+    }
+
+    #[test]
+    fn test_alternating_fixpoint_rules_unknown() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Impossible rules
         let con_rules: Spec<_, _> = datalog! {
@@ -211,10 +202,9 @@ mod tests {
     }
 
     #[test]
-    fn test_spec_alternating_fixpoint_paper() {
+    fn test_alternating_fixpoint_paper_5_1() {
         #[cfg(feature = "log")]
-        setup_logger();
-
+        crate::tests::setup_logger();
 
         // Example 5.1
         let five_one: Spec<_, _> = datalog! {
@@ -243,7 +233,12 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("r", None)), Some(false));
         assert_eq!(res.closed_world_truth(&make_atom("s", None)), Some(false));
         assert_eq!(res.closed_world_truth(&make_atom("t", None)), Some(false));
+    }
 
+    #[test]
+    fn test_alternating_fixpoint_paper_5_2a() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Example 5.2 (a)
         // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
@@ -271,6 +266,12 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("wins", ["g"])), Some(true));
         assert_eq!(res.closed_world_truth(&make_atom("wins", ["h"])), Some(false));
         assert_eq!(res.closed_world_truth(&make_atom("wins", ["i"])), Some(false));
+    }
+
+    #[test]
+    fn test_alternating_fixpoint_paper_5_2b() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Example 5.2 (b)
         // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
@@ -294,7 +295,12 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_atom("wins", ["b"])), None);
         assert_eq!(res.closed_world_truth(&make_atom("wins", ["c"])), Some(true));
         assert_eq!(res.closed_world_truth(&make_atom("wins", ["d"])), Some(false));
+    }
 
+    #[test]
+    fn test_alternating_fixpoint_paper_5_2c() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Example 5.2 (c)
         // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)

@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 16:32:11
 //  Last edited:
-//    03 Dec 2024, 10:31:31
+//    03 Dec 2024, 15:40:48
 //  Auto updated?
 //    Yes
 //
@@ -51,7 +51,7 @@ impl<'f, 's> State<'f, 's> {
 ///
 /// This mostly exists as one to be able to correct borrow the transitions as read while writing to
 /// the rules.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Rules<'f, 's> {
     /// A list of rules that are from the spec.
     pub(crate) spec_rules:  IndexSet<Rule<&'f str, &'s str>>,
@@ -122,4 +122,14 @@ impl<'f, 's> Rules<'f, 's> {
     pub fn to_spec(&self) -> Spec<&'f str, &'s str> {
         Spec { rules: self.spec_rules.iter().cloned().chain(self.trans_rules.iter().cloned()).collect() }
     }
+
+
+
+    /// The total number of active rules.
+    #[inline]
+    pub fn len(&self) -> usize { self.spec_rules.len() + self.trans_rules.len() }
+
+    /// Whether there are any active rules.
+    #[inline]
+    pub fn is_empty(&self) -> bool { self.len() == 0 }
 }

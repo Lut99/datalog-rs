@@ -4,7 +4,7 @@
 //  Created:
 //    21 Mar 2024, 10:22:40
 //  Last edited:
-//    28 Nov 2024, 16:49:09
+//    03 Dec 2024, 14:36:21
 //  Auto updated?
 //    Yes
 //
@@ -25,63 +25,16 @@ use crate::log::warn;
 /***** TESTS *****/
 #[cfg(all(test, feature = "macros"))]
 mod tests {
-    use ast_toolkit::punctuated::Punctuated;
     use datalog_macros::datalog;
 
     use super::*;
-    use crate::ast::{AtomArgs, Comma, Parens, Span};
-
-
-    /// Sets up a logger if wanted.
-    #[cfg(feature = "log")]
-    fn setup_logger() {
-        use humanlog::{DebugMode, HumanLogger};
-
-        // Check if the envs tell us to
-        if let Ok(logger) = std::env::var("LOGGER") {
-            if logger == "1" || logger == "true" {
-                // Create the logger
-                if let Err(err) = HumanLogger::terminal(DebugMode::Full).init() {
-                    eprintln!("WARNING: Failed to setup logger: {err} (no logging for this session)");
-                }
-            }
-        }
-    }
-
-    // /// Makes an [`Ident`] conveniently.
-    // fn make_ident(name: &'static str) -> Ident { Ident { value: Span::new("make_ident::value", name) } }
-
-    /// Makes an [`Atom`] conveniently.
-    fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Atom<&'static str, &'static str> {
-        // Make the punctuation
-        let mut punct: Punctuated<AtomArg<&'static str, &'static str>, Comma<&'static str, &'static str>> = Punctuated::new();
-        for (i, arg) in args.into_iter().enumerate() {
-            if i == 0 {
-                punct.push_first(AtomArg::Atom(Ident { value: Span::new("make_atom::arg", arg) }));
-            } else {
-                punct.push(Comma { span: Span::new("make_atom::arg::comma", ",") }, AtomArg::Atom(Ident { value: Span::new("make_atom::arg", arg) }));
-            }
-        }
-
-        // Make the atom
-        Atom {
-            ident: Ident { value: Span::new("make_atom::name", name) },
-            args:  if !punct.is_empty() {
-                Some(AtomArgs {
-                    paren_tokens: Parens { open: Span::new("make_atom::parens::open", "("), close: Span::new("make_atom::parens::close", ")") },
-                    args: punct,
-                })
-            } else {
-                None
-            },
-        }
-    }
+    use crate::tests::make_atom;
 
 
     #[test]
-    fn test_interpretation_from_universe() {
+    fn test_interpretation_from_universe_empty() {
         #[cfg(feature = "log")]
-        setup_logger();
+        crate::tests::setup_logger();
 
         // Empty spec first
         let empty: Spec<_, _> = datalog! {
@@ -89,6 +42,12 @@ mod tests {
         };
         let int: Interpretation = Interpretation::from_universe(&empty);
         assert!(int.is_empty());
+    }
+
+    #[test]
+    fn test_interpretation_from_universe_constant_single() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Spec with only constants (one, first)
         let one: Spec<_, _> = datalog! {
@@ -101,6 +60,12 @@ mod tests {
         assert_eq!(int.closed_world_truth(&make_atom("bar", [])), Some(false));
         assert_eq!(int.closed_world_truth(&make_atom("baz", [])), Some(false));
         assert_eq!(int.closed_world_truth(&make_atom("bingo", ["boingo"])), Some(false));
+    }
+
+    #[test]
+    fn test_interpretation_from_universe_constant_multi() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Multiple constants
         let consts: Spec<_, _> = datalog! {
@@ -113,6 +78,12 @@ mod tests {
         assert_eq!(int.closed_world_truth(&make_atom("bar", [])), None);
         assert_eq!(int.closed_world_truth(&make_atom("baz", [])), None);
         assert_eq!(int.closed_world_truth(&make_atom("bingo", ["boingo"])), Some(false));
+    }
+
+    #[test]
+    fn test_interpretation_from_universe_constant_duplicate() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Duplicate constants
         let dups: Spec<_, _> = datalog! {
@@ -125,6 +96,12 @@ mod tests {
         assert_eq!(int.closed_world_truth(&make_atom("bar", [])), None);
         assert_eq!(int.closed_world_truth(&make_atom("baz", [])), Some(false));
         assert_eq!(int.closed_world_truth(&make_atom("bingo", ["boingo"])), Some(false));
+    }
+
+    #[test]
+    fn test_interpretation_from_universe_arity_1() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Spec with arity-1 atoms (functions)
         let funcs: Spec<_, _> = datalog! {
@@ -141,6 +118,12 @@ mod tests {
         assert_eq!(int.closed_world_truth(&make_atom("foo", ["bar"])), None);
         assert_eq!(int.closed_world_truth(&make_atom("bar", ["baz"])), None);
         assert_eq!(int.closed_world_truth(&make_atom("bingo", ["boingo"])), Some(false));
+    }
+
+    #[test]
+    fn test_interpretation_from_universe_arity_mixed() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Mixed arity
         let arity: Spec<_, _> = datalog! {
@@ -157,6 +140,12 @@ mod tests {
         assert_eq!(int.closed_world_truth(&make_atom("foo", ["bar"])), Some(false));
         assert_eq!(int.closed_world_truth(&make_atom("bar", ["baz"])), Some(false));
         assert_eq!(int.closed_world_truth(&make_atom("bingo", ["boingo"])), Some(false));
+    }
+
+    #[test]
+    fn test_interpretation_from_universe_full() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
         // Full rules
         let rules: Spec<_, _> = datalog! {
