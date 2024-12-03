@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 15:45:02
 //  Last edited:
-//    29 Nov 2024, 16:23:54
+//    03 Dec 2024, 17:42:13
 //  Auto updated?
 //    Yes
 //
@@ -135,11 +135,11 @@ where
 /// use datalog::transitions::parser::specs::{ParseError, trans_spec};
 ///
 /// let span1 = Span::new("<example>", r#"#foo {
-///     +{ foo. }
-///     ~{ bar :- baz(quz). }
-/// }
-/// !{ #foo }
-/// +{ foo. }
+///     +{ foo }.
+///     ~{ bar } :- baz(quz).
+/// }.
+/// !{ #foo }.
+/// +{ foo }.
 /// foo :- bar, baz(quz)."#);
 ///
 /// let mut comb = trans_spec();
@@ -147,7 +147,7 @@ where
 /// assert_eq!(
 ///     comb.parse(span1).unwrap(),
 ///     (
-///         span1.slice(90..),
+///         span1.slice(92..),
 ///         TransitionSpec {
 ///             phrases: vec![
 ///                 Phrase::Transition(Transition {
@@ -156,67 +156,63 @@ where
 ///                     postulations: vec![
 ///                         Postulation {
 ///                             op: PostulationOp::Create(Add { span: span1.slice(11..12) }),
-///                             curly_tokens: Curly { open: span1.slice(12..13), close: span1.slice(19..20) },
-///                             rules: vec![Rule {
-///                                 consequences: punct![v => Atom { ident: Ident { value: span1.slice(14..17) }, args: None }],
-///                                 tail: None,
-///                                 dot: Dot { span: span1.slice(17..18) },
-///                             }],
+///                             curly_tokens: Curly { open: span1.slice(12..13), close: span1.slice(18..19) },
+///                             consequents: punct![v => Atom { ident: Ident { value: span1.slice(14..17) }, args: None }],
+///                             tail: None,
+///                             dot: Dot { span: span1.slice(19..20) },
 ///                         },
 ///                         Postulation {
 ///                             op: PostulationOp::Obfuscate(Squiggly { span: span1.slice(25..26) }),
-///                             curly_tokens: Curly { open: span1.slice(26..27), close: span1.slice(45..46) },
-///                             rules: vec![Rule {
-///                                 consequences: punct![v => Atom { ident: Ident { value: span1.slice(28..31) }, args: None }],
-///                                 tail: Some(RuleAntecedents {
-///                                     arrow_token: Arrow { span: span1.slice(32..34) },
-///                                     antecedents: punct![v => Literal::Atom(Atom {
-///                                         ident: Ident { value: span1.slice(35..38) },
-///                                         args: Some(AtomArgs {
-///                                             paren_tokens: Parens { open: span1.slice(38..39), close: span1.slice(42..43) },
-///                                             args: punct![v => AtomArg::Atom(Ident { value: span1.slice(39..42) })],
-///                                         }),
-///                                     })],
-///                                 }),
-///                                 dot: Dot { span: span1.slice(43..44) },
-///                             }],
+///                             curly_tokens: Curly { open: span1.slice(26..27), close: span1.slice(32..33) },
+///                             consequents: punct![v => Atom { ident: Ident { value: span1.slice(28..31) }, args: None }],
+///                             tail: Some(RuleAntecedents {
+///                                 arrow_token: Arrow { span: span1.slice(34..36) },
+///                                 antecedents: punct![v => Literal::Atom(Atom {
+///                                     ident: Ident { value: span1.slice(37..40) },
+///                                     args: Some(AtomArgs {
+///                                         paren_tokens: Parens { open: span1.slice(40..41), close: span1.slice(44..45) },
+///                                         args: punct![v => AtomArg::Atom(Ident { value: span1.slice(41..44) })],
+///                                     }),
+///                                 })],
+///                             }),
+///                             dot: Dot { span: span1.slice(45..46) },
 ///                         },
 ///                     ],
+///                     dot: Dot { span: span1.slice(48..49) },
 ///                 }),
 ///                 Phrase::Trigger(Trigger {
-///                     exclaim_token: Exclaim { span: span1.slice(49..50) },
-///                     curly_tokens: Curly { open: span1.slice(50..51), close: span1.slice(57..58) },
-///                     idents: vec![Ident { value: span1.slice(52..56) }],
+///                     exclaim_token: Exclaim { span: span1.slice(50..51) },
+///                     curly_tokens: Curly { open: span1.slice(51..52), close: span1.slice(58..59) },
+///                     idents: vec![Ident { value: span1.slice(53..57) }],
+///                     dot: Dot { span: span1.slice(59..60) },
 ///                 }),
 ///                 Phrase::Postulation(Postulation {
-///                     op: PostulationOp::Create(Add { span: span1.slice(59..60) }),
-///                     curly_tokens: Curly { open: span1.slice(60..61), close: span1.slice(67..68) },
-///                     rules: vec![Rule {
-///                         consequences: punct![v => Atom { ident: Ident { value: span1.slice(62..65) }, args: None }],
-///                         tail: None,
-///                         dot: Dot { span: span1.slice(65..66) }
-///                     }],
+///                     op: PostulationOp::Create(Add { span: span1.slice(61..62) }),
+///                     curly_tokens: Curly { open: span1.slice(62..63), close: span1.slice(68..69) },
+///                     consequents: punct![v => Atom { ident: Ident { value: span1.slice(64..67) }, args: None }],
+///                     tail: None,
+///                     dot: Dot { span: span1.slice(69..70) },
 ///                 }),
 ///                 Phrase::Rule(Rule {
-///                     consequences: punct![v => Atom { ident: Ident { value: span1.slice(69..72) }, args: None }],
+///                     consequents: punct![v => Atom { ident: Ident { value: span1.slice(71..74) }, args: None }],
 ///                     tail: Some(RuleAntecedents {
-///                         arrow_token: Arrow { span: span1.slice(73..75) },
+///                         arrow_token: Arrow { span: span1.slice(75..77) },
 ///                         antecedents: punct![
 ///                             v => Literal::Atom(Atom {
-///                                 ident: Ident { value: span1.slice(76..79) },
+///                                 ident: Ident { value: span1.slice(78..81) },
 ///                                 args: None,
 ///                             }),
-///                             p => Comma { span: span1.slice(79..80) },
+///                             p => Comma { span: span1.slice(81..82) },
 ///                             v => Literal::Atom(Atom {
-///                                 ident: Ident { value: span1.slice(81..84) },
+///                                 ident: Ident { value: span1.slice(83..86) },
 ///                                 args: Some(AtomArgs {
-///                                     paren_tokens: Parens { open: span1.slice(84..85), close: span1.slice(88..89) },
-///                                     args: punct![v => AtomArg::Atom(Ident { value: span1.slice(85..88) })],
+///                                     paren_tokens: Parens { open: span1.slice(86..87), close: span1.slice(90..91) },
+///                                     args: punct![v => AtomArg::Atom(Ident { value: span1.slice(87..90) })],
 ///                                 }),
 ///                             })
 ///                         ],
 ///                     }),
-///                     dot: Dot { span: span1.slice(89..90) },
+///                     dot: Dot { span: span1.slice(91..92) },
 ///                 }),
 ///             ]
 ///         }
@@ -256,75 +252,71 @@ where
 /// use datalog::transitions::ast::{Add, Curly, Exclaim, Phrase, Postulation, PostulationOp, Squiggly, Transition, Trigger};
 /// use datalog::transitions::parser::specs::{ParseError, phrase};
 ///
-/// let span1 = Span::new("<example>", "#foo {\n    +{ foo. }\n    ~{ bar :- baz(quz). }\n}");
-/// let span2 = Span::new("<example>", "!{ #foo }");
-/// let span3 = Span::new("<example>", "+{ foo. }");
+/// let span1 = Span::new("<example>", "#foo {\n    +{ foo }.\n    ~{ bar } :- baz(quz).\n}.");
+/// let span2 = Span::new("<example>", "!{ #foo }.");
+/// let span3 = Span::new("<example>", "+{ foo }.");
 /// let span4 = Span::new("<example>", "foo :- bar, baz(quz).");
 ///
 /// let mut comb = phrase();
 /// assert_eq!(
 ///     comb.parse(span1).unwrap(),
 ///     (
-///         span1.slice(48..),
+///         span1.slice(49..),
 ///         Phrase::Transition(Transition {
 ///             ident: Ident { value: span1.slice(..4) },
 ///             curly_tokens: Curly { open: span1.slice(5..6), close: span1.slice(47..48) },
 ///             postulations: vec![
 ///                 Postulation {
 ///                     op: PostulationOp::Create(Add { span: span1.slice(11..12) }),
-///                     curly_tokens: Curly { open: span1.slice(12..13), close: span1.slice(19..20) },
-///                     rules: vec![Rule {
-///                         consequences: punct![v => Atom { ident: Ident { value: span1.slice(14..17) }, args: None }],
-///                         tail: None,
-///                         dot: Dot { span: span1.slice(17..18) },
-///                     }],
+///                     curly_tokens: Curly { open: span1.slice(12..13), close: span1.slice(18..19) },
+///                     consequents: punct![v => Atom { ident: Ident { value: span1.slice(14..17) }, args: None }],
+///                     tail: None,
+///                     dot: Dot { span: span1.slice(19..20) },
 ///                 },
 ///                 Postulation {
 ///                     op: PostulationOp::Obfuscate(Squiggly { span: span1.slice(25..26) }),
-///                     curly_tokens: Curly { open: span1.slice(26..27), close: span1.slice(45..46) },
-///                     rules: vec![Rule {
-///                         consequences: punct![v => Atom { ident: Ident { value: span1.slice(28..31) }, args: None }],
-///                         tail: Some(RuleAntecedents {
-///                             arrow_token: Arrow { span: span1.slice(32..34) },
-///                             antecedents: punct![v => Literal::Atom(Atom {
-///                                 ident: Ident { value: span1.slice(35..38) },
-///                                 args: Some(AtomArgs {
-///                                     paren_tokens: Parens { open: span1.slice(38..39), close: span1.slice(42..43) },
-///                                     args: punct![v => AtomArg::Atom(Ident { value: span1.slice(39..42) })],
-///                                 }),
-///                             })],
-///                         }),
-///                         dot: Dot { span: span1.slice(43..44) },
-///                     }],
+///                     curly_tokens: Curly { open: span1.slice(26..27), close: span1.slice(32..33) },
+///                     consequents: punct![v => Atom { ident: Ident { value: span1.slice(28..31) }, args: None }],
+///                     tail: Some(RuleAntecedents {
+///                         arrow_token: Arrow { span: span1.slice(34..36) },
+///                         antecedents: punct![v => Literal::Atom(Atom {
+///                             ident: Ident { value: span1.slice(37..40) },
+///                             args: Some(AtomArgs {
+///                                 paren_tokens: Parens { open: span1.slice(40..41), close: span1.slice(44..45) },
+///                                 args: punct![v => AtomArg::Atom(Ident { value: span1.slice(41..44) })],
+///                             }),
+///                         })],
+///                     }),
+///                     dot: Dot { span: span1.slice(45..46) },
 ///                 },
 ///             ],
+///             dot: Dot { span: span3.slice(48..49) },
 ///         })
 ///     )
 /// );
 /// assert_eq!(
 ///     comb.parse(span2).unwrap(),
-///     (span2.slice(9..), Phrase::Trigger(Trigger {
+///     (span2.slice(10..), Phrase::Trigger(Trigger {
 ///         exclaim_token: Exclaim { span: span2.slice(..1) },
 ///         curly_tokens: Curly { open: span2.slice(1..2), close: span2.slice(8..9) },
 ///         idents: vec![Ident { value: span2.slice(3..7) }],
+///         dot: Dot { span: span3.slice(9..10) },
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span3).unwrap(),
 ///     (span3.slice(9..), Phrase::Postulation(Postulation {
 ///         op: PostulationOp::Create(Add { span: span3.slice(..1) }),
-///         curly_tokens: Curly { open: span3.slice(1..2), close: span3.slice(8..9) },
-///         rules: vec![Rule {
-///             consequences: punct![v => Atom { ident: Ident { value: span3.slice(3..6) }, args: None }],
-///             tail: None,
-///             dot: Dot { span: span3.slice(6..7) }
-///         }],
+///         curly_tokens: Curly { open: span3.slice(1..2), close: span3.slice(7..8) },
+///         consequents: punct![v => Atom { ident: Ident { value: span3.slice(3..6) }, args: None }],
+///         tail: None,
+///         dot: Dot { span: span3.slice(8..9) }
 ///     }))
 /// );
 /// assert_eq!(
 ///     comb.parse(span4).unwrap(),
 ///     (span4.slice(21..), Phrase::Rule(Rule {
-///         consequences: punct![v => Atom { ident: Ident { value: span4.slice(..3) }, args: None }],
+///         consequents: punct![v => Atom { ident: Ident { value: span4.slice(..3) }, args: None }],
 ///         tail: Some(RuleAntecedents {
 ///             arrow_token: Arrow { span: span4.slice(4..6) },
 ///             antecedents: punct![

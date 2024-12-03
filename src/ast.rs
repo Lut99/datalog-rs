@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    28 Nov 2024, 17:25:13
+//    03 Dec 2024, 16:14:30
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,7 @@ use std::hash::{Hash, Hasher};
 
 pub use ast_toolkit::punctuated::Punctuated;
 #[cfg(feature = "railroad")]
-use ast_toolkit::railroad::{railroad as rr, ToDelimNode, ToNode, ToNonTerm};
+use ast_toolkit::railroad::{ToDelimNode, ToNode, ToNonTerm, railroad as rr};
 pub use ast_toolkit::span::{Span, Spanning as _};
 use ast_toolkit::span::{Spannable, SpannableDisplay};
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
@@ -325,8 +325,8 @@ impl_map!(Spec, rules);
 /// ```
 #[derive(Clone, Debug)]
 pub struct Rule<F, S> {
-    /// A list of consequences (i.e., instances produced by this rule).
-    pub consequences: Punctuated<Atom<F, S>, Comma<F, S>>,
+    /// A list of consequents (i.e., instances produced by this rule).
+    pub consequents: Punctuated<Atom<F, S>, Comma<F, S>>,
     /// An optional second part that describes the antecedents.
     pub tail: Option<RuleAntecedents<F, S>>,
     /// The closing dot after each rule.
@@ -341,7 +341,7 @@ where
         write!(
             f,
             "{}{}.",
-            self.consequences.values().map(|c| c.to_string()).collect::<Vec<String>>().join(", "),
+            self.consequents.values().map(|c| c.to_string()).collect::<Vec<String>>().join(", "),
             if let Some(tail) = &self.tail { tail.to_string() } else { String::new() }
         )
     }
@@ -353,7 +353,7 @@ where
 {
     #[inline]
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        for (value, punct) in self.consequences.pairs() {
+        for (value, punct) in self.consequents.pairs() {
             value.reserialize_fmt(f)?;
             if let Some(punct) = punct {
                 punct.reserialize_fmt(f)?;
@@ -379,7 +379,7 @@ impl<F, S> ToNode for Rule<F, S> {
         ])
     }
 }
-impl_map!(Rule, consequences, tail);
+impl_map!(Rule, consequents, tail);
 
 /// Defines the second half of the rule, if any.
 ///

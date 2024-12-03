@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 10:47:06
 //  Last edited:
-//    03 Dec 2024, 14:41:14
+//    03 Dec 2024, 16:17:18
 //  Auto updated?
 //    Yes
 //
@@ -35,7 +35,7 @@ pub type FromStr = Virtual;
 
 
 /***** HELPER FUNCTIONS *****/
-/// Parses a comma-separated list as long as it's nice.
+/// Parses a comma-separated list of comma's as long as it's nice.
 ///
 /// # Arguments
 /// - `input`: The [`ParseStream`] to parse from.
@@ -208,7 +208,7 @@ impl ToTokens for Rule {
         let (crate_path, from_str): (CratePath, FromStr) = Default::default();
 
         // First, generate consequences
-        let consequences_tokens: TokenStream2 = serialize_punctuated(self.consequents.iter());
+        let consequents_tokens: TokenStream2 = serialize_punctuated(self.consequents.iter());
 
         // Next, generate the antecedents
         let antecedents_tokens: TokenStream2 = if let Some(((colon, _), antecedents)) = &self.antecedents {
@@ -224,14 +224,14 @@ impl ToTokens for Rule {
                 })
             }
         } else {
-            quote_spanned! { consequences_tokens.span() => None }
+            quote_spanned! { consequents_tokens.span() => None }
         };
 
         // Finally, serialize the rule!
         tokens.extend(quote_spanned! {
-            consequences_tokens.span() =>
+            consequents_tokens.span() =>
             #crate_path::ast::Rule {
-                consequences: #consequences_tokens,
+                consequents: #consequents_tokens,
                 tail: #antecedents_tokens,
                 dot: #crate_path::ast::Dot { span: #crate_path::ast::Span::new(#from_str, ".") },
             }

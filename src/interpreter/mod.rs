@@ -4,7 +4,7 @@
 //  Created:
 //    26 Mar 2024, 19:36:31
 //  Last edited:
-//    03 Dec 2024, 14:46:55
+//    03 Dec 2024, 17:58:13
 //  Auto updated?
 //    Yes
 //
@@ -26,6 +26,7 @@
 
 // Nested modules
 pub mod interpretation;
+pub mod quantify;
 
 use std::collections::HashMap;
 // Imports
@@ -365,7 +366,7 @@ fn format_rule_assign(rule: &Rule<&str, &str>, assign: &HashMap<Ident<&str, &str
     let mut buf: String = String::new();
 
     // Consequences
-    for cons in rule.consequences.values() {
+    for cons in rule.consequents.values() {
         buf.push_str(&format!(
             "{}({})",
             cons.ident,
@@ -515,7 +516,7 @@ where
             // First, build quantifiers for this rule's variables
             vars.clear();
             for arg in rule
-                .consequences
+                .consequents
                 .values()
                 .flat_map(|c| c.args.iter().flat_map(|a| a.args.values()))
                 .chain(rule.tail.iter().flat_map(|t| t.antecedents.values().flat_map(|a| a.atom().args.iter().flat_map(|a| a.args.values()))))
@@ -554,7 +555,7 @@ where
                     }
 
                     // If here, then derive consequents
-                    for con in rule.consequences.values() {
+                    for con in rule.consequents.values() {
                         trace!("-----> Deriving consequent '{}'", format_atom_assign(con, &assign));
                         if int.learn_with_assign(con, &assign, true) != Some(true) {
                             changed = true;
@@ -574,7 +575,7 @@ where
                 }
 
                 // If here, then derive consequents
-                for con in rule.consequences.values() {
+                for con in rule.consequents.values() {
                     trace!("-----> Deriving consequent '{con}'");
                     if int.learn(con, true) != Some(true) {
                         changed = true;

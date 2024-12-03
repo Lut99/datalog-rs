@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 14:32:43
 //  Last edited:
-//    03 Dec 2024, 15:38:43
+//    03 Dec 2024, 16:16:20
 //  Auto updated?
 //    Yes
 //
@@ -41,18 +41,18 @@ pub fn make_rule(
     antecedents: impl IntoIterator<Item = Literal<&'static str, &'static str>>,
 ) -> Rule<&'static str, &'static str> {
     // Convert the consequents and antecedents first
-    let consequences: Punctuated<Atom<&'static str, &'static str>, Comma<&'static str, &'static str>> = consequents.into_iter().collect();
+    let consequents: Punctuated<Atom<&'static str, &'static str>, Comma<&'static str, &'static str>> = consequents.into_iter().collect();
     let antecedents: Punctuated<Literal<&'static str, &'static str>, Comma<&'static str, &'static str>> = antecedents.into_iter().collect();
 
     // Now build the rule
     Rule {
-        consequences,
+        consequents,
         tail: if !antecedents.is_empty() {
             Some(RuleAntecedents { arrow_token: Arrow { span: Span::new("make_rule::arrow", ":-") }, antecedents })
         } else {
             None
         },
-        dot: make_dot(),
+        dot: Dot { span: Span::new("make_rule::dot", ".") },
     }
 }
 
@@ -93,6 +93,3 @@ pub fn make_curly() -> Curly<&'static str, &'static str> {
     // Make the atom
     Curly { open: Span::new("make_curly::open", "{"), close: Span::new("make_curly::close", "}") }
 }
-
-/// Makes a [`Dot`] conveniently.
-pub fn make_dot() -> Dot<&'static str, &'static str> { Dot { span: Span::new("make_rule::dot", ".") } }

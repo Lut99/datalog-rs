@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 16:26:50
 //  Last edited:
-//    03 Dec 2024, 16:01:09
+//    03 Dec 2024, 17:52:30
 //  Auto updated?
 //    Yes
 //
@@ -20,10 +20,11 @@ use std::error;
 // Imports
 use std::fmt::{Display, Formatter, Result as FResult};
 
+use ast_toolkit::punctuated::punct;
 use state::State;
 
 use super::ast::{Phrase, Postulation, TransitionSpec, Trigger};
-use crate::ast::{Ident, Spec};
+use crate::ast::{Atom, Dot, Ident, Rule, Spec};
 use crate::interpreter::interpretation::Interpretation;
 use crate::transitions::ast::{PostulationOp, Transition};
 
@@ -33,19 +34,27 @@ use crate::transitions::ast::{PostulationOp, Transition};
 mod tests {
     use std::collections::HashMap;
 
+    use ast_toolkit::punctuated::Punctuated;
     use ast_toolkit::span::Span;
     use datalog_macros::datalog_trans;
-    use indexmap::IndexSet;
-    use state::Rules;
 
     use super::*;
-    use crate::ast::{Literal, Rule};
-    use crate::tests::{make_atom, make_curly, make_ident, make_rule};
-    use crate::transitions::ast::{Add, Squiggly};
+    use crate::ast::{Arrow, Atom, Comma, Dot, Literal, RuleAntecedents};
+    use crate::tests::{make_atom, make_curly, make_ident};
+    use crate::transitions::ast::{Add, Exclaim, Squiggly};
 
 
     /// Makes a [`Postulation`] conveniently.
-    fn make_postulation(create: bool, rules: impl IntoIterator<Item = Rule<&'static str, &'static str>>) -> Postulation<&'static str, &'static str> {
+    fn make_postulation(
+        create: bool,
+        consequents: impl IntoIterator<Item = Atom<&'static str, &'static str>>,
+        antecedents: impl IntoIterator<Item = Literal<&'static str, &'static str>>,
+    ) -> Postulation<&'static str, &'static str> {
+        // Convert the consequents and antecedents first
+        let consequents: Punctuated<Atom<&'static str, &'static str>, Comma<&'static str, &'static str>> = consequents.into_iter().collect();
+        let antecedents: Punctuated<Literal<&'static str, &'static str>, Comma<&'static str, &'static str>> = antecedents.into_iter().collect();
+
+        // Now build the rule
         Postulation {
             op: if create {
                 PostulationOp::Create(Add { span: Span::new("make_postulation::op::create", "+") })
@@ -53,7 +62,23 @@ mod tests {
                 PostulationOp::Obfuscate(Squiggly { span: Span::new("make_postulation::op::obfuscate", "~") })
             },
             curly_tokens: make_curly(),
-            rules: rules.into_iter().collect(),
+            consequents,
+            tail: if !antecedents.is_empty() {
+                Some(RuleAntecedents { arrow_token: Arrow { span: Span::new("make_postulation::arrow", ":-") }, antecedents })
+            } else {
+                None
+            },
+            dot: Dot { span: Span::new("make_postulation::dot", ".") },
+        }
+    }
+
+    /// Makes a [`Trigger`] conveniently.
+    fn make_trigger(idents: impl IntoIterator<Item = &'static str>) -> Trigger<&'static str, &'static str> {
+        Trigger {
+            exclaim_token: Exclaim { span: Span::new("make_trigger::exclaim", "!") },
+            curly_tokens: make_curly(),
+            idents: idents.into_iter().map(|i| Ident { value: Span::new("make_trigger::ident", i) }).collect(),
+            dot: Dot { span: Span::new("make_trigger::dot", ".") },
         }
     }
 
@@ -103,7 +128,7 @@ mod tests {
         // Just give the definition of a transition
         let def: TransitionSpec<_, _> = datalog_trans! {
             #![crate]
-            #foo {}
+            #foo {}.
         };
         let (state, mut effects): (State, Vec<Effect>) = match def.run() {
             Ok(res) => res,
@@ -111,7 +136,12 @@ mod tests {
         };
         assert_eq!(
             state.trans,
-            HashMap::from([(make_ident("#foo"), Transition { ident: make_ident("#foo"), curly_tokens: make_curly(), postulations: vec![] })])
+            HashMap::from([(make_ident("#foo"), Transition {
+                ident: make_ident("#foo"),
+                curly_tokens: make_curly(),
+                postulations: vec![],
+                dot: Dot { span: Span::new("<example>", ".") },
+            })])
         );
         assert!(state.rules.is_empty());
         assert_eq!(effects.len(), 1);
@@ -130,8 +160,8 @@ mod tests {
         let def: TransitionSpec<_, _> = datalog_trans! {
             #![crate]
             #bar {
-                +{ foo. }
-            }
+                +{ foo }.
+            }.
         };
         let (state, mut effects): (State, Vec<Effect>) = match def.run() {
             Ok(res) => res,
@@ -142,7 +172,8 @@ mod tests {
             HashMap::from([(make_ident("#bar"), Transition {
                 ident: make_ident("#bar"),
                 curly_tokens: make_curly(),
-                postulations: vec![make_postulation(true, [make_rule([make_atom("foo", None)], None)])],
+                postulations: vec![make_postulation(true, [make_atom("foo", None)], None)],
+                dot: Dot { span: Span::new("<example>", ".") },
             })])
         );
         assert!(state.rules.is_empty());
@@ -162,9 +193,9 @@ mod tests {
         let def: TransitionSpec<_, _> = datalog_trans! {
             #![crate]
             #baz {
-                +{ foo. }
-                ~{ bar :- baz(quz). }
-            }
+                +{ foo }.
+                ~{ bar } :- baz(quz).
+            }.
         };
         let (state, mut effects): (State, Vec<Effect>) = match def.run() {
             Ok(res) => res,
@@ -176,9 +207,10 @@ mod tests {
                 ident: make_ident("#baz"),
                 curly_tokens: make_curly(),
                 postulations: vec![
-                    make_postulation(true, [make_rule([make_atom("foo", None)], None)]),
-                    make_postulation(false, [make_rule([make_atom("bar", None)], [Literal::Atom(make_atom("baz", ["quz"]))])])
+                    make_postulation(true, [make_atom("foo", None)], None),
+                    make_postulation(false, [make_atom("bar", None)], [Literal::Atom(make_atom("baz", ["quz"]))])
                 ],
+                dot: Dot { span: Span::new("<example>", ".") },
             })])
         );
         assert!(state.rules.is_empty());
@@ -197,40 +229,24 @@ mod tests {
         // Run two postulations
         let def: TransitionSpec<_, _> = datalog_trans! {
             #![crate]
-            +{ foo :- bar. }
-            +{ bar. }
+            foo :- bar.
+            +{ bar }.
         };
-        let (state, mut effects): (State, Vec<Effect>) = match def.run() {
+        let (_, mut effects): (State, Vec<Effect>) = match def.run() {
             Ok(res) => res,
             Err(err) => panic!("{err}"),
         };
-        assert!(state.trans.is_empty());
-        assert_eq!(state.rules, Rules {
-            spec_rules:  IndexSet::new(),
-            trans_rules: IndexSet::from([
-                make_rule([make_atom("foo", None)], [Literal::Atom(make_atom("bar", None))]),
-                make_rule([make_atom("bar", None)], None)
-            ]),
-        });
-        assert_eq!(effects.len(), 3);
-
-        let effect3: Effect = effects.pop().unwrap();
-        assert_eq!(effect3.trigger, EffectTrigger::End);
-        assert_eq!(effect3.interpretation.closed_world_truth(&make_atom("foo", None)), Some(true));
-        assert_eq!(effect3.interpretation.closed_world_truth(&make_atom("bar", None)), Some(true));
+        assert_eq!(effects.len(), 2);
 
         let effect2: Effect = effects.pop().unwrap();
-        assert_eq!(effect2.trigger, EffectTrigger::Postulation(make_postulation(true, [make_rule([make_atom("bar", None)], None)])));
+        assert_eq!(effect2.trigger, EffectTrigger::End);
         assert_eq!(effect2.interpretation.closed_world_truth(&make_atom("foo", None)), Some(true));
         assert_eq!(effect2.interpretation.closed_world_truth(&make_atom("bar", None)), Some(true));
 
         let effect1: Effect = effects.pop().unwrap();
-        assert_eq!(
-            effect1.trigger,
-            EffectTrigger::Postulation(make_postulation(true, [make_rule([make_atom("foo", None)], [Literal::Atom(make_atom("bar", None))])]))
-        );
-        assert_eq!(effect1.interpretation.closed_world_truth(&make_atom("foo", None)), Some(false));
-        assert_eq!(effect1.interpretation.closed_world_truth(&make_atom("bar", None)), Some(false));
+        assert_eq!(effect1.trigger, EffectTrigger::Postulation(make_postulation(true, [make_atom("bar", None)], None)));
+        assert_eq!(effect1.interpretation.closed_world_truth(&make_atom("foo", None)), Some(true));
+        assert_eq!(effect1.interpretation.closed_world_truth(&make_atom("bar", None)), Some(true));
     }
 
     #[test]
@@ -241,15 +257,13 @@ mod tests {
         // Run a postulation, then revert it
         let def: TransitionSpec<_, _> = datalog_trans! {
             #![crate]
-            +{ foo. }
-            ~{ foo. }
+            +{ foo }.
+            ~{ foo }.
         };
-        let (state, mut effects): (State, Vec<Effect>) = match def.run() {
+        let (_, mut effects): (State, Vec<Effect>) = match def.run() {
             Ok(res) => res,
             Err(err) => panic!("{err}"),
         };
-        assert!(state.trans.is_empty());
-        assert_eq!(state.rules, Rules { spec_rules: IndexSet::new(), trans_rules: IndexSet::new() });
         assert_eq!(effects.len(), 3);
 
         let effect3: Effect = effects.pop().unwrap();
@@ -257,11 +271,11 @@ mod tests {
         assert_eq!(effect3.interpretation.closed_world_truth(&make_atom("foo", None)), Some(false));
 
         let effect2: Effect = effects.pop().unwrap();
-        assert_eq!(effect2.trigger, EffectTrigger::Postulation(make_postulation(false, [make_rule([make_atom("foo", None)], None)])));
+        assert_eq!(effect2.trigger, EffectTrigger::Postulation(make_postulation(false, [make_atom("foo", None)], None)));
         assert_eq!(effect2.interpretation.closed_world_truth(&make_atom("foo", None)), Some(false));
 
         let effect1: Effect = effects.pop().unwrap();
-        assert_eq!(effect1.trigger, EffectTrigger::Postulation(make_postulation(true, [make_rule([make_atom("foo", None)], None)])));
+        assert_eq!(effect1.trigger, EffectTrigger::Postulation(make_postulation(true, [make_atom("foo", None)], None)));
         assert_eq!(effect1.interpretation.closed_world_truth(&make_atom("foo", None)), Some(true));
     }
 
@@ -271,25 +285,55 @@ mod tests {
         crate::tests::setup_logger();
 
         // Setup a nice example with a race
-        let _: TransitionSpec<&str, &str> = datalog_trans!(
+        let race: TransitionSpec<&str, &str> = datalog_trans!(
             #![crate]
 
             amy. racer(amy).
             bob. racer(bob).
 
             apple_town. place(apple_town).
-            banana_city. place(banana_town).
+            banana_city. place(banana_city).
             pear_ville. place(pear_ville).
-            path(apple_town, banana_town).
-            path(banana_town, pear_ville).
+            path(apple_town, banana_city).
+            path(banana_city, pear_ville).
 
             // We do this as a postulation, so the transition below can undo it
-            +{ at(amy, apple_town). at(bob, apple_town). }
+            +{ at(amy, apple_town), at(bob, apple_town) }.
 
             #move_amy {
-                +{ at(amy, X) :- at(amy, Y), path(X, Y). }
-            }
+                // +{ at(amy, X) } :- at(amy, Y), path(X, Y).
+                // ~{ at(amy, X) }.
+                ~{ at(amy, X) }.
+            }.
+
+            !{ #move_amy }.
         );
+        let (state, mut effects): (State, Vec<Effect>) = match race.run() {
+            Ok(res) => res,
+            Err(err) => panic!("{err}"),
+        };
+        assert_eq!(effects.len(), 3);
+        println!("EFFECT1: {}", effects[0].interpretation);
+        println!("EFFECT2: {}", effects[1].interpretation);
+        println!("EFFECT3: {}", effects[2].interpretation);
+
+        // Replay the effects
+        // let effect3: Effect = effects.pop().unwrap();
+        // assert_eq!(effect3.trigger, EffectTrigger::End);
+        // assert_eq!(effect3.interpretation.closed_world_truth(&make_atom("at", ["amy", "apple_town"])), Some(false));
+        // assert_eq!(effect3.interpretation.closed_world_truth(&make_atom("at", ["amy", "banana_city"])), Some(true));
+        // assert_eq!(effect3.interpretation.closed_world_truth(&make_atom("at", ["amy", "pear_ville"])), Some(false));
+
+        let effect2: Effect = effects.pop().unwrap();
+        // assert_eq!(effect2.trigger, EffectTrigger::Trigger(make_trigger(["#move_amy"])));
+        assert_eq!(effect2.trigger, EffectTrigger::End);
+        assert_eq!(effect2.interpretation.closed_world_truth(&make_atom("at", ["amy", "apple_town"])), Some(false));
+        assert_eq!(effect2.interpretation.closed_world_truth(&make_atom("at", ["amy", "banana_city"])), Some(true));
+        assert_eq!(effect2.interpretation.closed_world_truth(&make_atom("at", ["amy", "pear_ville"])), Some(false));
+
+        let effect1: Effect = effects.pop().unwrap();
+        assert_eq!(effect1.trigger, EffectTrigger::Postulation(make_postulation(true, [make_atom("foo", None)], None)));
+        assert_eq!(effect1.interpretation.closed_world_truth(&make_atom("foo", None)), Some(true));
     }
 }
 
@@ -327,6 +371,25 @@ impl<'f, 's> error::Error for Error<'f, 's> {
 impl<'f, 's> From<crate::interpreter::Error<'f, 's>> for Error<'f, 's> {
     #[inline]
     fn from(value: crate::interpreter::Error<'f, 's>) -> Self { Self::Inference { err: value } }
+}
+
+
+
+
+
+/***** HELPER FUNCTIONS ****/
+/// Computes a [`Spec`] from the given [`State`].
+fn state_to_spec<'a, 'f: 'a, 's: 'a>(
+    rules: impl IntoIterator<Item = &'a Rule<&'f str, &'s str>>,
+    posts: impl IntoIterator<Item = &'a Atom<&'f str, &'s str>>,
+) -> Spec<&'f str, &'s str> {
+    Spec {
+        rules: rules
+            .into_iter()
+            .cloned()
+            .chain(posts.into_iter().map(|atom| Rule { consequents: punct![v => atom.clone()], tail: None, dot: Dot::default() }))
+            .collect(),
+    }
 }
 
 
@@ -390,7 +453,8 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
     /// transitions; and a series of [`Effect`]s that tell the user what happened.
     ///
     /// # Errors
-    /// This function can error if the total number of arguments in a rule exceeds [`STACK_VEC_LEN`](crate::interpreter::interpretation::STACK_VEC_LEN).
+    /// This function can error if the total number of arguments in a rule exceeds
+    /// [`STACK_VEC_LEN`](crate::interpreter::interpretation::STACK_VEC_LEN).
     #[inline]
     pub fn run(&self) -> Result<(State<'f, 's>, Vec<Effect<'f, 's>>), Error<'f, 's>> {
         let mut state = State::new();
@@ -402,17 +466,22 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
 
     /// Computes the denotation of the specification after every transition.
     ///
+    /// Unlike [`Spec::alternating_fixpoint_mut()`], the given `state` _can_ contain previous state
+    /// from previous runs. I.e., it is not cleared at the start like an `int` is.
+    ///
     /// # Arguments
-    /// - `state`: The [`State`] that we derive in. This state may already be non-zero, if multiple specs in sequence are derived.
+    /// - `state`: The [`State`] that we derive in. This state may already be non-zero, if multiple
+    /// specs in sequence are derived.
     ///
     /// # Returns
     /// A series of [`Effect`]s that tell the user what happened.
     ///
     /// # Errors
-    /// This function can error if the total number of arguments in a rule exceeds [`STACK_VEC_LEN`](crate::interpreter::interpretation::STACK_VEC_LEN).
+    /// This function can error if the total number of arguments in a rule exceeds
+    /// [`STACK_VEC_LEN`](crate::interpreter::interpretation::STACK_VEC_LEN).
     #[inline]
     pub fn run_mut(&self, state: &mut State<'f, 's>) -> Result<Vec<Effect<'f, 's>>, Error<'f, 's>> {
-        let State { trans: transitions, rules } = state;
+        let State { trans: transitions, rules, posts } = state;
 
         // Go through everything in the spec!
         let mut effects: Vec<Effect<'f, 's>> = Vec::new();
@@ -420,7 +489,7 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
             match phrase {
                 // We collect rules & definitions as we find them.
                 Phrase::Rule(rule) => {
-                    rules.add_spec_rule(rule.clone());
+                    rules.insert(rule.clone());
                 },
                 Phrase::Transition(trans) => {
                     transitions.insert(trans.ident, trans.clone());
@@ -430,23 +499,32 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
                 Phrase::Postulation(post) => {
                     let mut effect: Effect<'f, 's> = Effect::new(post.clone());
 
-                    // Update the state with the proper rules
+                    // First, with the current KB, do an inference run to find out which postconditions are derived
+                    let mut spec: Spec<&str, &str> = state_to_spec(rules.iter(), posts.iter());
+                    spec.rules.push(post.to_rule());
+                    // NOTE: This function clears the interpretation for us
+                    let int: Interpretation = spec.alternating_fixpoint()?;
+
+                    // Update the state according to the current knowledge base
                     match post.op {
                         PostulationOp::Create(_) => {
-                            for rule in &post.rules {
-                                rules.create_rule(rule.clone());
+                            for atom in post.consequents.values() {
+                                if int.closed_world_truth(atom) == Some(true) {
+                                    posts.insert(atom.clone());
+                                }
                             }
                         },
                         PostulationOp::Obfuscate(_) => {
-                            for rule in &post.rules {
-                                rules.obfuscate_rule(rule);
+                            for atom in post.consequents.values() {
+                                if int.closed_world_truth(atom) == Some(true) {
+                                    posts.shift_remove(atom);
+                                }
                             }
                         },
                     }
 
-                    // Run an interpretation and add that to the state too
-                    let spec: Spec<&'f str, &'s str> = rules.to_spec();
-                    spec.alternating_fixpoint_mut(&mut effect.interpretation)?;
+                    // Now we run an interpretation FOR REAL
+                    state_to_spec(rules.iter(), posts.iter()).alternating_fixpoint_mut(&mut effect.interpretation)?;
 
                     // OK!
                     effects.push(effect);
@@ -464,24 +542,34 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
 
                         // Handle its postulations
                         for post in &trans.postulations {
+                            // First, with the current KB, do an inference run to find out which postconditions are derived
+                            let mut spec: Spec<&str, &str> = state_to_spec(rules.iter(), posts.iter());
+                            spec.rules.push(post.to_rule());
+                            // NOTE: This function clears the interpretation for us
+                            let int: Interpretation = spec.alternating_fixpoint()?;
+
+                            // Update the state according to the current knowledge base
                             match post.op {
                                 PostulationOp::Create(_) => {
-                                    for rule in &post.rules {
-                                        rules.create_rule(rule.clone());
+                                    for atom in post.consequents.values() {
+                                        if int.closed_world_truth(atom) == Some(true) {
+                                            posts.insert(atom.clone());
+                                        }
                                     }
                                 },
                                 PostulationOp::Obfuscate(_) => {
-                                    for rule in &post.rules {
-                                        rules.obfuscate_rule(rule);
+                                    for atom in post.consequents.values() {
+                                        if int.closed_world_truth(atom) == Some(true) {
+                                            posts.shift_remove(atom);
+                                        }
                                     }
                                 },
                             }
                         }
                     }
 
-                    // Now run an inference step
-                    let spec: Spec<&'f str, &'s str> = rules.to_spec();
-                    spec.alternating_fixpoint_mut(&mut effect.interpretation)?;
+                    // Now we run an interpretation FOR REAL
+                    state_to_spec(rules.iter(), posts.iter()).alternating_fixpoint_mut(&mut effect.interpretation)?;
 
                     // OK!
                     effects.push(effect);
@@ -491,8 +579,7 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
 
         // Run a final postulation
         let mut effect: Effect<'f, 's> = Effect::new(EffectTrigger::End);
-        let spec: Spec<&'f str, &'s str> = rules.to_spec();
-        spec.alternating_fixpoint_mut(&mut effect.interpretation)?;
+        state_to_spec(rules.iter(), posts.iter()).alternating_fixpoint_mut(&mut effect.interpretation)?;
         effects.push(effect);
 
         // OK, report all effects back

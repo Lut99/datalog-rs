@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 17:55:47
 //  Last edited:
-//    29 Nov 2024, 15:34:31
+//    03 Dec 2024, 17:38:05
 //  Auto updated?
 //    Yes
 //
@@ -32,6 +32,8 @@ pub enum ParseError<F, S> {
     CurlyClose { span: Span<F, S> },
     /// Failed to parse the opening curly bracket.
     CurlyOpen { span: Span<F, S> },
+    /// Failed to parse a dot.
+    Dot { span: Span<F, S> },
     /// Failed to parse an exclaimation mark.
     Exclaim { span: Span<F, S> },
     /// Failed to parse the transition identifier.
@@ -49,6 +51,11 @@ impl<F, S> Debug for ParseError<F, S> {
             },
             CurlyOpen { span } => {
                 let mut fmt = f.debug_struct("ParseError::CurlyOpen");
+                fmt.field("span", span);
+                fmt.finish()
+            },
+            Dot { span } => {
+                let mut fmt = f.debug_struct("ParseError::Dot");
                 fmt.field("span", span);
                 fmt.finish()
             },
@@ -72,6 +79,7 @@ impl<F, S> Display for ParseError<F, S> {
         match self {
             CurlyClose { .. } => write!(f, "Expected a closing curly bracket"),
             CurlyOpen { .. } => write!(f, "Expected an opening curly bracket"),
+            Dot { .. } => write!(f, "Expected a dot"),
             Exclaim { .. } => write!(f, "Expected an exclaimation mark"),
             TransIdent { .. } => write!(f, "{}", TransIdentExpectsFormatter),
         }
@@ -89,6 +97,7 @@ where
         match self {
             CurlyClose { span } => span.clone(),
             CurlyOpen { span } => span.clone(),
+            Dot { span } => span.clone(),
             Exclaim { span } => span.clone(),
             TransIdent { span } => span.clone(),
         }
@@ -102,6 +111,7 @@ where
         match self {
             Self::CurlyClose { span } => span,
             Self::CurlyOpen { span } => span,
+            Self::Dot { span } => span,
             Self::Exclaim { span } => span,
             Self::TransIdent { span } => span,
         }
@@ -126,40 +136,43 @@ where
 /// use ast_toolkit::snack::error::{Common, Error, Failure};
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
-/// use datalog::ast::Ident;
+/// use datalog::ast::{Dot, Ident};
 /// use datalog::transitions::ast::{Curly, Exclaim, Trigger};
 /// use datalog::transitions::parser::triggers::{ParseError, trigger};
 ///
-/// let span1 = Span::new("<example>", "!{ #foo }");
-/// let span2 = Span::new("<example>", "!{}");
-/// let span3 = Span::new("<example>", "!{ #foo #bar }");
-/// let span4 = Span::new("<example>", "{ #foo }");
-/// let span5 = Span::new("<example>", "!{ foo }");
+/// let span1 = Span::new("<example>", "!{ #foo }.");
+/// let span2 = Span::new("<example>", "!{}.");
+/// let span3 = Span::new("<example>", "!{ #foo #bar }.");
+/// let span4 = Span::new("<example>", "{ #foo }.");
+/// let span5 = Span::new("<example>", "!{ foo }.");
 /// let span6 = Span::new("<example>", "!{ #foo");
 ///
 /// let mut comb = trigger();
 /// assert_eq!(
 ///     comb.parse(span1).unwrap(),
-///     (span1.slice(9..), Trigger {
+///     (span1.slice(10..), Trigger {
 ///         exclaim_token: Exclaim { span: span1.slice(..1) },
 ///         curly_tokens: Curly { open: span1.slice(1..2), close: span1.slice(8..9) },
 ///         idents: vec![Ident { value: span1.slice(3..7) }],
+///         dot: Dot { span: span3.slice(9..10) },
 ///     })
 /// );
 /// assert_eq!(
 ///     comb.parse(span2).unwrap(),
-///     (span2.slice(3..), Trigger {
+///     (span2.slice(4..), Trigger {
 ///         exclaim_token: Exclaim { span: span2.slice(..1) },
 ///         curly_tokens: Curly { open: span2.slice(1..2), close: span2.slice(2..3) },
 ///         idents: vec![],
+///         dot: Dot { span: span3.slice(3..4) },
 ///     })
 /// );
 /// assert_eq!(
 ///     comb.parse(span3).unwrap(),
-///     (span3.slice(14..), Trigger {
+///     (span3.slice(15..), Trigger {
 ///         exclaim_token: Exclaim { span: span3.slice(..1) },
 ///         curly_tokens: Curly { open: span3.slice(1..2), close: span3.slice(13..14) },
 ///         idents: vec![Ident { value: span3.slice(3..7) }, Ident { value: span3.slice(8..12) }],
+///         dot: Dot { span: span3.slice(14..15) },
 ///     })
 /// );
 /// assert!(matches!(
@@ -182,7 +195,7 @@ where
     S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + WhileUtf8,
 {
     comb::map(
-        seq::pair(
+        seq::tuple((
             comb::map_err(tokens::exclaim(), |err| ParseError::Exclaim { span: err.into_span() }),
             error::cut(comb::map_err(
                 tokens::curly(seq::preceded(
@@ -201,8 +214,9 @@ where
                     }
                 },
             )),
-        ),
-        |(exclaim_token, (idents, curly_tokens))| ast::Trigger { exclaim_token, curly_tokens, idents },
+            comb::map_err(crate::parser::tokens::dot(), |err| ParseError::Dot { span: err.into_span() }),
+        )),
+        |(exclaim_token, (idents, curly_tokens), dot)| ast::Trigger { exclaim_token, curly_tokens, idents, dot },
     )
     .parse(input)
 }

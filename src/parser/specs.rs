@@ -18,7 +18,7 @@ use std::rc::Rc;
 
 use ast_toolkit::snack::error::{Common, Failure};
 use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
-use ast_toolkit::snack::{comb, combinator as comb, error, multi, sequence as seq, utf8, Result as SResult};
+use ast_toolkit::snack::{Result as SResult, comb, combinator as comb, error, multi, sequence as seq, utf8};
 use ast_toolkit::span::{Span, Spannable, Spanning};
 
 use super::rules;
@@ -116,7 +116,7 @@ impl<F: Clone, S: Clone> Spanning<F, S> for ParseError<F, S> {
 /// }));
 /// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(11..), Spec {
 ///     rules: vec![Rule {
-///         consequences: punct![
+///         consequents: punct![
 ///             v => Atom {
 ///                 ident: Ident { value: span2.slice(..3) },
 ///                 args: None,
@@ -132,7 +132,7 @@ impl<F: Clone, S: Clone> Spanning<F, S> for ParseError<F, S> {
 /// assert_eq!(comb.parse(span3).unwrap(), (span3.slice(21..), Spec {
 ///     rules: vec![
 ///         Rule {
-///             consequences: punct![
+///             consequents: punct![
 ///                 v => Atom {
 ///                     ident: Ident { value: span2.slice(..3) },
 ///                     args: None,
@@ -145,7 +145,7 @@ impl<F: Clone, S: Clone> Spanning<F, S> for ParseError<F, S> {
 ///             dot: Dot { span: span2.slice(10..11) },
 ///         },
 ///         Rule {
-///             consequences: punct![
+///             consequents: punct![
 ///                 v => Atom {
 ///                     ident: Ident { value: span3.slice(12..15) },
 ///                     args: None,

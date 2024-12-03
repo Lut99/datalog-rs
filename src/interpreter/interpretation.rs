@@ -4,7 +4,7 @@
 //  Created:
 //    21 Mar 2024, 10:22:40
 //  Last edited:
-//    03 Dec 2024, 14:36:21
+//    03 Dec 2024, 16:15:43
 //  Auto updated?
 //    Yes
 //
@@ -694,7 +694,7 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
         let mut consts: IndexSet<Ident<&'f str, &'s str>> = IndexSet::new();
         for rule in rules.clone() {
             // Go over the consequences only (since these are the only ones that can be true)
-            for cons in rule.consequences.values() {
+            for cons in rule.consequents.values() {
                 // Add the consequent if it has no arguments
                 if cons.args.as_ref().map(|a| a.args.len()).unwrap_or(0) == 0 {
                     consts.insert(cons.ident);
@@ -710,7 +710,7 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
             // Build quantifiers over the variables in the rule
             vars.clear();
             for arg in rule
-                .consequences
+                .consequents
                 .values()
                 .flat_map(|a| a.args.iter().flat_map(|a| a.args.values()))
                 .chain(rule.tail.iter().flat_map(|t| t.antecedents.values().flat_map(|a| a.atom().args.iter().flat_map(|a| a.args.values()))))
@@ -742,7 +742,7 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
 
                     // Go over the consequences only... and _negative_ antecedents
                     // The former represents the possible atoms that _can_ be true, the latter represents the things we may want to search for are false.
-                    for atom in rule.consequences.values().chain(rule.tail.iter().flat_map(|t| {
+                    for atom in rule.consequents.values().chain(rule.tail.iter().flat_map(|t| {
                         t.antecedents.values().filter_map(|a| match a {
                             Literal::Atom(_) => None,
                             Literal::NegAtom(NegAtom { atom, .. }) => Some(atom),
@@ -776,7 +776,7 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
                 }
             } else {
                 // Go over the consequences only... and antecedents lol
-                for atom in rule.consequences.values().chain(rule.tail.iter().flat_map(|t| {
+                for atom in rule.consequents.values().chain(rule.tail.iter().flat_map(|t| {
                     t.antecedents.values().filter_map(|a| match a {
                         Literal::Atom(_) => None,
                         Literal::NegAtom(NegAtom { atom, .. }) => Some(atom),

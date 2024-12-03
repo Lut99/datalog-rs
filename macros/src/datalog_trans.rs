@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 11:04:28
 //  Last edited:
-//    03 Dec 2024, 14:53:19
+//    03 Dec 2024, 17:32:31
 //  Auto updated?
 //    Yes
 //
@@ -15,11 +15,12 @@
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{ToTokens, quote_spanned};
 use syn::parse::{Parse, ParseStream};
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
-use syn::token::Brace;
+use syn::token::{Brace, Colon, Comma, Dot, Minus};
 use syn::{Error, Ident, LitStr, Token, braced};
 
-use crate::common::{CratePath, DatalogAttributes, FromStr, Rule, resolve_placeholders};
+use crate::common::{Atom, CratePath, DatalogAttributes, FromStr, Literal, Rule, parse_punctuated, resolve_placeholders, serialize_punctuated};
 
 
 /***** HELPER FUNCTIONS *****/
@@ -100,11 +101,13 @@ impl ToTokens for Phrase {
 /// Represents a postulation.
 struct Postulation {
     /// The symbol at the start of it.
-    op:    PostulationOp,
+    op: PostulationOp,
     /// The curly brackets wrapping...
     brace: Brace,
-    /// The list of rules to postulate.
-    rules: Vec<Rule>,
+    /// The list of atoms to postulate.
+    consequents: Punctuated<Atom, Comma>,
+    /// Any antecedents
+    antecedents: Option<((Colon, Minus), Punctuated<Literal, Comma>)>,
 }
 impl Parse for Postulation {
     #[inline]
@@ -116,32 +119,66 @@ impl Parse for Postulation {
         let content;
         let brace: Brace = braced!(content in input);
 
-        // Finally, parse the rest as a repeated bunch of rules
-        let mut rules: Vec<Rule> = Vec::new();
-        while !content.is_empty() {
-            rules.push(Rule::parse(&content)?);
-        }
+        // The bit in between is regular ol' identifiers
+        let consequents = parse_punctuated(&content, Atom::parse)?;
 
-        // Done!
-        Ok(Self { op, brace, rules })
+        // Parse the antecedents, if any
+        let antecedents = if let (Ok(colon), Ok(minus)) = (input.parse::<Colon>(), input.parse::<Minus>()) {
+            // Parse a punctuated list of antecedents
+            let antecedents: Punctuated<Literal, Comma> = parse_punctuated(input, Literal::parse)?;
+            if antecedents.is_empty() {
+                return Err(input.error("Expected at least one antecedent"));
+            }
+            Some(((colon, minus), antecedents))
+        } else {
+            None
+        };
+
+        // Parse the final dot
+        let _dot: Dot = input.parse()?;
+
+        // Done parsing!
+        Ok(Self { op, brace, consequents, antecedents })
     }
 }
 impl ToTokens for Postulation {
     #[inline]
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let crate_path: CratePath = Default::default();
+        let (crate_path, from_str): (CratePath, FromStr) = Default::default();
 
-        // OK, write the final struct
+        // First, generate consequences
+        let consequents_tokens: TokenStream2 = serialize_punctuated(self.consequents.iter());
+
+        // Next, generate the antecedents
+        let antecedents_tokens: TokenStream2 = if let Some(((colon, _), antecedents)) = &self.antecedents {
+            // Generate all the antecedents
+            let antecedents_tokens: TokenStream2 = serialize_punctuated(antecedents.iter());
+
+            // Serialize them to a single RuleAntecedents
+            quote_spanned! {
+                colon.span =>
+                Some(#crate_path::ast::RuleAntecedents {
+                    arrow_token: #crate_path::ast::Arrow { span: #crate_path::ast::Span::new(#from_str, ":-") },
+                    antecedents: #antecedents_tokens,
+                })
+            }
+        } else {
+            quote_spanned! { consequents_tokens.span() => None }
+        };
+
+        // Finally, serialize the rule!
         let op: &PostulationOp = &self.op;
         let curly_tokens: TokenStream2 = serialize_brace(&self.brace);
-        let rules: Vec<TokenStream2> = self.rules.iter().map(Rule::to_token_stream).collect();
-        tokens.extend(quote_spanned! { Span::call_site() =>
+        tokens.extend(quote_spanned! {
+            consequents_tokens.span() =>
             #crate_path::transitions::ast::Postulation {
                 op: #op,
                 curly_tokens: #curly_tokens,
-                rules: ::std::vec![#(#rules),*],
+                consequents: #consequents_tokens,
+                tail: #antecedents_tokens,
+                dot: #crate_path::ast::Dot { span: #crate_path::ast::Span::new(#from_str, ".") },
             }
-        })
+        });
     }
 }
 
@@ -170,6 +207,9 @@ impl Parse for Transition {
             posts.push(Postulation::parse(&content)?);
         }
 
+        // Parse the final dot
+        let _dot: Dot = input.parse()?;
+
         // Done!
         Ok(Self { ident, brace, posts })
     }
@@ -177,7 +217,7 @@ impl Parse for Transition {
 impl ToTokens for Transition {
     #[inline]
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let crate_path: CratePath = Default::default();
+        let (crate_path, from_str): (CratePath, FromStr) = Default::default();
 
         // OK, write the final struct
         let ident: &TransIdent = &self.ident;
@@ -188,6 +228,7 @@ impl ToTokens for Transition {
                 ident: #ident,
                 curly_tokens: #curly_tokens,
                 postulations: ::std::vec![#(#posts),*],
+                dot: #crate_path::ast::Dot { span: #crate_path::ast::Span::new(#from_str, ".") },
             }
         })
     }
@@ -218,6 +259,9 @@ impl Parse for Trigger {
             idents.push(TransIdent::parse(&content)?);
         }
 
+        // Parse the final dot
+        let _dot: Dot = input.parse()?;
+
         // Done!
         Ok(Self { not, brace, idents })
     }
@@ -225,17 +269,18 @@ impl Parse for Trigger {
 impl ToTokens for Trigger {
     #[inline]
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let crate_path: CratePath = Default::default();
+        let (crate_path, from_str): (CratePath, FromStr) = Default::default();
 
         // OK, write the final struct
         let exclaim: TokenStream2 = serialize_not(&self.not);
         let curly_tokens: TokenStream2 = serialize_brace(&self.brace);
         let idents: Vec<TokenStream2> = self.idents.iter().map(TransIdent::to_token_stream).collect();
         tokens.extend(quote_spanned! { Span::call_site() =>
-            #crate_path::transitions::ast::Transition {
+            #crate_path::transitions::ast::Trigger {
                 exclaim_token: #exclaim,
                 curly_tokens: #curly_tokens,
                 idents: ::std::vec![#(#idents),*],
+                dot: #crate_path::ast::Dot { span: #crate_path::ast::Span::new(#from_str, ".") },
             }
         })
     }
