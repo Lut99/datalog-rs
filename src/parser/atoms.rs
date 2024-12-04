@@ -17,10 +17,10 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use ast_toolkit::snack::error::{Common, Error, Failure};
 use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
 use ast_toolkit::snack::utf8::complete::while1;
-use ast_toolkit::snack::{branch, comb, combinator as comb, error, multi, sequence as seq, utf8, Result as SResult};
+use ast_toolkit::snack::{Result as SResult, branch, comb, combinator as comb, error, multi, sequence as seq};
 use ast_toolkit::span::{Span, Spanning};
 
-use super::tokens;
+use super::{tokens, whitespaces};
 use crate::ast;
 
 
@@ -276,7 +276,7 @@ where
     S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + WhileUtf8,
 {
     match tokens::parens(multi::punctuated0(
-        seq::delimited(error::transmute(utf8::whitespace0()), atom_arg(), error::transmute(utf8::whitespace0())),
+        seq::delimited(error::transmute(whitespaces::whitespace()), atom_arg(), error::transmute(whitespaces::whitespace())),
         comb::map_err(tokens::comma(), |err| ParseError::Comma { span: err.into_span() }),
     ))
     .parse(input)
@@ -303,7 +303,7 @@ where
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
 /// use datalog::ast::{AtomArg, Ident};
-/// use datalog::parser::atoms::{atom_arg, ParseError};
+/// use datalog::parser::atoms::{ParseError, atom_arg};
 ///
 /// let span1 = Span::new("<example>", "foo");
 /// let span2 = Span::new("<example>", "Bar");
@@ -348,7 +348,7 @@ where
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
 /// use datalog::ast::Ident;
-/// use datalog::parser::atoms::{ident, ParseError};
+/// use datalog::parser::atoms::{ParseError, ident};
 ///
 /// let span1 = Span::new("<example>", "foo");
 /// let span2 = Span::new("<example>", "Bar");
@@ -409,7 +409,7 @@ where
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
 /// use datalog::ast::Ident;
-/// use datalog::parser::atoms::{var, ParseError};
+/// use datalog::parser::atoms::{ParseError, var};
 ///
 /// let span1 = Span::new("<example>", "foo");
 /// let span2 = Span::new("<example>", "Bar");

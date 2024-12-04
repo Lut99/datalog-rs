@@ -16,7 +16,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
-use ast_toolkit::snack::{branch, comb, combinator as comb, error, multi, sequence as seq, utf8};
+use ast_toolkit::snack::{branch, comb, combinator as comb, error, multi, sequence as seq};
 use ast_toolkit::span::{Span, Spannable, Spanning};
 
 use super::super::ast;
@@ -24,8 +24,8 @@ use super::postulations::PostulationExpectsFormatter;
 use super::transitions::TransitionExpectsFormatter;
 use super::triggers::TriggerExpectsFormatter;
 use super::{postulations, transitions, triggers};
-use crate::parser::rules;
 use crate::parser::rules::RuleExpectsFormatter;
+use crate::parser::{rules, whitespaces};
 
 
 /***** ERRORS *****/
@@ -227,7 +227,7 @@ where
     S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + Spannable + WhileUtf8,
 {
     comb::map(
-        comb::all(multi::many0(seq::delimited(error::transmute(utf8::whitespace0()), phrase(), error::transmute(utf8::whitespace0())))),
+        comb::all(multi::many0(seq::delimited(error::transmute(whitespaces::whitespace()), phrase(), error::transmute(whitespaces::whitespace())))),
         |phrases| ast::TransitionSpec { phrases },
     )
     .parse(input)

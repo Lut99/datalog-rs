@@ -4,7 +4,7 @@
 //  Created:
 //    08 May 2024, 11:12:42
 //  Last edited:
-//    28 Nov 2024, 16:46:05
+//    04 Dec 2024, 17:57:38
 //  Auto updated?
 //    Yes
 //
@@ -18,10 +18,10 @@ use std::rc::Rc;
 
 use ast_toolkit::snack::error::{Common, Failure};
 use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
-use ast_toolkit::snack::{Result as SResult, comb, combinator as comb, error, multi, sequence as seq, utf8};
+use ast_toolkit::snack::{Result as SResult, comb, combinator as comb, error, multi, sequence as seq};
 use ast_toolkit::span::{Span, Spannable, Spanning};
 
-use super::rules;
+use super::{rules, whitespaces};
 use crate::ast;
 
 
@@ -172,9 +172,9 @@ where
     S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + Spannable + WhileUtf8,
 {
     match comb::all(multi::many0(seq::delimited(
-        error::transmute(utf8::whitespace0()),
+        error::transmute(whitespaces::whitespace()),
         comb::map_err(rules::rule(), |err| ParseError::Rule { span: err.span() }),
-        error::transmute(utf8::whitespace0()),
+        error::transmute(whitespaces::whitespace()),
     )))
     .parse(input)
     {

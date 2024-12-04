@@ -17,13 +17,14 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit::snack::error::Common;
 use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
-use ast_toolkit::snack::{comb, combinator as comb, error, multi, sequence as seq, utf8};
+use ast_toolkit::snack::{comb, combinator as comb, error, multi, sequence as seq};
 use ast_toolkit::span::{Span, Spanning};
 
 use super::super::ast;
 use super::idents::TransIdentExpectsFormatter;
 use super::postulations::PostulationExpectsFormatter;
 use super::{idents, postulations, tokens};
+use crate::parser::whitespaces;
 
 
 /***** ERRORS *****/
@@ -209,15 +210,15 @@ where
 {
     comb::map(
         seq::tuple((
-            comb::map_err(seq::terminated(idents::trans_ident(), error::transmute(utf8::whitespace0())), |err| ParseError::TransIdent {
+            comb::map_err(seq::terminated(idents::trans_ident(), error::transmute(whitespaces::whitespace())), |err| ParseError::TransIdent {
                 span: err.into_span(),
             }),
             comb::map_err(
                 tokens::curly(seq::preceded(
-                    error::transmute(utf8::whitespace0()),
+                    error::transmute(whitespaces::whitespace()),
                     multi::many0(seq::terminated(
                         comb::map_err(postulations::postulation(), |err| ParseError::Postulation { span: err.into_span() }),
-                        error::transmute(utf8::whitespace0()),
+                        error::transmute(whitespaces::whitespace()),
                     )),
                 )),
                 |err| match err {

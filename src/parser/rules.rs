@@ -4,7 +4,7 @@
 //  Created:
 //    07 May 2024, 16:38:16
 //  Last edited:
-//    03 Dec 2024, 17:05:31
+//    04 Dec 2024, 18:01:31
 //  Auto updated?
 //    Yes
 //
@@ -20,7 +20,7 @@ use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
 use ast_toolkit::snack::{Result as SResult, comb, combinator as comb, error, multi, sequence as seq, utf8};
 use ast_toolkit::span::{Span, Spanning};
 
-use super::{atoms, literals, tokens};
+use super::{atoms, literals, tokens, whitespaces};
 use crate::ast;
 
 
@@ -212,7 +212,7 @@ where
     match seq::tuple((
         multi::punctuated1(
             seq::delimited(
-                error::transmute(utf8::whitespace0()),
+                error::transmute(whitespaces::whitespace()),
                 map_err(atoms::atom(), |err| ParseError::Atom { span: err.span() }),
                 error::transmute(comb::not(utf8::complete::while1(|c| {
                     if c.len() != 1 {
@@ -224,9 +224,9 @@ where
             ),
             comb::map_err(tokens::comma(), |err| ParseError::Comma { span: err.into_span() }),
         ),
-        error::transmute(utf8::whitespace0()),
+        error::transmute(whitespaces::whitespace()),
         comb::opt(rule_antecedents()),
-        error::transmute(utf8::whitespace0()),
+        error::transmute(whitespaces::whitespace()),
         comb::map_err(tokens::dot(), |err| ParseError::Dot { span: err.into_span() }),
     ))
     .parse(input)
@@ -316,7 +316,7 @@ where
         error::cut(multi::punctuated1(
             comb::map_err(
                 seq::delimited(
-                    error::transmute(utf8::whitespace0()),
+                    error::transmute(whitespaces::whitespace()),
                     literals::literal(),
                     error::transmute(comb::not(utf8::complete::while1(|c| {
                         if c.len() != 1 {

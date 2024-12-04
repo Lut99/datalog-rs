@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    03 Dec 2024, 17:28:25
+//    04 Dec 2024, 17:22:04
 //  Auto updated?
 //    Yes
 //
@@ -116,10 +116,10 @@ where
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
-            Self::Postulation(p) => writeln!(f, "{p}"),
-            Self::Rule(r) => writeln!(f, "{r}"),
-            Self::Transition(t) => writeln!(f, "{t}"),
-            Self::Trigger(t) => writeln!(f, "{t}"),
+            Self::Postulation(p) => write!(f, "{p}"),
+            Self::Rule(r) => write!(f, "{r}"),
+            Self::Transition(t) => write!(f, "{t}"),
+            Self::Trigger(t) => write!(f, "{t}"),
         }
     }
 }

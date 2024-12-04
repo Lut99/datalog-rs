@@ -17,13 +17,14 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit::snack::error::Common;
 use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
-use ast_toolkit::snack::{branch, comb, combinator as comb, error, multi, sequence as seq, utf8};
+use ast_toolkit::snack::{branch, comb, combinator as comb, error, multi, sequence as seq};
 use ast_toolkit::span::{Span, Spanning};
 
 use super::super::ast;
 use super::tokens;
 use crate::parser::atoms::{self, AtomExpectsFormatter};
 use crate::parser::rules::{self, RuleAntecedentsExpectsFormatter};
+use crate::parser::whitespaces;
 
 
 /***** ERRORS *****/
@@ -237,14 +238,14 @@ where
 {
     comb::map(
         seq::pair(
-            seq::terminated(postulation_op(), error::transmute(utf8::whitespace0())),
+            seq::terminated(postulation_op(), error::transmute(whitespaces::whitespace())),
             error::cut(seq::tuple((
                 comb::map_err(
                     tokens::curly(multi::punctuated0(
                         seq::delimited(
-                            error::transmute(utf8::whitespace0()),
+                            error::transmute(whitespaces::whitespace()),
                             comb::map_err(atoms::atom(), |err| ParseError::Atom { span: err.span() }),
-                            error::transmute(utf8::whitespace0()),
+                            error::transmute(whitespaces::whitespace()),
                             // error::transmute(comb::not(utf8::complete::while1(|c| {
                             //     if c.len() != 1 {
                             //         return false;
@@ -262,9 +263,9 @@ where
                         _ => unreachable!(),
                     },
                 ),
-                error::transmute(utf8::whitespace0()),
+                error::transmute(whitespaces::whitespace()),
                 comb::map_err(comb::opt(rules::rule_antecedents()), |err| ParseError::RuleAntecedents { span: err.into_span() }),
-                error::transmute(utf8::whitespace0()),
+                error::transmute(whitespaces::whitespace()),
                 comb::map_err(crate::parser::tokens::dot(), |err| ParseError::Dot { span: err.into_span() }),
             ))),
         ),

@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 14:32:43
 //  Last edited:
-//    03 Dec 2024, 16:16:20
+//    04 Dec 2024, 17:02:39
 //  Auto updated?
 //    Yes
 //
@@ -12,7 +12,7 @@
 //!   Contains some common test functions.
 //
 
-use crate::ast::{Arrow, Atom, AtomArg, AtomArgs, Comma, Dot, Ident, Literal, Parens, Punctuated, Rule, RuleAntecedents, Span};
+use crate::ast::{Arrow, Atom, AtomArg, AtomArgs, Comma, Dot, Ident, Literal, NegAtom, Not, Parens, Punctuated, Rule, RuleAntecedents, Span};
 use crate::transitions::ast::Curly;
 
 
@@ -56,15 +56,33 @@ pub fn make_rule(
     }
 }
 
+/// Makes a [`Literal`] conveniently.
+pub fn make_lit(polarity: bool, name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Literal<&'static str, &'static str> {
+    if polarity {
+        Literal::Atom(make_atom(name, args))
+    } else {
+        Literal::NegAtom(NegAtom { not_token: Not { span: Span::new("make_lit::not", "not") }, atom: make_atom(name, args) })
+    }
+}
+
 /// Makes an [`Atom`] conveniently.
+#[track_caller]
 pub fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Atom<&'static str, &'static str> {
     // Make the punctuation
     let mut punct: Punctuated<AtomArg<&'static str, &'static str>, Comma<&'static str, &'static str>> = Punctuated::new();
     for (i, arg) in args.into_iter().enumerate() {
-        if i == 0 {
-            punct.push_first(AtomArg::Atom(Ident { value: Span::new("make_atom::arg", arg) }));
+        // Either push as atom or as variable
+        let arg: AtomArg<&'static str, &'static str> = if arg.chars().next().unwrap_or_else(|| panic!("Empty argument given")).is_uppercase() {
+            AtomArg::Var(Ident { value: Span::new("make_atom::var", arg) })
         } else {
-            punct.push(Comma { span: Span::new("make_atom::arg::comma", ",") }, AtomArg::Atom(Ident { value: Span::new("make_atom::arg", arg) }));
+            AtomArg::Atom(Ident { value: Span::new("make_atom::arg", arg) })
+        };
+
+        // Then push with the correct punctuation
+        if i == 0 {
+            punct.push_first(arg);
+        } else {
+            punct.push(Comma { span: Span::new("make_atom::arg::comma", ",") }, arg);
         }
     }
 

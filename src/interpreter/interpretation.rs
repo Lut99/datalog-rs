@@ -4,7 +4,7 @@
 //  Created:
 //    21 Mar 2024, 10:22:40
 //  Last edited:
-//    03 Dec 2024, 16:15:43
+//    04 Dec 2024, 15:09:44
 //  Auto updated?
 //    Yes
 //
@@ -498,40 +498,40 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
         state.finish()
     }
 
-    /// Computes the hash of the given atom that has an external assignment.
-    ///
-    /// This is exposed to be useful for [`Self::truth_of_lit_by_hash()`](Interpretation::truth_of_lit_by_hash()).
-    ///
-    /// # Arguments
-    /// - `atom`: The [`Atom`] to compute the hash of.
-    /// - `assign`: Some map that maps variables to their concrete values to hash.
-    ///
-    /// # Returns
-    /// Some [`u64`] encoding the atom's hash.
-    ///
-    /// # Panics
-    /// This function can panic if there is a variable in the `atom` that is not in the `assignment`.
-    #[inline]
-    #[track_caller]
-    pub fn hash_atom_with_assign(&self, atom: &Atom<&'f str, &'s str>, assign: &HashMap<Ident<&'f str, &'s str>, Ident<&'f str, &'s str>>) -> u64 {
-        let mut state: R::Hasher = self.state.build_hasher();
+    // /// Computes the hash of the given atom that has an external assignment.
+    // ///
+    // /// This is exposed to be useful for [`Self::truth_of_lit_by_hash()`](Interpretation::truth_of_lit_by_hash()).
+    // ///
+    // /// # Arguments
+    // /// - `atom`: The [`Atom`] to compute the hash of.
+    // /// - `assign`: Some map that maps variables to their concrete values to hash.
+    // ///
+    // /// # Returns
+    // /// Some [`u64`] encoding the atom's hash.
+    // ///
+    // /// # Panics
+    // /// This function can panic if there is a variable in the `atom` that is not in the `assignment`.
+    // #[inline]
+    // #[track_caller]
+    // pub fn hash_atom_with_assign(&self, atom: &Atom<&'f str, &'s str>, assign: &HashMap<Ident<&'f str, &'s str>, Ident<&'f str, &'s str>>) -> u64 {
+    //     let mut state: R::Hasher = self.state.build_hasher();
 
-        // Hash the identifier, then all arguments
-        atom.ident.value.value().hash(&mut state);
-        for arg in atom.args.iter().flat_map(|a| a.args.values()) {
-            // If it's a variable, apply the assignment instead
-            if let AtomArg::Var(v) = arg {
-                AtomArg::Atom(*assign.get(v).unwrap_or_else(|| panic!("Found variable '{v}' in atom that was not in assignment"))).hash(&mut state);
-                continue;
-            }
+    //     // Hash the identifier, then all arguments
+    //     atom.ident.value.value().hash(&mut state);
+    //     for arg in atom.args.iter().flat_map(|a| a.args.values()) {
+    //         // If it's a variable, apply the assignment instead
+    //         if let AtomArg::Var(v) = arg {
+    //             AtomArg::Atom(*assign.get(v).unwrap_or_else(|| panic!("Found variable '{v}' in atom that was not in assignment"))).hash(&mut state);
+    //             continue;
+    //         }
 
-            // Hash the AtomArg as-is
-            arg.hash(&mut state);
-        }
+    //         // Hash the AtomArg as-is
+    //         arg.hash(&mut state);
+    //     }
 
-        // Done
-        state.finish()
-    }
+    //     // Done
+    //     state.finish()
+    // }
 
     /// Learns the truth value of a new atom.
     ///
@@ -588,66 +588,66 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
         }
     }
 
-    /// Learns the truth value of a new atom with a custom assignment of its arguments.
-    ///
-    /// This promotes an _existing_ atom from the unknown list to the known list.
-    ///
-    /// # Arguments
-    /// - `atom`: Some atom, potentially with variables as arguments, to learn.
-    /// - `assign`: An assignment of values for the perhaps-existing variables in `atom`.
-    /// - `truth`: The truth value of the atom in question.
-    ///
-    /// # Returns
-    /// Whether we already knew about this `atom`.
-    ///
-    /// # Panics
-    /// This function can panic if the atom is not in the list of unknown truths, or if there was a variable in `atom` that was not in the `assign`ment.
-    #[inline]
-    #[track_caller]
-    pub fn learn_with_assign(
-        &mut self,
-        atom: &Atom<&'f str, &'s str>,
-        assign: &HashMap<Ident<&'f str, &'s str>, Ident<&'f str, &'s str>>,
-        truth: bool,
-    ) -> Option<bool> {
-        let hash: u64 = self.hash_atom_with_assign(atom, assign);
+    // /// Learns the truth value of a new atom with a custom assignment of its arguments.
+    // ///
+    // /// This promotes an _existing_ atom from the unknown list to the known list.
+    // ///
+    // /// # Arguments
+    // /// - `atom`: Some atom, potentially with variables as arguments, to learn.
+    // /// - `assign`: An assignment of values for the perhaps-existing variables in `atom`.
+    // /// - `truth`: The truth value of the atom in question.
+    // ///
+    // /// # Returns
+    // /// Whether we already knew about this `atom`.
+    // ///
+    // /// # Panics
+    // /// This function can panic if the atom is not in the list of unknown truths, or if there was a variable in `atom` that was not in the `assign`ment.
+    // #[inline]
+    // #[track_caller]
+    // pub fn learn_with_assign(
+    //     &mut self,
+    //     atom: &Atom<&'f str, &'s str>,
+    //     assign: &HashMap<Ident<&'f str, &'s str>, Ident<&'f str, &'s str>>,
+    //     truth: bool,
+    // ) -> Option<bool> {
+    //     let hash: u64 = self.hash_atom_with_assign(atom, assign);
 
-        // Attempt to find the atom in the list of truths
-        match self.unknown.remove(&hash) {
-            true => {
-                // For this one, can never already exist
-                if truth {
-                    self.tknown.insert(hash);
-                    None
-                } else {
-                    self.fknown.insert(hash);
-                    None
-                }
-            },
-            false => {
-                // NOTE: We don't _move_ the atom from false -> true and vice versa; we merely observe that it is _also_ true/false.
-                if truth {
-                    if self.tknown.contains(&hash) {
-                        Some(true)
-                    } else if self.fknown.contains(&hash) {
-                        self.tknown.insert(hash);
-                        Some(false)
-                    } else {
-                        panic!("Cannot learn anything about non-existing atom '{atom}'");
-                    }
-                } else {
-                    if self.fknown.contains(&hash) {
-                        Some(false)
-                    } else if self.tknown.contains(&hash) {
-                        self.fknown.insert(hash);
-                        Some(true)
-                    } else {
-                        panic!("Cannot learn anything about non-existing atom '{atom}'");
-                    }
-                }
-            },
-        }
-    }
+    //     // Attempt to find the atom in the list of truths
+    //     match self.unknown.remove(&hash) {
+    //         true => {
+    //             // For this one, can never already exist
+    //             if truth {
+    //                 self.tknown.insert(hash);
+    //                 None
+    //             } else {
+    //                 self.fknown.insert(hash);
+    //                 None
+    //             }
+    //         },
+    //         false => {
+    //             // NOTE: We don't _move_ the atom from false -> true and vice versa; we merely observe that it is _also_ true/false.
+    //             if truth {
+    //                 if self.tknown.contains(&hash) {
+    //                     Some(true)
+    //                 } else if self.fknown.contains(&hash) {
+    //                     self.tknown.insert(hash);
+    //                     Some(false)
+    //                 } else {
+    //                     panic!("Cannot learn anything about non-existing atom '{atom}'");
+    //                 }
+    //             } else {
+    //                 if self.fknown.contains(&hash) {
+    //                     Some(false)
+    //                 } else if self.tknown.contains(&hash) {
+    //                     self.fknown.insert(hash);
+    //                     Some(true)
+    //                 } else {
+    //                     panic!("Cannot learn anything about non-existing atom '{atom}'");
+    //                 }
+    //             }
+    //         },
+    //     }
+    // }
 
     /// Makes a new atom possible.
     ///
@@ -814,30 +814,30 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
         if truth { self.tknown.contains(&hash) } else { self.fknown.contains(&hash) }
     }
 
-    /// Returns whether a particular atom is in the know.
-    ///
-    /// This function is more powerful than comparing the result of open world queries, because you can specifically ask for the status of the positive and negative atom variants.
-    /// [`Self::open_world_truth()`](Interpretation::open_world_truth()) will always tell you true exists if it does, regardless of whether false exists.
-    ///
-    /// # Arguments
-    /// - `atom`: Some [`Atom`] to attempt to find the truth of.
-    /// - `assign`: Some particular assignment for any variables occuring in the `atom`.
-    /// - `truth`: The specific truth-variant of the atom to investigate.
-    ///
-    /// # Returns
-    /// True if we know that this atom has this truth value, or false otherwise. This may mean we know it has the other truth value (which is _not_ mutually exclusive with the first case! I.e., we may know of it _both_ existing!).
-    #[inline]
-    pub fn knows_about_atom_with_assign(
-        &self,
-        atom: &Atom<&'f str, &'s str>,
-        assign: &HashMap<Ident<&'f str, &'s str>, Ident<&'f str, &'s str>>,
-        truth: bool,
-    ) -> bool {
-        let hash: u64 = self.hash_atom_with_assign(&atom, assign);
+    // /// Returns whether a particular atom is in the know.
+    // ///
+    // /// This function is more powerful than comparing the result of open world queries, because you can specifically ask for the status of the positive and negative atom variants.
+    // /// [`Self::open_world_truth()`](Interpretation::open_world_truth()) will always tell you true exists if it does, regardless of whether false exists.
+    // ///
+    // /// # Arguments
+    // /// - `atom`: Some [`Atom`] to attempt to find the truth of.
+    // /// - `assign`: Some particular assignment for any variables occuring in the `atom`.
+    // /// - `truth`: The specific truth-variant of the atom to investigate.
+    // ///
+    // /// # Returns
+    // /// True if we know that this atom has this truth value, or false otherwise. This may mean we know it has the other truth value (which is _not_ mutually exclusive with the first case! I.e., we may know of it _both_ existing!).
+    // #[inline]
+    // pub fn knows_about_atom_with_assign(
+    //     &self,
+    //     atom: &Atom<&'f str, &'s str>,
+    //     assign: &HashMap<Ident<&'f str, &'s str>, Ident<&'f str, &'s str>>,
+    //     truth: bool,
+    // ) -> bool {
+    //     let hash: u64 = self.hash_atom_with_assign(&atom, assign);
 
-        // Do the procedure above
-        if truth { self.tknown.contains(&hash) } else { self.fknown.contains(&hash) }
-    }
+    //     // Do the procedure above
+    //     if truth { self.tknown.contains(&hash) } else { self.fknown.contains(&hash) }
+    // }
 
     /// Returns the truth value of the given atom under the closed-world assumption.
     ///
@@ -891,40 +891,40 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
         }
     }
 
-    /// Returns the truth value of the given atom under the open-world assumption.
-    ///
-    /// # Arguments
-    /// - `atom`: Some [`Atom`] to attempt to find the truth of.
-    /// - `assign`: A list of assignments for the variables in the atom, if any.
-    ///
-    /// # Returns
-    /// This applies the following procedure:
-    /// - If the atom is known, returns the truth value of it;
-    /// - If the atom is unknown, returns [`None`]; or
-    /// - Returns [`None`] if the atom doesn't exist in the universe.
-    ///
-    /// # Panics
-    /// This function panics if there was a variable in `atom` that was not in the `assign`ment.
-    #[inline]
-    #[track_caller]
-    pub fn open_world_truth_with_assign(
-        &self,
-        atom: &Atom<&'f str, &'s str>,
-        assign: &HashMap<Ident<&'f str, &'s str>, Ident<&'f str, &'s str>>,
-    ) -> Option<bool> {
-        let hash: u64 = self.hash_atom_with_assign(&atom, assign);
+    // /// Returns the truth value of the given atom under the open-world assumption.
+    // ///
+    // /// # Arguments
+    // /// - `atom`: Some [`Atom`] to attempt to find the truth of.
+    // /// - `assign`: A list of assignments for the variables in the atom, if any.
+    // ///
+    // /// # Returns
+    // /// This applies the following procedure:
+    // /// - If the atom is known, returns the truth value of it;
+    // /// - If the atom is unknown, returns [`None`]; or
+    // /// - Returns [`None`] if the atom doesn't exist in the universe.
+    // ///
+    // /// # Panics
+    // /// This function panics if there was a variable in `atom` that was not in the `assign`ment.
+    // #[inline]
+    // #[track_caller]
+    // pub fn open_world_truth_with_assign(
+    //     &self,
+    //     atom: &Atom<&'f str, &'s str>,
+    //     assign: &HashMap<Ident<&'f str, &'s str>, Ident<&'f str, &'s str>>,
+    // ) -> Option<bool> {
+    //     let hash: u64 = self.hash_atom_with_assign(&atom, assign);
 
-        // Do the procedure above
-        if self.tknown.contains(&hash) {
-            Some(true)
-        } else if self.fknown.contains(&hash) {
-            Some(false)
-        } else if self.unknown.contains(&hash) {
-            None
-        } else {
-            None
-        }
-    }
+    //     // Do the procedure above
+    //     if self.tknown.contains(&hash) {
+    //         Some(true)
+    //     } else if self.fknown.contains(&hash) {
+    //         Some(false)
+    //     } else if self.unknown.contains(&hash) {
+    //         None
+    //     } else {
+    //         None
+    //     }
+    // }
 }
 
 // Format
