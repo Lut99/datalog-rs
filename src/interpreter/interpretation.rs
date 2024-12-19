@@ -4,7 +4,7 @@
 //  Created:
 //    21 Mar 2024, 10:22:40
 //  Last edited:
-//    04 Dec 2024, 15:09:44
+//    19 Dec 2024, 11:19:02
 //  Auto updated?
 //    Yes
 //
@@ -16,8 +16,9 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::hash::{BuildHasher, DefaultHasher, Hash as _, Hasher, RandomState};
 
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 
+use super::quantify::RuleQuantifier;
 use crate::ast::{Atom, AtomArg, Ident, Literal, NegAtom, Rule, Spec};
 use crate::log::warn;
 
@@ -172,104 +173,6 @@ mod tests {
 /***** CONSTANTS *****/
 /// Defines the maximum amount of _variables_ that a consequent can have.
 pub const STACK_VEC_LEN: usize = 16;
-
-
-
-
-
-/***** ITERATORS *****/
-/// Iterates over all constants for a particular variable.
-///
-/// This isn't straightforward iteration, but rather repeats elements and the whole iterator in order to create a unique assignment for all (unique!) variables in a rule.
-#[derive(Clone, Copy, Debug)]
-pub struct VarQuantifier {
-    /// The indices that we keep track of. Given in the order of: `inner_repeat_count`, `consts_idx`, `outer_repeat_count`.
-    idx: (usize, usize, usize),
-    /// The position of this variable in the total list of quantifiers, if you will.
-    i:   usize,
-}
-impl VarQuantifier {
-    /// Constructor for the VarQuantifier.
-    ///
-    /// # Arguments
-    /// - `consts`: Some [`IndexSet`] of constants that will actually be quantified, but repeatedly.
-    /// - `i`: The `i`ndex of this variable. This is necessary to change what is repeated such that multiple variable together form a sensible quantification.
-    ///
-    /// # Returns
-    /// A new VarQuantifier able to do stuff.
-    #[inline]
-    pub fn new(i: usize) -> Self { Self { idx: (0, 0, 0), i } }
-
-    /// Returns the next [`Ident`] in this quantifier.
-    ///
-    /// # Arguments
-    /// - `consts`: The set of constants to actually quantify over.
-    /// - `n_vars`: The total number of variables that this quantifier quantifies over. Determines amounts of repetitions.
-    ///
-    /// # Returns
-    /// The next [`Ident`] in line.
-    #[cfg_attr(debug_assertions, track_caller)]
-    pub fn next<'f, 's, 'c>(&mut self, consts: &'c IndexSet<Ident<&'f str, &'s str>>, n_vars: usize) -> Option<Ident<&'f str, &'s str>> {
-        // Check if `i` isn't too large
-        #[cfg(debug_assertions)]
-        if self.i >= n_vars {
-            panic!("Internal i ({}) is too large for given number of variabels ({})", self.i, n_vars);
-        }
-
-        // Compute the bounds.
-        // We scale from essentially doing `111111...333333`, to `111222...222333`, to `123123...123123`
-        //
-        // Some examples:
-        // ```plain
-        // 123, three variables:
-        // 111111111222222222333333333      (outer = 1, inner = 9)
-        // 111222333111222333111222333      (outer = 3, inner = 3)
-        // 123123123123123123123123123      (outer = 9, inner = 1)
-        //
-        // 12, four variables
-        // 1111111122222222                 (outer = 1, inner = 8)
-        // 1111222211112222                 (outer = 2, inner = 4)
-        // 1122112211221122                 (outer = 4, inner = 2)
-        // 1212121212121212                 (outer = 8, inner = 1)
-        //
-        // 1234, two variables
-        // 1111222233334444                 (outer = 1, inner = 4)
-        // 1234123412341234                 (outer = 4, inner = 1)
-        // ```
-        // From this we can observe that the outer grows exponentially over the Herbrand base size, whereas the inner grows inverse exponentially.
-        let consts_len: usize = consts.len();
-        let n_inner_repeats: usize = consts.len().pow((n_vars - 1 - self.i) as u32);
-        let n_outer_repeats: usize = consts.len().pow(self.i as u32);
-
-        // Consider whether to return the current element or advance any of the counters
-        let (inner_idx, idx, outer_idx): (&mut usize, &mut usize, &mut usize) = (&mut self.idx.0, &mut self.idx.1, &mut self.idx.2);
-        loop {
-            if *inner_idx < n_inner_repeats && *idx < consts_len {
-                // We're in the inner-repeat loop
-                *inner_idx += 1;
-                break Some(consts[*idx]);
-            } else if *idx < consts_len {
-                // We're advancing to the next element
-                *inner_idx = 0;
-                *idx += 1;
-                continue;
-            } else if *outer_idx < n_outer_repeats {
-                // We're advancing to the next iterator repetition
-                *inner_idx = 0;
-                *idx = 0;
-                *outer_idx += 1;
-                continue;
-            } else {
-                // Nothing to return anymore
-                break None;
-            }
-        }
-    }
-
-    /// Resets the iterator to nothing yielded.
-    #[inline]
-    pub fn reset(&mut self) { self.idx = (0, 0, 0); }
-}
 
 
 
@@ -704,89 +607,18 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
 
         // Then, go over the rules to instantiate any variables in the rules with the assignment
         // NOTE: Is an IndexMap to have predictable assignment order, nice for testing
-        let mut vars: IndexMap<&str, VarQuantifier> = IndexMap::new();
-        let mut assign: HashMap<&str, Ident<&'f str, &'s str>> = HashMap::new();
-        for rule in rules {
-            // Build quantifiers over the variables in the rule
-            vars.clear();
-            for arg in rule
-                .consequents
-                .values()
-                .flat_map(|a| a.args.iter().flat_map(|a| a.args.values()))
-                .chain(rule.tail.iter().flat_map(|t| t.antecedents.values().flat_map(|a| a.atom().args.iter().flat_map(|a| a.args.values()))))
-            {
-                if let AtomArg::Var(v) = arg {
-                    let vars_len: usize = vars.len();
-                    if !vars.contains_key(v.value.value()) {
-                        vars.insert(v.value.value(), VarQuantifier::new(vars_len));
-                    }
-                }
-            }
-            let n_vars: usize = vars.len();
-
-            // Change on whether there are any variables
-            if n_vars > 0 {
-                // Iterate over assignments
-                assign.clear();
-                'assign: loop {
-                    // Get the next assignment
-                    assign.clear();
-                    for (v, i) in vars.iter_mut() {
-                        match i.next(&consts, n_vars) {
-                            Some(a) => {
-                                assign.insert(*v, a);
-                            },
-                            None => break 'assign,
-                        }
-                    }
-
-                    // Go over the consequences only... and _negative_ antecedents
-                    // The former represents the possible atoms that _can_ be true, the latter represents the things we may want to search for are false.
-                    for atom in rule.consequents.values().chain(rule.tail.iter().flat_map(|t| {
-                        t.antecedents.values().filter_map(|a| match a {
-                            Literal::Atom(_) => None,
-                            Literal::NegAtom(NegAtom { atom, .. }) => Some(atom),
-                        })
-                    })) {
-                        // Turn this atom into a concrete instance, if it has variables
-                        let atom: Atom<&'f str, &'s str> = if atom.has_vars() {
-                            // Apply that assignment to the variables
-                            let mut atom: Atom<_, _> = atom.clone();
-                            for arg in atom.args.iter_mut().flat_map(|a| a.args.values_mut()) {
-                                // Get the identifier of this variable (if it is any)
-                                let v: Ident<_, _> = if let AtomArg::Var(v) = arg {
-                                    *v
-                                } else {
-                                    continue;
-                                };
-
-                                // Write the appropriate assignment value to it
-                                *arg = AtomArg::Atom(*assign.get(v.value.value()).expect("Got variable without assignment"));
-                            }
-                            atom
-                        } else {
-                            atom.clone()
-                        };
-
-                        // Alright now insert _that_
-                        let hash: u64 = self.hash_atom(&atom);
-                        self.unknown.insert(hash);
-                        self.defs.insert(hash, atom);
-                    }
-                }
-            } else {
-                // Go over the consequences only... and antecedents lol
-                for atom in rule.consequents.values().chain(rule.tail.iter().flat_map(|t| {
-                    t.antecedents.values().filter_map(|a| match a {
-                        Literal::Atom(_) => None,
-                        Literal::NegAtom(NegAtom { atom, .. }) => Some(atom),
-                    })
-                })) {
-                    // Insert the non-constants
-                    let hash: u64 = self.hash_atom(atom);
-                    self.unknown.insert(hash);
-                    self.defs.insert(hash, atom.clone());
-                }
+        for rule in rules.flat_map(|r| RuleQuantifier::new(r, &consts)) {
+            // Go over the consequences only... and _negative_ antecedents
+            // The former represents the possible atoms that _can_ be true, the latter represents the things we may want to search for are false.
+            for atom in rule.consequents.into_values().chain(rule.tail.into_iter().flat_map(|t| {
+                t.antecedents.into_values().filter_map(|a| match a {
+                    Literal::Atom(_) => None,
+                    Literal::NegAtom(NegAtom { atom, .. }) => Some(atom),
+                })
+            })) {
+                let hash: u64 = self.hash_atom(&atom);
+                self.unknown.insert(hash);
+                self.defs.insert(hash, atom);
             }
         }
 
@@ -962,5 +794,49 @@ impl<'f, 's, R: BuildHasher> Display for Interpretation<'f, 's, R> {
         write!(f, "{}", fknown.into_iter().map(|a| format!("    {a}=false\n")).collect::<String>())?;
         write!(f, "{}", unknown.into_iter().map(|a| format!("    {a}=unknown\n")).collect::<String>())?;
         writeln!(f, "}}")
+    }
+}
+
+// Iteration
+impl<'f, 's, R> Interpretation<'f, 's, R> {
+    /// Returns an iterator over all the known truths in the Interpretation.
+    ///
+    /// # Returns
+    /// An [`Iterator`] which will yield [`Atom`], [`Option<bool>`](Option) pairs, where a [`None`]
+    /// in the value position encodes a logical contradiction.
+    #[inline]
+    pub fn iter<'a>(&'a self) -> impl 'a + Iterator<Item = (&'a Atom<&'f str, &'s str>, Option<bool>)> {
+        self.defs.iter().map(|(h, d)| {
+            if self.tknown.contains(h) {
+                (d, Some(true))
+            } else if self.fknown.contains(h) {
+                (d, Some(false))
+            } else if self.unknown.contains(h) {
+                (d, None)
+            } else {
+                panic!("Encountered a definition {d:?} ({h}) that is not in the known trues, known falses or known unknowns");
+            }
+        })
+    }
+
+    /// Returns an iterator over all the known truths in the Interpretation, consuming ourselfs to
+    /// return the atoms by ownership.
+    ///
+    /// # Returns
+    /// An [`Iterator`] which will yield [`Atom`], [`Option<bool>`](Option) pairs, where a [`None`]
+    /// in the value position encodes a logical contradiction.
+    #[inline]
+    pub fn into_iter(self) -> impl Iterator<Item = (Atom<&'f str, &'s str>, Option<bool>)> {
+        self.defs.into_iter().map(move |(h, d)| {
+            if self.tknown.contains(&h) {
+                (d, Some(true))
+            } else if self.fknown.contains(&h) {
+                (d, Some(false))
+            } else if self.unknown.contains(&h) {
+                (d, None)
+            } else {
+                panic!("Encountered a definition {d:?} ({h}) that is not in the known trues, known falses or known unknowns");
+            }
+        })
     }
 }
