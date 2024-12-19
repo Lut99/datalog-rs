@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    03 Dec 2024, 16:14:30
+//    19 Dec 2024, 11:54:11
 //  Auto updated?
 //    Yes
 //
@@ -16,6 +16,8 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 
 pub use ast_toolkit::punctuated::Punctuated;
+#[cfg(feature = "macros")]
+pub use ast_toolkit::punctuated::punct;
 #[cfg(feature = "railroad")]
 use ast_toolkit::railroad::{ToDelimNode, ToNode, ToNonTerm, railroad as rr};
 pub use ast_toolkit::span::{Span, Spanning as _};
