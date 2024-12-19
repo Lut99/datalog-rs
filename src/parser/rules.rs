@@ -4,7 +4,7 @@
 //  Created:
 //    07 May 2024, 16:38:16
 //  Last edited:
-//    28 Nov 2024, 17:21:18
+//    04 Dec 2024, 18:01:31
 //  Auto updated?
 //    Yes
 //
@@ -17,10 +17,10 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit::snack::combinator::map_err;
 use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
-use ast_toolkit::snack::{comb, combinator as comb, error, multi, sequence as seq, utf8, Result as SResult};
+use ast_toolkit::snack::{Result as SResult, comb, combinator as comb, error, multi, sequence as seq, utf8};
 use ast_toolkit::span::{Span, Spanning};
 
-use super::{atoms, literals, tokens};
+use super::{atoms, literals, tokens, whitespaces};
 use crate::ast;
 
 
@@ -150,7 +150,7 @@ where
 ///
 /// let mut comb = rule();
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(11..), Rule {
-///     consequences: punct![
+///     consequents: punct![
 ///         v => Atom {
 ///             ident: Ident { value: span1.slice(..3) },
 ///             args: None,
@@ -163,7 +163,7 @@ where
 ///     dot: Dot { span: span1.slice(10..11) },
 /// }));
 /// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(9..), Rule {
-///     consequences: punct![
+///     consequents: punct![
 ///         v => Atom {
 ///             ident: Ident { value: span2.slice(..3) },
 ///             args: None,
@@ -178,7 +178,7 @@ where
 ///     dot: Dot { span: span2.slice(8..9) },
 /// }));
 /// assert_eq!(comb.parse(span3).unwrap(), (span3.slice(21..), Rule {
-///     consequences: punct![
+///     consequents: punct![
 ///         v => Atom {
 ///             ident: Ident { value: span3.slice(..3) },
 ///             args: Some(AtomArgs {
@@ -212,7 +212,7 @@ where
     match seq::tuple((
         multi::punctuated1(
             seq::delimited(
-                error::transmute(utf8::whitespace0()),
+                error::transmute(whitespaces::whitespace()),
                 map_err(atoms::atom(), |err| ParseError::Atom { span: err.span() }),
                 error::transmute(comb::not(utf8::complete::while1(|c| {
                     if c.len() != 1 {
@@ -224,14 +224,14 @@ where
             ),
             comb::map_err(tokens::comma(), |err| ParseError::Comma { span: err.into_span() }),
         ),
-        error::transmute(utf8::whitespace0()),
+        error::transmute(whitespaces::whitespace()),
         comb::opt(rule_antecedents()),
-        error::transmute(utf8::whitespace0()),
+        error::transmute(whitespaces::whitespace()),
         comb::map_err(tokens::dot(), |err| ParseError::Dot { span: err.into_span() }),
     ))
     .parse(input)
     {
-        SResult::Ok(rem, (consequences, _, tail, _, dot)) => SResult::Ok(rem, ast::Rule { consequences, tail, dot }),
+        SResult::Ok(rem, (consequents, _, tail, _, dot)) => SResult::Ok(rem, ast::Rule { consequents, tail, dot }),
         SResult::Fail(fail) => SResult::Fail(fail),
         SResult::Error(err) => SResult::Error(err),
     }
@@ -316,7 +316,7 @@ where
         error::cut(multi::punctuated1(
             comb::map_err(
                 seq::delimited(
-                    error::transmute(utf8::whitespace0()),
+                    error::transmute(whitespaces::whitespace()),
                     literals::literal(),
                     error::transmute(comb::not(utf8::complete::while1(|c| {
                         if c.len() != 1 {

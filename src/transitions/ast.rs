@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    29 Nov 2024, 11:23:22
+//    04 Dec 2024, 17:22:04
 //  Auto updated?
 //    Yes
 //
@@ -15,13 +15,16 @@
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::hash::{Hash, Hasher};
 
+use ast_toolkit::punctuated::Punctuated;
 #[cfg(feature = "railroad")]
-use ast_toolkit::railroad::{railroad as rr, ToDelimNode, ToNode, ToNonTerm};
+use ast_toolkit::railroad::{ToDelimNode, ToNode, ToNonTerm, railroad as rr};
 use ast_toolkit::span::SpannableDisplay;
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
 use paste::paste;
 
-use crate::ast::{impl_enum_map, impl_map, Ident, Reserialize, ReserializeDelim, Rule};
+use crate::ast::{Atom, Comma, Dot, Ident, Rule, RuleAntecedents, impl_enum_map, impl_map};
+#[cfg(feature = "reserialize")]
+use crate::ast::{Reserialize, ReserializeDelim};
 
 
 /***** HELPERS *****/
@@ -87,8 +90,8 @@ impl_map!(TransitionSpec, phrases);
 /// # Syntax
 /// ```plain
 /// #foo {
-///     +{ foo. }
-///     ~{ bar :- baz(quz). }
+///     +{ foo }.
+///     ~{ bar } :- baz(quz).
 /// }.
 /// !{ #foo }.
 /// foo :- bar, baz(quz).
@@ -113,10 +116,10 @@ where
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
-            Self::Postulation(p) => writeln!(f, "{p}"),
-            Self::Rule(r) => writeln!(f, "{r}"),
-            Self::Transition(t) => writeln!(f, "{t}"),
-            Self::Trigger(t) => writeln!(f, "{t}"),
+            Self::Postulation(p) => write!(f, "{p}"),
+            Self::Rule(r) => write!(f, "{r}"),
+            Self::Transition(t) => write!(f, "{t}"),
+            Self::Trigger(t) => write!(f, "{t}"),
         }
     }
 }
@@ -143,17 +146,31 @@ impl_enum_map!(Phrase, Postulation(nested), Rule(nested), Transition(nested), Tr
 ///
 /// # Syntax
 /// ```plain
-/// +{ foo. }
-/// ~{ bar :- baz(quz). }
+/// +{ foo }.
+/// ~{ bar } :- baz(quz).
 /// ```
 #[derive(Clone, Debug)]
 pub struct Postulation<F, S> {
     /// The operator.
     pub op: PostulationOp<F, S>,
-    /// The curly brackets wrapping the rules.
+    /// The curly brackets wrapping the postulated facts.
     pub curly_tokens: Curly<F, S>,
-    /// The rule(s) postulated.
-    pub rules: Vec<Rule<F, S>>,
+    /// The fact(s) postulated.
+    pub consequents: Punctuated<Atom<F, S>, Comma<F, S>>,
+    /// The tail of the postulation.
+    pub tail: Option<RuleAntecedents<F, S>>,
+    /// The dot token at the end.
+    pub dot: Dot<F, S>,
+}
+impl<F: Clone, S: Clone> Postulation<F, S> {
+    /// Gets the postulation as a regular rule.
+    ///
+    /// This is powerful for reasoning, where the postconditions are computed on whether the
+    /// preconditions hold in the current state.
+    ///
+    /// # Returns
+    /// A [`Rule`] that can be used to find out if the post conditions hold.
+    pub fn to_rule(&self) -> Rule<F, S> { Rule { consequents: self.consequents.clone(), tail: self.tail.clone(), dot: self.dot.clone() } }
 }
 impl<F, S> Display for Postulation<F, S>
 where
@@ -162,13 +179,21 @@ where
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "{}{{", self.op)?;
-        if !self.rules.is_empty() {
-            writeln!(f)?;
+        if !self.consequents.is_empty() {
+            write!(f, " ")?;
+            for (i, atom) in self.consequents.values().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{atom}")?;
+            }
+            write!(f, " ")?;
         }
-        for rule in &self.rules {
-            writeln!(f, "    {rule}")?;
+        write!(f, "}}")?;
+        if let Some(tail) = &self.tail {
+            write!(f, "{tail}")?;
         }
-        write!(f, "}}")
+        write!(f, ".")
     }
 }
 #[cfg(feature = "reserialize")]
@@ -180,15 +205,21 @@ where
     fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
         self.op.reserialize_fmt(f)?;
         self.curly_tokens.reserialize_open_fmt(f)?;
-        if !self.rules.is_empty() {
-            writeln!(f)?;
+        if !self.consequents.is_empty() {
+            write!(f, " ")?;
+            for (i, atom) in self.consequents.values().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                atom.reserialize_fmt(f)?;
+            }
+            write!(f, " ")?;
         }
-        for rule in &self.rules {
-            write!(f, "    ")?;
-            rule.reserialize_fmt(f)?;
-            writeln!(f)?;
+        self.curly_tokens.reserialize_close_fmt(f)?;
+        if let Some(tail) = &self.tail {
+            tail.reserialize_fmt(f)?;
         }
-        self.curly_tokens.reserialize_close_fmt(f)
+        self.dot.reserialize_fmt(f)
     }
 }
 #[cfg(feature = "railroad")]
@@ -200,12 +231,14 @@ impl<F, S> ToNode for Postulation<F, S> {
         rr::Sequence::new(vec![
             Box::new(PostulationOp::<F, S>::railroad()) as Box<dyn rr::Node>,
             Box::new(Curly::<F, S>::railroad_open()),
-            Box::new(rr::Repeat::new(Rule::<F, S>::railroad(), rr::Empty)),
+            Box::new(rr::Repeat::new(Ident::<F, S>::railroad(), rr::Empty)),
             Box::new(Curly::<F, S>::railroad_close()),
+            Box::new(rr::Optional::new(RuleAntecedents::<F, S>::railroad())),
+            Box::new(Dot::<F, S>::railroad()),
         ])
     }
 }
-impl_map!(Postulation, rules);
+impl_map!(Postulation, consequents, tail);
 
 /// Specifies the possible postulation types.
 #[derive(Clone, Copy, Debug)]
@@ -245,8 +278,8 @@ impl_enum_map!(PostulationOp, Create(op), Obfuscate(op));
 /// # Syntax
 /// ```plain
 /// #foo {
-///     +{ foo. }
-///     ~{ bar :- baz(quz). }
+///     +{ foo }.
+///     ~{ bar } :- baz(quz).
 /// }.
 /// ```
 #[derive(Clone, Debug)]
@@ -257,6 +290,8 @@ pub struct Transition<F, S> {
     pub curly_tokens: Curly<F, S>,
     /// The posulations nested inside.
     pub postulations: Vec<Postulation<F, S>>,
+    /// The dot token at the end.
+    pub dot: Dot<F, S>,
 }
 impl<F, S> Display for Transition<F, S>
 where
@@ -326,6 +361,8 @@ pub struct Trigger<F, S> {
     pub curly_tokens: Curly<F, S>,
     /// The list of transition identifiers triggered.
     pub idents: Vec<Ident<F, S>>,
+    /// The dot token at the end.
+    pub dot: Dot<F, S>,
 }
 impl<F, S> Display for Trigger<F, S>
 where

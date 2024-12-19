@@ -4,7 +4,7 @@
 //  Created:
 //    03 May 2024, 14:14:18
 //  Last edited:
-//    28 Nov 2024, 16:53:16
+//    04 Dec 2024, 17:41:54
 //  Auto updated?
 //    Yes
 //
@@ -16,9 +16,10 @@ use std::fs;
 use std::path::PathBuf;
 
 use clap::Parser;
-use datalog::ast::Spec;
-use datalog::interpreter::interpretation::Interpretation;
-use datalog::parser;
+#[cfg(feature = "transitions")]
+use datalog::transitions::{ast::TransitionSpec, interpreter::Effect, parser};
+#[cfg(not(feature = "transitions"))]
+use datalog::{ast::Spec, interpreter::interpretation::Interpretation, parser};
 use error_trace::trace;
 use humanlog::{DebugMode, HumanLogger};
 use log::{debug, error, info};
@@ -88,33 +89,64 @@ fn main() {
     debug!("Loaded {} file(s)", sources.len());
 
     // Attempt to parse the files
-    let mut spec: Spec<&str, &str> = Spec { rules: Vec::new() };
-    for (what, source) in &sources {
-        debug!("Parsing file '{what}'...");
-        let file_spec: Spec<&str, &str> = match parser::parse::<&str, &str>(what, source) {
-            Ok(spec) => spec,
+    #[cfg(not(feature = "transitions"))]
+    {
+        let mut spec: Spec<&str, &str> = Spec { rules: Vec::new() };
+        for (what, source) in &sources {
+            debug!("Parsing file '{what}'...");
+            let file_spec: Spec<&str, &str> = match parser::parse::<&str, &str>(what, source) {
+                Ok(spec) => spec,
+                Err(err) => {
+                    error!("{err}");
+                    error!("Syntax error while parsing input file '{what}' (see output above)");
+                    std::process::exit(1);
+                },
+            };
+
+            // Merge this one with the existing one
+            spec.rules.extend(file_spec.rules);
+        }
+
+        // Alright, now interpret the file
+        debug!("Running interpretation of {} rules...", spec.rules.len());
+        let int: Interpretation = spec.alternating_fixpoint();
+
+        // If we made it, print it
+        println!("{int}");
+    }
+    #[cfg(feature = "transitions")]
+    {
+        let mut spec: TransitionSpec<&str, &str> = TransitionSpec { phrases: Vec::new() };
+        for (what, source) in &sources {
+            debug!("Parsing file '{what}'...");
+            let file_spec: TransitionSpec<&str, &str> = match parser::parse::<&str, &str>(what, source) {
+                Ok(spec) => spec,
+                Err(err) => {
+                    error!("{err}");
+                    error!("Syntax error while parsing input file '{what}' (see output above)");
+                    std::process::exit(1);
+                },
+            };
+
+            // Merge this one with the existing one
+            spec.phrases.extend(file_spec.phrases);
+        }
+
+        // Alright, now interpret the file
+        debug!("Running interpretation of {} phrases...", spec.phrases.len());
+        let effects: Vec<Effect> = match spec.run() {
+            Ok((_, effects)) => effects,
             Err(err) => {
-                error!("{err}");
-                error!("Syntax error while parsing input file '{what}' (see output above)");
+                error!("{}", trace!(("Failed to run interpretation"), err));
                 std::process::exit(1);
             },
         };
 
-        // Merge this one with the existing one
-        spec.rules.extend(file_spec.rules);
+        // If we made it, print it
+        println!("Program trace:");
+        for effect in effects {
+            println!("--> {}", effect.trigger);
+            println!("    {}", effect.interpretation.to_string().replace('\n', "\n    "));
+        }
     }
-
-    // Alright, now interpret the file
-    debug!("Running interpretation of {} rules...", spec.rules.len());
-    let int: Interpretation = match spec.alternating_fixpoint() {
-        Ok(int) => int,
-        Err(err) => {
-            error!("{err}");
-            error!("Failed to interpret input (see output above)");
-            std::process::exit(1);
-        },
-    };
-
-    // If we made it, print it
-    println!("{int}");
 }

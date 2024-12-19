@@ -1,0 +1,18 @@
+amy. racer(amy).
+bob. racer(bob).
+
+apple_town. place(apple_town).
+banana_city. place(banana_city).
+pear_ville. place(pear_ville).
+path(apple_town, banana_city).
+path(banana_city, pear_ville).
+
+// We do this as a postulation, so the transition below can undo it
++{ at(amy, apple_town), at(bob, apple_town) }.
+
+#move_amy {
+    +{ at(amy, X) } :- at(amy, Y), path(Y, X).
+    ~{ at(amy, X) }.
+}.
+
+!{ #move_amy }.

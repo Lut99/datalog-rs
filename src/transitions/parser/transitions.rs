@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 11:01:38
 //  Last edited:
-//    29 Nov 2024, 15:44:02
+//    03 Dec 2024, 17:39:04
 //  Auto updated?
 //    Yes
 //
@@ -17,13 +17,14 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit::snack::error::Common;
 use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
-use ast_toolkit::snack::{comb, combinator as comb, error, multi, sequence as seq, utf8};
+use ast_toolkit::snack::{comb, combinator as comb, error, multi, sequence as seq};
 use ast_toolkit::span::{Span, Spanning};
 
 use super::super::ast;
 use super::idents::TransIdentExpectsFormatter;
 use super::postulations::PostulationExpectsFormatter;
 use super::{idents, postulations, tokens};
+use crate::parser::whitespaces;
 
 
 /***** ERRORS *****/
@@ -33,11 +34,14 @@ pub enum ParseError<F, S> {
     CurlyClose { span: Span<F, S> },
     /// Failed to parse the opening curly bracket.
     CurlyOpen { span: Span<F, S> },
+    /// Failed to parse a dot.
+    Dot { span: Span<F, S> },
     /// Failed to parse a postulation.
     Postulation { span: Span<F, S> },
     /// Failed to parse the transition identifier.
     TransIdent { span: Span<F, S> },
 }
+// NOTE: Not derived to avoid unnecessary bounds on `F` and `S`.
 impl<F, S> Debug for ParseError<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
@@ -50,6 +54,11 @@ impl<F, S> Debug for ParseError<F, S> {
             },
             CurlyOpen { span } => {
                 let mut fmt = f.debug_struct("ParseError::CurlyOpen");
+                fmt.field("span", span);
+                fmt.finish()
+            },
+            Dot { span } => {
+                let mut fmt = f.debug_struct("ParseError::Dot");
                 fmt.field("span", span);
                 fmt.finish()
             },
@@ -73,6 +82,7 @@ impl<F, S> Display for ParseError<F, S> {
         match self {
             CurlyClose { .. } => write!(f, "Expected a closing curly bracket"),
             CurlyOpen { .. } => write!(f, "Expected an opening curly bracket"),
+            Dot { .. } => write!(f, "Expected a dot"),
             Postulation { .. } => write!(f, "{}", PostulationExpectsFormatter),
             TransIdent { .. } => write!(f, "{}", TransIdentExpectsFormatter),
         }
@@ -90,6 +100,7 @@ where
         match self {
             CurlyClose { span } => span.clone(),
             CurlyOpen { span } => span.clone(),
+            Dot { span } => span.clone(),
             Postulation { span } => span.clone(),
             TransIdent { span } => span.clone(),
         }
@@ -103,6 +114,7 @@ where
         match self {
             Self::CurlyClose { span } => span,
             Self::CurlyOpen { span } => span,
+            Self::Dot { span } => span,
             Self::Postulation { span } => span,
             Self::TransIdent { span } => span,
         }
@@ -128,71 +140,65 @@ where
 /// use ast_toolkit::snack::error::{Common, Error, Failure};
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
-/// use datalog::ast::{Arrow, Atom, AtomArg, AtomArgs, Dot, Ident, Literal, Parens, Rule, RuleAntecedents};
+/// use datalog::ast::{Arrow, Atom, AtomArg, AtomArgs, Comma, Dot, Ident, Literal, Parens, Rule, RuleAntecedents};
 /// use datalog::transitions::ast::{Add, Curly, Postulation, PostulationOp, Squiggly, Transition};
 /// use datalog::transitions::parser::transitions::{transition, ParseError};
 ///
-/// let span1 = Span::new("<example>", "#foo {}");
-/// let span2 = Span::new("<example>", "#bar { +{ foo. } }");
-/// let span3 = Span::new("<example>", "#baz { ~{ foo. bar. } +{ baz. } }");
+/// let span1 = Span::new("<example>", "#foo {}.");
+/// let span2 = Span::new("<example>", "#bar { +{ foo }. }.");
+/// let span3 = Span::new("<example>", "#baz { ~{ foo, bar }. +{ baz }. }.");
 ///
 /// let mut comb = transition();
 /// assert_eq!(
 ///     comb.parse(span1).unwrap(),
-///     (span1.slice(7..), Transition {
+///     (span1.slice(8..), Transition {
 ///         ident: Ident { value: span1.slice(..4) },
 ///         curly_tokens: Curly { open: span1.slice(5..6), close: span1.slice(6..7) },
 ///         postulations: vec![],
+///         dot: Dot { span: span3.slice(7..8) },
 ///     })
 /// );
 /// assert_eq!(
 ///     comb.parse(span2).unwrap(),
-///     (span2.slice(18..), Transition {
+///     (span2.slice(19..), Transition {
 ///         ident: Ident { value: span2.slice(..4) },
 ///         curly_tokens: Curly { open: span2.slice(5..6), close: span2.slice(17..18) },
 ///         postulations: vec![Postulation {
 ///             op: PostulationOp::Create(Add { span: span2.slice(7..8) }),
-///             curly_tokens: Curly { open: span2.slice(8..9), close: span2.slice(15..16) },
-///             rules: vec![Rule {
-///                 consequences: punct![v => Atom { ident: Ident { value: span2.slice(10..13) }, args: None }],
-///                 tail: None,
-///                 dot: Dot { span: span2.slice(13..14) }
-///             }],
+///             curly_tokens: Curly { open: span2.slice(8..9), close: span2.slice(14..15) },
+///             consequents: punct![v => Atom { ident: Ident { value: span2.slice(10..13) }, args: None }],
+///             tail: None,
+///             dot: Dot { span: span2.slice(15..16) },
 ///         }],
+///         dot: Dot { span: span3.slice(18..19) },
 ///     })
 /// );
 /// assert_eq!(
 ///     comb.parse(span3).unwrap(),
-///     (span3.slice(33..), Transition {
+///     (span3.slice(34..), Transition {
 ///         ident: Ident { value: span3.slice(..4) },
 ///         curly_tokens: Curly { open: span3.slice(5..6), close: span3.slice(32..33) },
 ///         postulations: vec![
 ///             Postulation {
-///                 op: PostulationOp::Create(Add { span: span3.slice(7..8) }),
-///                 curly_tokens: Curly { open: span3.slice(8..9), close: span3.slice(20..21) },
-///                 rules: vec![
-///                     Rule {
-///                         consequences: punct![v => Atom { ident: Ident { value: span3.slice(10..13) }, args: None }],
-///                         tail: None,
-///                         dot: Dot { span: span3.slice(13..14) }
-///                     },
-///                     Rule {
-///                         consequences: punct![v => Atom { ident: Ident { value: span3.slice(15..18) }, args: None }],
-///                         tail: None,
-///                         dot: Dot { span: span3.slice(18..19) }
-///                     },
+///                 op: PostulationOp::Obfuscate(Squiggly { span: span3.slice(7..8) }),
+///                 curly_tokens: Curly { open: span3.slice(8..9), close: span3.slice(19..20) },
+///                 consequents: punct![
+///                     v => Atom { ident: Ident { value: span3.slice(10..13) }, args: None },
+///                     p => Comma { span: span3.slice(13..14) },
+///                     v => Atom { ident: Ident { value: span3.slice(15..18) }, args: None }
 ///                 ],
+///                 tail: None,
+///                 dot: Dot { span: span3.slice(20..21) },
 ///             },
 ///             Postulation {
 ///                 op: PostulationOp::Create(Add { span: span3.slice(22..23) }),
-///                 curly_tokens: Curly { open: span3.slice(23..24), close: span3.slice(30..31) },
-///                 rules: vec![Rule {
-///                     consequences: punct![v => Atom { ident: Ident { value: span3.slice(25..28) }, args: None }],
-///                     tail: None,
-///                     dot: Dot { span: span3.slice(28..29) }
-///                 }],
+///                 curly_tokens: Curly { open: span3.slice(23..24), close: span3.slice(29..30) },
+///                 consequents: punct![v => Atom { ident: Ident { value: span3.slice(25..28) }, args: None }],
+///                 tail: None,
+///                 dot: Dot { span: span3.slice(30..31) }
 ///             },
 ///         ],
+///         dot: Dot { span: span3.slice(33..34) },
 ///     })
 /// );
 /// ```
@@ -203,16 +209,16 @@ where
     S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + WhileUtf8,
 {
     comb::map(
-        seq::pair(
-            comb::map_err(seq::terminated(idents::trans_ident(), error::transmute(utf8::whitespace0())), |err| ParseError::TransIdent {
+        seq::tuple((
+            comb::map_err(seq::terminated(idents::trans_ident(), error::transmute(whitespaces::whitespace())), |err| ParseError::TransIdent {
                 span: err.into_span(),
             }),
             comb::map_err(
                 tokens::curly(seq::preceded(
-                    error::transmute(utf8::whitespace0()),
+                    error::transmute(whitespaces::whitespace()),
                     multi::many0(seq::terminated(
                         comb::map_err(postulations::postulation(), |err| ParseError::Postulation { span: err.into_span() }),
-                        error::transmute(utf8::whitespace0()),
+                        error::transmute(whitespaces::whitespace()),
                     )),
                 )),
                 |err| match err {
@@ -222,8 +228,9 @@ where
                     _ => unreachable!(),
                 },
             ),
-        ),
-        |(ident, (postulations, curly_tokens))| ast::Transition { ident, curly_tokens, postulations },
+            comb::map_err(crate::parser::tokens::dot(), |err| ParseError::Dot { span: err.into_span() }),
+        )),
+        |(ident, (postulations, curly_tokens), dot)| ast::Transition { ident, curly_tokens, postulations, dot },
     )
     .parse(input)
 }

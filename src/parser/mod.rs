@@ -19,6 +19,7 @@ pub mod literals;
 pub mod rules;
 pub mod specs;
 pub mod tokens;
+pub mod whitespaces;
 
 // Imports
 use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
