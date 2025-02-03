@@ -25,6 +25,7 @@ indexmap = "2.7.0"
 itertools = "0.13.0"
 log = { version = "0.4.22", optional = true }
 paste = "1.0.15"
+stackvec = { git = "https://github.com/Lut99/stackvec-rs", optional = true }
 
 datalog-macros = { path = "./macros", optional = true }
 
@@ -42,7 +43,7 @@ default = []
 
 transitions = ["datalog-macros/transitions"]
 
-interpreter = []
+interpreter = ["dep:stackvec"]
 parser = ["ast-toolkit/snack"]
 reserialize = []
 

@@ -4,7 +4,7 @@
 //  Created:
 //    26 Mar 2024, 19:36:31
 //  Last edited:
-//    04 Dec 2024, 15:18:57
+//    03 Feb 2025, 17:16:19
 //  Auto updated?
 //    Yes
 //
@@ -25,13 +25,13 @@
 //!       <https://doi.org/10.1145/73721.73722>
 
 // Nested modules
-pub mod interpretation;
 pub mod quantify;
+pub mod state;
 
 // Imports
 use indexmap::set::IndexSet;
 
-use self::interpretation::Interpretation;
+use self::state::Interpretation;
 use crate::ast::{Ident, Rule, Spec};
 use crate::log::{debug, trace};
 

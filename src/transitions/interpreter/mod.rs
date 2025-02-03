@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 16:26:50
 //  Last edited:
-//    04 Dec 2024, 17:40:17
+//    03 Feb 2025, 18:20:47
 //  Auto updated?
 //    Yes
 //
@@ -27,7 +27,7 @@ use state::State;
 
 use super::ast::{Phrase, Postulation, TransitionSpec, Trigger};
 use crate::ast::{Atom, Dot, Ident, Rule, Spec};
-use crate::interpreter::interpretation::Interpretation;
+use crate::interpreter::state::Interpretation;
 use crate::transitions::ast::{PostulationOp, Transition};
 
 
