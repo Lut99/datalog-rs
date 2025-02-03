@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 11:10:12
 //  Last edited:
-//    03 Dec 2024, 17:20:24
+//    03 Feb 2025, 15:12:45
 //  Auto updated?
 //    Yes
 //
@@ -170,7 +170,6 @@ where
 /// let span6 = Span::new("<example>", "~{ bar :- baz(quz).");
 ///
 /// let mut comb = postulation();
-/// println!("{:?}", comb.parse(span1));
 /// assert_eq!(
 ///     comb.parse(span1).unwrap(),
 ///     (span1.slice(9..), Postulation {
@@ -181,7 +180,6 @@ where
 ///         dot: Dot { span: span1.slice(8..9) },
 ///     })
 /// );
-/// println!("{:?}", comb.parse(span2));
 /// assert_eq!(
 ///     comb.parse(span2).unwrap(),
 ///     (span2.slice(21..), Postulation {
@@ -194,14 +192,16 @@ where
 ///                 ident: Ident { value: span2.slice(12..15) },
 ///                 args: Some(AtomArgs {
 ///                     paren_tokens: Parens { open: span2.slice(15..16), close: span2.slice(19..20) },
-///                     args: punct![v => AtomArg::Atom(Ident { value: span2.slice(16..19) })]
+///                     args: punct![v => AtomArg::Atom(Box::new(Atom {
+///                         ident: Ident { value: span2.slice(16..19) },
+///                         args: None,
+///                     }))]
 ///                 })
 ///             })]
 ///         }),
 ///         dot: Dot { span: span2.slice(20..21) }
 ///     })
 /// );
-/// println!("{:?}", comb.parse(span3));
 /// assert_eq!(
 ///     comb.parse(span3).unwrap(),
 ///     (span3.slice(4..), Postulation {
@@ -212,7 +212,6 @@ where
 ///         dot: Dot { span: span3.slice(3..4) },
 ///     })
 /// );
-/// println!("{:?}", comb.parse(span4));
 /// assert_eq!(
 ///     comb.parse(span4).unwrap(),
 ///     (span4.slice(14..), Postulation {

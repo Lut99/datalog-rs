@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 14:32:43
 //  Last edited:
-//    04 Dec 2024, 17:02:39
+//    03 Feb 2025, 15:11:43
 //  Auto updated?
 //    Yes
 //
@@ -12,7 +12,10 @@
 //!   Contains some common test functions.
 //
 
+#![allow(unused)]
+
 use crate::ast::{Arrow, Atom, AtomArg, AtomArgs, Comma, Dot, Ident, Literal, NegAtom, Not, Parens, Punctuated, Rule, RuleAntecedents, Span};
+#[cfg(feature = "transitions")]
 use crate::transitions::ast::Curly;
 
 
@@ -75,7 +78,7 @@ pub fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str
         let arg: AtomArg<&'static str, &'static str> = if arg.chars().next().unwrap_or_else(|| panic!("Empty argument given")).is_uppercase() {
             AtomArg::Var(Ident { value: Span::new("make_atom::var", arg) })
         } else {
-            AtomArg::Atom(Ident { value: Span::new("make_atom::arg", arg) })
+            AtomArg::Atom(Box::new(Atom { ident: Ident { value: Span::new("make_atom::arg", arg) }, args: None }))
         };
 
         // Then push with the correct punctuation
@@ -107,6 +110,7 @@ pub fn make_ident(value: &'static str) -> Ident<&'static str, &'static str> {
 }
 
 /// Makes a [`Curly`] conveniently.
+#[cfg(feature = "transitions")]
 pub fn make_curly() -> Curly<&'static str, &'static str> {
     // Make the atom
     Curly { open: Span::new("make_curly::open", "{"), close: Span::new("make_curly::close", "}") }

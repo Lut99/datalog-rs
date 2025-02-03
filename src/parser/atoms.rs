@@ -4,7 +4,7 @@
 //  Created:
 //    07 May 2024, 10:29:41
 //  Last edited:
-//    28 Nov 2024, 17:17:15
+//    03 Feb 2025, 15:09:08
 //  Auto updated?
 //    Yes
 //
@@ -155,7 +155,10 @@ where
 ///         ident: Ident { value: span2.slice(..3) },
 ///         args: Some(AtomArgs {
 ///             paren_tokens: Parens { open: span2.slice(3..4), close: span2.slice(7..8) },
-///             args: punct![v => AtomArg::Atom(Ident { value: span2.slice(4..7) })],
+///             args: punct![v => AtomArg::Atom(Box::new(Atom {
+///                 ident: Ident { value: span2.slice(4..7) },
+///                 args: None,
+///             }))],
 ///         }),
 ///     })
 /// );
@@ -168,7 +171,10 @@ where
 ///             args: punct![
 ///                 v => AtomArg::Var(Ident { value: span3.slice(4..7) }),
 ///                 p => Comma { span: span3.slice(7..8) },
-///                 v => AtomArg::Atom(Ident { value: span3.slice(9..12) })
+///                 v => AtomArg::Atom(Box::new(Atom {
+///                     ident: Ident { value: span3.slice(9..12) },
+///                     args: None,
+///                 }))
 ///             ],
 ///         }),
 ///     })
@@ -219,7 +225,7 @@ where
 /// use ast_toolkit::snack::error::{Common, Error, Failure};
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
-/// use datalog::ast::{AtomArg, AtomArgs, Comma, Parens, Ident};
+/// use datalog::ast::{AtomArg, Atom, AtomArgs, Comma, Parens, Ident};
 /// use datalog::parser::atoms::{atom_args, ParseError};
 ///
 /// let span1 = Span::new("<example>", "()");
@@ -241,7 +247,10 @@ where
 ///     comb.parse(span2).unwrap(),
 ///     (span2.slice(5..), AtomArgs {
 ///         paren_tokens: Parens { open: span2.slice(0..1), close: span2.slice(4..5) },
-///         args: punct![v => AtomArg::Atom(Ident { value: span2.slice(1..4) })],
+///         args: punct![v => AtomArg::Atom(Box::new(Atom {
+///             ident: Ident { value: span2.slice(1..4) },
+///             args: None,
+///         }))],
 ///     })
 /// );
 /// assert_eq!(
@@ -251,7 +260,10 @@ where
 ///         args: punct![
 ///             v => AtomArg::Var(Ident { value: span3.slice(1..4) }),
 ///             p => Comma { span: span3.slice(4..5) },
-///             v => AtomArg::Atom(Ident { value: span3.slice(6..9) })
+///             v => AtomArg::Atom(Box::new(Atom {
+///                 ident: Ident { value: span3.slice(6..9) },
+///                 args: None,
+///             }))
 ///         ],
 ///     })
 /// );
@@ -302,32 +314,75 @@ where
 /// use ast_toolkit::snack::error::{Common, Failure};
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
-/// use datalog::ast::{AtomArg, Ident};
+/// use datalog::ast::{Atom, AtomArg, AtomArgs, Comma, Ident, Parens, Punctuated};
 /// use datalog::parser::atoms::{ParseError, atom_arg};
 ///
 /// let span1 = Span::new("<example>", "foo");
 /// let span2 = Span::new("<example>", "Bar");
-/// let span3 = Span::new("<example>", "()");
+/// let span3 = Span::new("<example>", "foo(bar(Baz), quz)");
+/// let span4 = Span::new("<example>", "()");
 ///
 /// let mut comb = atom_arg();
 /// assert_eq!(
 ///     comb.parse(span1).unwrap(),
-///     (span1.slice(3..), AtomArg::Atom(Ident { value: span1.slice(..3) }))
+///     (
+///         span1.slice(3..),
+///         AtomArg::Atom(Box::new(Atom { ident: Ident { value: span1.slice(..3) }, args: None }))
+///     )
 /// );
 /// assert_eq!(
 ///     comb.parse(span2).unwrap(),
 ///     (span2.slice(3..), AtomArg::Var(Ident { value: span2.slice(..3) }))
 /// );
-/// assert!(matches!(comb.parse(span3), SResult::Fail(Failure::Common(Common::Alt { .. }))));
+/// assert_eq!(
+///     comb.parse(span3).unwrap(),
+///     (
+///         span3.slice(18..),
+///         AtomArg::Atom(Box::new(Atom {
+///             ident: Ident { value: span3.slice(..3) },
+///             args:  Some(AtomArgs {
+///                 paren_tokens: Parens { open: span3.slice(3..4), close: span3.slice(17..18) },
+///                 args: {
+///                     let mut punct = Punctuated::new();
+///                     punct.push_first(AtomArg::Atom(Box::new(Atom {
+///                         ident: Ident { value: span3.slice(4..7) },
+///                         args:  Some(AtomArgs {
+///                             paren_tokens: Parens {
+///                                 open:  span3.slice(7..8),
+///                                 close: span3.slice(11..12),
+///                             },
+///                             args: {
+///                                 let mut punct = Punctuated::new();
+///                                 punct.push_first(AtomArg::Var(Ident {
+///                                     value: span3.slice(8..11),
+///                                 }));
+///                                 punct
+///                             },
+///                         }),
+///                     })));
+///                     punct.push(
+///                         Comma { span: span3.slice(12..13) },
+///                         AtomArg::Atom(Box::new(Atom {
+///                             ident: Ident { value: span3.slice(14..17) },
+///                             args:  None,
+///                         })),
+///                     );
+///                     punct
+///                 },
+///             }),
+///         })),
+///     )
+/// );
+/// assert!(matches!(comb.parse(span4), SResult::Fail(Failure::Common(Common::Alt { .. }))));
 /// ```
 #[inline]
 #[comb(snack = ::ast_toolkit::snack, expected = "either a constant or a variable", Output = ast::AtomArg<F, S>, Error = ParseError<F, S>)]
 pub fn atom_arg<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,
-    S: Clone + WhileUtf8,
+    S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + WhileUtf8,
 {
-    branch::alt((comb::map(ident(), ast::AtomArg::Atom), comb::map(var(), ast::AtomArg::Var))).parse(input)
+    branch::alt((comb::map(atom(), |atom| ast::AtomArg::Atom(Box::new(atom))), comb::map(var(), ast::AtomArg::Var))).parse(input)
 }
 
 

@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    19 Dec 2024, 11:54:11
+//    03 Feb 2025, 14:14:39
 //  Auto updated?
 //    Yes
 //
@@ -713,7 +713,7 @@ pub enum AtomArg<F, S> {
     /// ```plain
     /// foo
     /// ```
-    Atom(Ident<F, S>),
+    Atom(Box<Atom<F, S>>),
     /// It's a variable.
     ///
     /// # Syntax
@@ -723,35 +723,17 @@ pub enum AtomArg<F, S> {
     #[cfg_attr(feature = "railroad", railroad(regex = "^[A-Z_][a-zA-Z_-]*$"))]
     Var(Ident<F, S>),
 }
-impl<F, S> AtomArg<F, S> {
-    /// Returns the identifier that appears in all variants of the AtomArg.
-    ///
-    /// # Returns
-    /// A reference to the [`Ident`] contained within.
-    pub fn ident(&self) -> &Ident<F, S> {
-        match self {
-            Self::Atom(a) => a,
-            Self::Var(v) => v,
-        }
-    }
-
-    /// Returns the identifier that appears in all variants of the AtomArg.
-    ///
-    /// # Returns
-    /// A mutable reference to the [`Ident`] contained within.
-    pub fn ident_mut(&mut self) -> &mut Ident<F, S> {
-        match self {
-            Self::Atom(a) => a,
-            Self::Var(v) => v,
-        }
-    }
-}
 impl<F, S> Display for AtomArg<F, S>
 where
     S: SpannableDisplay,
 {
     #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", self.ident()) }
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        match self {
+            Self::Atom(a) => a.fmt(f),
+            Self::Var(v) => v.fmt(f),
+        }
+    }
 }
 #[cfg(feature = "reserialize")]
 impl<F, S> Reserialize for AtomArg<F, S>
@@ -759,7 +741,12 @@ where
     S: SpannableDisplay,
 {
     #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", self.ident()) }
+    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
+        match self {
+            Self::Atom(a) => a.reserialize_fmt(f),
+            Self::Var(v) => v.reserialize_fmt(f),
+        }
+    }
 }
 impl_enum_map!(AtomArg, Atom(ident), Var(ident));
 

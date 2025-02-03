@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 15:45:02
 //  Last edited:
-//    03 Dec 2024, 17:42:13
+//    03 Feb 2025, 15:14:08
 //  Auto updated?
 //    Yes
 //
@@ -171,7 +171,10 @@ where
 ///                                     ident: Ident { value: span1.slice(37..40) },
 ///                                     args: Some(AtomArgs {
 ///                                         paren_tokens: Parens { open: span1.slice(40..41), close: span1.slice(44..45) },
-///                                         args: punct![v => AtomArg::Atom(Ident { value: span1.slice(41..44) })],
+///                                         args: punct![v => AtomArg::Atom(Box::new(Atom {
+///                                             ident: Ident { value: span1.slice(41..44) },
+///                                             args: None,
+///                                         }))],
 ///                                     }),
 ///                                 })],
 ///                             }),
@@ -207,7 +210,10 @@ where
 ///                                 ident: Ident { value: span1.slice(83..86) },
 ///                                 args: Some(AtomArgs {
 ///                                     paren_tokens: Parens { open: span1.slice(86..87), close: span1.slice(90..91) },
-///                                     args: punct![v => AtomArg::Atom(Ident { value: span1.slice(87..90) })],
+///                                     args: punct![v => AtomArg::Atom(Box::new(Atom {
+///                                         ident: Ident { value: span1.slice(87..90) },
+///                                         args: None,
+///                                     }))],
 ///                                 }),
 ///                             })
 ///                         ],
@@ -283,7 +289,10 @@ where
 ///                             ident: Ident { value: span1.slice(37..40) },
 ///                             args: Some(AtomArgs {
 ///                                 paren_tokens: Parens { open: span1.slice(40..41), close: span1.slice(44..45) },
-///                                 args: punct![v => AtomArg::Atom(Ident { value: span1.slice(41..44) })],
+///                                 args: punct![v => AtomArg::Atom(Box::new(Atom {
+///                                     ident: Ident { value: span1.slice(41..44) },
+///                                     args: None,
+///                                 }))],
 ///                             }),
 ///                         })],
 ///                     }),
@@ -329,7 +338,10 @@ where
 ///                     ident: Ident { value: span4.slice(12..15) },
 ///                     args: Some(AtomArgs {
 ///                         paren_tokens: Parens { open: span4.slice(15..16), close: span4.slice(19..20) },
-///                         args: punct![v => AtomArg::Atom(Ident { value: span4.slice(16..19) })],
+///                         args: punct![v => AtomArg::Atom(Box::new(Atom {
+///                             ident: Ident { value: span4.slice(16..19) },
+///                             args: None,
+///                         }))],
 ///                     }),
 ///                 })
 ///             ],

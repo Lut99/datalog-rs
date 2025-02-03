@@ -4,7 +4,7 @@
 //  Created:
 //    07 May 2024, 14:20:04
 //  Last edited:
-//    28 Nov 2024, 17:13:28
+//    03 Feb 2025, 15:10:07
 //  Auto updated?
 //    Yes
 //
@@ -17,7 +17,7 @@ use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
 use ast_toolkit::snack::utf8::complete as utf8;
-use ast_toolkit::snack::{branch, comb, combinator as comb, error, sequence as seq, Result as SResult};
+use ast_toolkit::snack::{Result as SResult, branch, comb, combinator as comb, error, sequence as seq};
 use ast_toolkit::span::{Span, Spanning};
 
 use super::{atoms, tokens};
@@ -144,7 +144,10 @@ where
 ///             ident: Ident { value: span3.slice(4..7) },
 ///             args:  Some(AtomArgs {
 ///                 paren_tokens: Parens { open: span3.slice(7..8), close: span3.slice(11..12) },
-///                 args: punct![v => AtomArg::Atom(Ident { value: span3.slice(8..11) })],
+///                 args: punct![v => AtomArg::Atom(Box::new(Atom {
+///                     ident: Ident { value: span3.slice(8..11) },
+///                     args: None,
+///                 }))],
 ///             }),
 ///         },
 ///     })),
@@ -227,7 +230,10 @@ where
 ///             ident: Ident { value: span3.slice(4..7) },
 ///             args:  Some(AtomArgs {
 ///                 paren_tokens: Parens { open: span3.slice(7..8), close: span3.slice(11..12) },
-///                 args: punct![v => AtomArg::Atom(Ident { value: span3.slice(8..11) })],
+///                 args: punct![v => AtomArg::Atom(Box::new(Atom {
+///                     ident: Ident { value: span3.slice(8..11) },
+///                     args: None,
+///                 }))],
 ///             }),
 ///         },
 ///     }),

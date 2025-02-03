@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 10:47:06
 //  Last edited:
-//    03 Dec 2024, 16:17:18
+//    03 Feb 2025, 14:29:58
 //  Auto updated?
 //    Yes
 //
@@ -262,10 +262,10 @@ impl Parse for Literal {
         };
 
         // Parse the parenthesis optionally
-        let args: Option<(Paren, Punctuated<Ident, Comma>)> = |input: ParseStream| -> Result<(Paren, Punctuated<Ident, Comma>), Error> {
+        let args: Option<(Paren, Punctuated<Atom, Comma>)> = |input: ParseStream| -> Result<(Paren, Punctuated<Atom, Comma>), Error> {
             let content;
             let paren: Paren = parenthesized!(content in input);
-            let args: Punctuated<Ident, Comma> = content.parse_terminated(Ident::parse, Token![,])?;
+            let args: Punctuated<Atom, Comma> = content.parse_terminated(Atom::parse, Token![,])?;
             Ok((paren, args))
         }(input)
         .ok();
@@ -310,7 +310,7 @@ pub struct Atom {
     /// The identifier of the atom.
     pub ident: Ident,
     /// The arguments of the atom, if any.
-    pub args:  Option<(Paren, Punctuated<Ident, Comma>)>,
+    pub args:  Option<(Paren, Punctuated<Atom, Comma>)>,
 }
 impl Parse for Atom {
     #[inline]
@@ -319,10 +319,10 @@ impl Parse for Atom {
         let ident: Ident = input.parse()?;
 
         // Parse the parenthesis optionally
-        let args: Option<(Paren, Punctuated<Ident, Comma>)> = |input: ParseStream| -> Result<(Paren, Punctuated<Ident, Comma>), Error> {
+        let args: Option<(Paren, Punctuated<Atom, Comma>)> = |input: ParseStream| -> Result<(Paren, Punctuated<Atom, Comma>), Error> {
             let content;
             let paren: Paren = parenthesized!(content in input);
-            let args: Punctuated<Ident, Comma> = content.parse_terminated(Ident::parse, Token![,])?;
+            let args: Punctuated<Atom, Comma> = content.parse_terminated(Atom::parse, Token![,])?;
             Ok((paren, args))
         }(input)
         .ok();
@@ -340,13 +340,33 @@ impl ToTokens for Atom {
         let (paren_span, args_tokens): (Option<Span>, TokenStream2) = if let Some((paren, args)) = &self.args {
             // Collect the arguments
             let args: Vec<TokenStream2> = args.into_iter().map(|arg| {
-                let sarg: String = arg.to_string();
-
-                // Note it down as a variable if it starts with an uppercase
-                if sarg.chars().next().expect("Got empty consequence argument identifier").is_uppercase() {
+                // Switch on whether a nested argument is given
+                let sarg: String = arg.ident.to_string();
+                if let Some((_, args)) = &arg.args {
+                    let targs: Vec<TokenStream2> = args.iter().enumerate().map(|(i, arg)| if i == 0 {
+                        quote_spanned! { arg.span() => <#crate_path::ast::Punctuated<_, _>>::push_first(&punct, #arg); }
+                    } else {
+                        quote_spanned! { arg.span() => <#crate_path::ast::Punctuated<_, _>>::push(&punct, #crate_path::ast::Comma{ span: #crate_path::ast::Span::new(#from_str, ",") }, #arg); }
+                    }).collect();
+                    quote_spanned! { arg.span() => #crate_path::ast::AtomArg::Atom(::std::boxed::Box::new(#crate_path::ast::Atom {
+                        ident: #crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sarg) },
+                        args: ::std::option::Option::Some(#crate_path::ast::AtomArgs {
+                            paren_tokens: #crate_path::ast::Parens { open: #crate_path::ast::Span::new(#from_str, "("), close: #crate_path::ast::Span::new(#from_str, ")") },
+                            args: {
+                                let mut punct = #crate_path::ast::Punctuated::new();
+                                #(#targs)*
+                                punct
+                            },
+                        }),
+                    })) }
+                } else if sarg.chars().next().expect("Got empty consequence argument identifier").is_uppercase() {
+                    // Note it down as a variable if it starts with an uppercase
                     quote_spanned! { arg.span() => #crate_path::ast::AtomArg::Var(#crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sarg) }) }
                 } else {
-                    quote_spanned! { arg.span() => #crate_path::ast::AtomArg::Atom(#crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sarg) }) }
+                    quote_spanned! { arg.span() => #crate_path::ast::AtomArg::Atom(::std::boxed::Box::new(#crate_path::ast::Atom {
+                        ident: #crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sarg) },
+                        args: ::std::option::Option::None,
+                    })) }
                 }
             }).collect();
 
