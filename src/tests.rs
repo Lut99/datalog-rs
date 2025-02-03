@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 14:32:43
 //  Last edited:
-//    03 Feb 2025, 15:11:43
+//    03 Feb 2025, 19:01:52
 //  Auto updated?
 //    Yes
 //
@@ -14,7 +14,7 @@
 
 #![allow(unused)]
 
-use crate::ast::{Arrow, Atom, AtomArg, AtomArgs, Comma, Dot, Ident, Literal, NegAtom, Not, Parens, Punctuated, Rule, RuleAntecedents, Span};
+use crate::ast::{Arrow, Atom, Comma, Dot, Fact, FactArgs, Ident, Literal, NegAtom, Not, Parens, Punctuated, Rule, RuleAntecedents, Span};
 #[cfg(feature = "transitions")]
 use crate::transitions::ast::Curly;
 
@@ -72,13 +72,13 @@ pub fn make_lit(polarity: bool, name: &'static str, args: impl IntoIterator<Item
 #[track_caller]
 pub fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Atom<&'static str, &'static str> {
     // Make the punctuation
-    let mut punct: Punctuated<AtomArg<&'static str, &'static str>, Comma<&'static str, &'static str>> = Punctuated::new();
+    let mut punct: Punctuated<Atom<&'static str, &'static str>, Comma<&'static str, &'static str>> = Punctuated::new();
     for (i, arg) in args.into_iter().enumerate() {
         // Either push as atom or as variable
-        let arg: AtomArg<&'static str, &'static str> = if arg.chars().next().unwrap_or_else(|| panic!("Empty argument given")).is_uppercase() {
-            AtomArg::Var(Ident { value: Span::new("make_atom::var", arg) })
+        let arg: Atom<&'static str, &'static str> = if arg.chars().next().unwrap_or_else(|| panic!("Empty argument given")).is_uppercase() {
+            Atom::Var(Ident { value: Span::new("make_atom::var", arg) })
         } else {
-            AtomArg::Atom(Box::new(Atom { ident: Ident { value: Span::new("make_atom::arg", arg) }, args: None }))
+            Atom::Fact(Fact { ident: Ident { value: Span::new("make_atom::arg", arg) }, args: None })
         };
 
         // Then push with the correct punctuation
@@ -90,17 +90,17 @@ pub fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str
     }
 
     // Make the atom
-    Atom {
+    Atom::Fact(Fact {
         ident: Ident { value: Span::new("make_atom::name", name) },
         args:  if !punct.is_empty() {
-            Some(AtomArgs {
+            Some(FactArgs {
                 paren_tokens: Parens { open: Span::new("make_atom::parens::open", "("), close: Span::new("make_atom::parens::close", ")") },
                 args: punct,
             })
         } else {
             None
         },
-    }
+    })
 }
 
 /// Makes an [`Ident`] conveniently.

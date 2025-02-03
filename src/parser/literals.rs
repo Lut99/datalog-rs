@@ -4,7 +4,7 @@
 //  Created:
 //    07 May 2024, 14:20:04
 //  Last edited:
-//    03 Feb 2025, 15:10:07
+//    03 Feb 2025, 19:16:24
 //  Auto updated?
 //    Yes
 //
@@ -106,7 +106,7 @@ where
 /// use ast_toolkit::snack::error::{Common, Error, Failure};
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
-/// use datalog::ast::{Literal, Atom, AtomArg, AtomArgs, Comma, Ident, NegAtom, Not, Parens};
+/// use datalog::ast::{Literal, Atom, Fact, FactArgs, Comma, Ident, NegAtom, Not, Parens};
 /// use datalog::parser::literals::{literal, ParseError};
 ///
 /// let span1 = Span::new("<example>", "not foo");
@@ -120,44 +120,44 @@ where
 ///     comb.parse(span1).unwrap(),
 ///     (span1.slice(7..), Literal::NegAtom(NegAtom {
 ///         not_token: Not { span: span1.slice(..3) },
-///         atom:      Atom { ident: Ident { value: span1.slice(4..7) }, args: None },
+///         atom:      Atom::Fact(Fact { ident: Ident { value: span1.slice(4..7) }, args: None }),
 ///     })),
 /// );
 /// assert_eq!(
 ///     comb.parse(span2).unwrap(),
 ///     (span2.slice(9..), Literal::NegAtom(NegAtom {
 ///         not_token: Not { span: span2.slice(..3) },
-///         atom:      Atom {
+///         atom:      Atom::Fact(Fact {
 ///             ident: Ident { value: span2.slice(4..7) },
-///             args:  Some(AtomArgs {
+///             args:  Some(FactArgs {
 ///                 paren_tokens: Parens { open: span2.slice(7..8), close: span2.slice(8..9) },
 ///                 args: punct![],
 ///             }),
-///         },
+///         }),
 ///     })),
 /// );
 /// assert_eq!(
 ///     comb.parse(span3).unwrap(),
 ///     (span3.slice(12..), Literal::NegAtom(NegAtom {
 ///         not_token: Not { span: span3.slice(..3) },
-///         atom:      Atom {
+///         atom:      Atom::Fact(Fact {
 ///             ident: Ident { value: span3.slice(4..7) },
-///             args:  Some(AtomArgs {
+///             args:  Some(FactArgs {
 ///                 paren_tokens: Parens { open: span3.slice(7..8), close: span3.slice(11..12) },
-///                 args: punct![v => AtomArg::Atom(Box::new(Atom {
+///                 args: punct![v => Atom::Fact(Fact {
 ///                     ident: Ident { value: span3.slice(8..11) },
 ///                     args: None,
-///                 }))],
+///                 })],
 ///             }),
-///         },
+///         }),
 ///     })),
 /// );
 /// assert_eq!(
 ///     comb.parse(span4).unwrap(),
-///     (span4.slice(3..), Literal::Atom(Atom {
+///     (span4.slice(3..), Literal::Atom(Atom::Fact(Fact{
 ///         ident: Ident { value: span4.slice(..3) },
 ///         args:  None,
-///     })),
+///     }))),
 /// );
 /// assert!(matches!(
 ///     comb.parse(span5),
@@ -192,7 +192,7 @@ where
 /// use ast_toolkit::snack::error::{Common, Error, Failure};
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
-/// use datalog::ast::{Atom, AtomArg, AtomArgs, Comma, Ident, NegAtom, Not, Parens};
+/// use datalog::ast::{Atom, Fact, FactArgs, Comma, Ident, NegAtom, Not, Parens};
 /// use datalog::parser::literals::{neg_atom, ParseError};
 ///
 /// let span1 = Span::new("<example>", "not foo");
@@ -206,36 +206,36 @@ where
 ///     comb.parse(span1).unwrap(),
 ///     (span1.slice(7..), NegAtom {
 ///         not_token: Not { span: span1.slice(..3) },
-///         atom:      Atom { ident: Ident { value: span1.slice(4..7) }, args: None },
+///         atom:      Atom::Fact(Fact { ident: Ident { value: span1.slice(4..7) }, args: None }),
 ///     }),
 /// );
 /// assert_eq!(
 ///     comb.parse(span2).unwrap(),
 ///     (span2.slice(9..), NegAtom {
 ///         not_token: Not { span: span2.slice(..3) },
-///         atom:      Atom {
+///         atom:      Atom::Fact(Fact {
 ///             ident: Ident { value: span2.slice(4..7) },
-///             args:  Some(AtomArgs {
+///             args:  Some(FactArgs {
 ///                 paren_tokens: Parens { open: span2.slice(7..8), close: span2.slice(8..9) },
 ///                 args: punct![],
 ///             }),
-///         },
+///         }),
 ///     }),
 /// );
 /// assert_eq!(
 ///     comb.parse(span3).unwrap(),
 ///     (span3.slice(12..), NegAtom {
 ///         not_token: Not { span: span3.slice(..3) },
-///         atom:      Atom {
+///         atom:      Atom::Fact(Fact {
 ///             ident: Ident { value: span3.slice(4..7) },
-///             args:  Some(AtomArgs {
+///             args:  Some(FactArgs {
 ///                 paren_tokens: Parens { open: span3.slice(7..8), close: span3.slice(11..12) },
-///                 args: punct![v => AtomArg::Atom(Box::new(Atom {
+///                 args: punct![v => Atom::Fact(Fact {
 ///                     ident: Ident { value: span3.slice(8..11) },
 ///                     args: None,
-///                 }))],
+///                 })],
 ///             }),
-///         },
+///         }),
 ///     }),
 /// );
 /// assert!(matches!(

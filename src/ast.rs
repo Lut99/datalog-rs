@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    03 Feb 2025, 14:14:39
+//    03 Feb 2025, 18:59:51
 //  Auto updated?
 //    Yes
 //
@@ -20,8 +20,8 @@ pub use ast_toolkit::punctuated::Punctuated;
 pub use ast_toolkit::punctuated::punct;
 #[cfg(feature = "railroad")]
 use ast_toolkit::railroad::{ToDelimNode, ToNode, ToNonTerm, railroad as rr};
+use ast_toolkit::span::SpannableDisplay;
 pub use ast_toolkit::span::{Span, Spanning as _};
-use ast_toolkit::span::{Spannable, SpannableDisplay};
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
 // Re-export the derive macro
 #[cfg(feature = "macros")]
@@ -103,136 +103,6 @@ pub(crate) use impl_enum_map;
 
 
 
-/***** FORMATTERS *****/
-/// Given an AST node, calls [`Reserialize::reserialize_fmt()`] on it.
-#[cfg(feature = "reserialize")]
-pub struct ReserializeFormatter<'n, N: ?Sized> {
-    /// The node to reserialize.
-    node: &'n N,
-}
-#[cfg(feature = "reserialize")]
-impl<'n, N: Reserialize> Display for ReserializeFormatter<'n, N> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { self.node.reserialize_fmt(f) }
-}
-
-/// Given an AST node, calls [`ReserializeDelim::reserialize_open_fmt()`] on it.
-#[cfg(feature = "reserialize")]
-pub struct ReserializeOpenFormatter<'n, N: ?Sized> {
-    /// The node to reserialize.
-    node: &'n N,
-}
-#[cfg(feature = "reserialize")]
-impl<'n, N: ReserializeDelim> Display for ReserializeOpenFormatter<'n, N> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { self.node.reserialize_open_fmt(f) }
-}
-
-/// Given an AST node, calls [`ReserializeDelim::reserialize_close_fmt()`] on it.
-#[cfg(feature = "reserialize")]
-pub struct ReserializeCloseFormatter<'n, N: ?Sized> {
-    /// The node to reserialize.
-    node: &'n N,
-}
-#[cfg(feature = "reserialize")]
-impl<'n, N: ReserializeDelim> Display for ReserializeCloseFormatter<'n, N> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { self.node.reserialize_close_fmt(f) }
-}
-
-
-
-
-
-/***** AUXILLARY *****/
-/// Serializes a node in the $Datalog^\neg$-tree such that is serializable to the same tree (modulo whitespace).
-#[cfg(feature = "reserialize")]
-pub trait Reserialize {
-    /// Formats this AST node to some formatter.
-    ///
-    /// The idea is that it is deterministic, i.e., serialializing and then parsing this output should yield you an equivalent tree (modulo whitespace).
-    ///
-    /// # Arguments
-    /// - `f`: The [`Formatter`] to serialize to.
-    ///
-    /// # Errors
-    /// This function is allowed to error if it failed to write to the given `f`ormatter.
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult;
-}
-
-/// Allows a node in the $Datalog^\neg$ to be serializable in a repeatable way.
-///
-/// Specifically, if serialized through this trait, it should be guaranteed that parsing it yields the same AST modulo whitespace.
-#[cfg(feature = "reserialize")]
-pub trait Reserializable: Reserialize {
-    /// Returns a formatter that re-serializes this node in the AST.
-    ///
-    /// # Returns
-    /// A [`ReserializeFormatter`] that implements [`Display`].
-    fn reserialize(&self) -> ReserializeFormatter<Self>;
-}
-#[cfg(feature = "reserialize")]
-impl<T: Reserialize> Reserializable for T {
-    #[inline]
-    fn reserialize(&self) -> ReserializeFormatter<Self> { ReserializeFormatter { node: self } }
-}
-
-
-
-/// Serializes a delimiting node in the $Datalog^\neg$-tree such that is serializable to the same tree (modulo whitespace).
-#[cfg(feature = "reserialize")]
-pub trait ReserializeDelim {
-    /// Formats the opening token of this AST node to some formatter.
-    ///
-    /// The idea is that it is deterministic, i.e., serialializing and then parsing this output should yield you an equivalent tree (modulo whitespace).
-    ///
-    /// # Arguments
-    /// - `f`: The [`Formatter`] to serialize to.
-    ///
-    /// # Errors
-    /// This function is allowed to error if it failed to write to the given `f`ormatter.
-    fn reserialize_open_fmt(&self, f: &mut Formatter) -> FResult;
-
-    /// Formats the closing token of this AST node to some formatter.
-    ///
-    /// The idea is that it is deterministic, i.e., serialializing and then parsing this output should yield you an equivalent tree (modulo whitespace).
-    ///
-    /// # Arguments
-    /// - `f`: The [`Formatter`] to serialize to.
-    ///
-    /// # Errors
-    /// This function is allowed to error if it failed to write to the given `f`ormatter.
-    fn reserialize_close_fmt(&self, f: &mut Formatter) -> FResult;
-}
-
-/// Allows a delimited node in the $Datalog^\neg$ to be serializable in a repeatable way.
-///
-/// Specifically, if serialized through this trait, it should be guaranteed that parsing it yields the same AST modulo whitespace.
-#[cfg(feature = "reserialize")]
-pub trait ReserializableDelim: ReserializeDelim {
-    /// Returns a formatter that re-serializes the opening token of this node in the AST.
-    ///
-    /// # Returns
-    /// A [`ReserializeOpenFormatter`] that implements [`Display`].
-    fn reserialize_open(&self) -> ReserializeOpenFormatter<Self>;
-    /// Returns a formatter that re-serializes the closing token of this node in the AST.
-    ///
-    /// # Returns
-    /// A [`ReserializeCloseFormatter`] that implements [`Display`].
-    fn reserialize_close(&self) -> ReserializeCloseFormatter<Self>;
-}
-#[cfg(feature = "reserialize")]
-impl<T: ReserializeDelim> ReserializableDelim for T {
-    #[inline]
-    fn reserialize_open(&self) -> ReserializeOpenFormatter<Self> { ReserializeOpenFormatter { node: self } }
-    #[inline]
-    fn reserialize_close(&self) -> ReserializeCloseFormatter<Self> { ReserializeCloseFormatter { node: self } }
-}
-
-
-
-
-
 /***** LIBRARY FUNCTIONS *****/
 /// Generates a static railroad diagram of the $Datalog^\neg$ AST.
 ///
@@ -287,28 +157,11 @@ pub struct Spec<F, S> {
     /// The list of rules in this program.
     pub rules: Vec<Rule<F, S>>,
 }
-impl<F, S> Spec<F, S> {}
-impl<F, S> Display for Spec<F, S>
-where
-    S: SpannableDisplay,
-{
+impl<F, S: SpannableDisplay> Display for Spec<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         for rule in &self.rules {
-            writeln!(f, "{rule}")?;
-        }
-        Ok(())
-    }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for Spec<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        for rule in &self.rules {
-            rule.reserialize_fmt(f)?;
+            rule.fmt(f)?;
             writeln!(f)?;
         }
         Ok(())
@@ -334,38 +187,22 @@ pub struct Rule<F, S> {
     /// The closing dot after each rule.
     pub dot: Dot<F, S>,
 }
-impl<F, S> Display for Rule<F, S>
-where
-    S: SpannableDisplay,
-{
+impl<F, S: SpannableDisplay> Display for Rule<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(
-            f,
-            "{}{}.",
-            self.consequents.values().map(|c| c.to_string()).collect::<Vec<String>>().join(", "),
-            if let Some(tail) = &self.tail { tail.to_string() } else { String::new() }
-        )
-    }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for Rule<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        for (value, punct) in self.consequents.pairs() {
-            value.reserialize_fmt(f)?;
-            if let Some(punct) = punct {
-                punct.reserialize_fmt(f)?;
-                write!(f, " ")?;
+        for (i, atom) in self.consequents.values().enumerate() {
+            if i > 0 {
+                write!(f, ",")?;
+                if f.alternate() {
+                    write!(f, " ")?;
+                }
             }
+            atom.fmt(f)?;
         }
         if let Some(tail) = &self.tail {
-            tail.reserialize_fmt(f)?;
+            tail.fmt(f)?;
         }
-        self.dot.reserialize_fmt(f)
+        Ok(())
     }
 }
 #[cfg(feature = "railroad")]
@@ -396,6 +233,22 @@ pub struct RuleAntecedents<F, S> {
     /// The list of antecedents.
     pub antecedents: Punctuated<Literal<F, S>, Comma<F, S>>,
 }
+impl<F, S: SpannableDisplay> Display for RuleAntecedents<F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, " :- ")?;
+        for (i, lit) in self.antecedents.values().enumerate() {
+            if i > 0 {
+                write!(f, ",")?;
+                if f.alternate() {
+                    write!(f, " ")?;
+                }
+            }
+            lit.fmt(f)?;
+        }
+        Ok(())
+    }
+}
 #[cfg(feature = "railroad")]
 impl<F, S> ToNode for RuleAntecedents<F, S> {
     type Node = rr::Sequence<Box<dyn rr::Node>>;
@@ -406,34 +259,6 @@ impl<F, S> ToNode for RuleAntecedents<F, S> {
             Box::new(Arrow::<F, S>::railroad()),
             Box::new(rr::Repeat::new(Literal::<F, S>::railroad(), Comma::<F, S>::railroad())),
         ])
-    }
-}
-impl<F, S> Display for RuleAntecedents<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, " :- {}", self.antecedents.values().map(|a| a.to_string()).collect::<Vec<String>>().join(", "))
-    }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for RuleAntecedents<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        self.arrow_token.reserialize_fmt(f)?;
-        write!(f, " ")?;
-        for (value, punct) in self.antecedents.pairs() {
-            value.reserialize_fmt(f)?;
-            if let Some(punct) = punct {
-                punct.reserialize_fmt(f)?;
-                write!(f, " ")?;
-            }
-        }
-        Ok(())
     }
 }
 impl_map!(RuleAntecedents, antecedents);
@@ -468,23 +293,12 @@ pub enum Literal<F, S> {
     /// ```
     NegAtom(NegAtom<F, S>),
 }
-impl<F, S> Literal<F, S>
-where
-    F: Clone,
-    S: Clone + Spannable,
-{
-    /// Returns if there are any variables in the antecedents.
-    ///
-    /// # Returns
-    /// True if there is at least one [`AtomArg::Var`], or false otherwise.
-    #[inline]
-    pub fn has_vars(&self) -> bool { self.atom().has_vars() }
-
+impl<F, S> Literal<F, S> {
     /// Returns the polarity of the literal.
     ///
     /// # Returns
     /// True if this is a positive literal ([`Literal::Atom`]), or false if it's a negative literal ([`Literal::NegAtom`]).
-    pub fn polarity(&self) -> bool { matches!(self, Self::Atom(_)) }
+    pub fn is_positive(&self) -> bool { matches!(self, Self::Atom(_)) }
 
     /// Returns the atom that appears in all variants of the literal.
     ///
@@ -507,29 +321,20 @@ where
             Self::NegAtom(na) => &mut na.atom,
         }
     }
+
+    /// Returns if there are any variables in the nested atom.
+    ///
+    /// # Returns
+    /// True if there is at least one [`Atom::Var`] recursively, or false otherwise.
+    #[inline]
+    pub fn has_vars(&self) -> bool { self.atom().has_vars() }
 }
-impl<F, S> Display for Literal<F, S>
-where
-    S: SpannableDisplay,
-{
+impl<F, S: SpannableDisplay> Display for Literal<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
-            Self::Atom(a) => write!(f, "{a}"),
-            Self::NegAtom(na) => write!(f, "{na}"),
-        }
-    }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for Literal<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        match self {
-            Self::Atom(a) => a.reserialize_fmt(f),
-            Self::NegAtom(na) => na.reserialize_fmt(f),
+            Self::Atom(a) => a.fmt(f),
+            Self::NegAtom(na) => na.fmt(f),
         }
     }
 }
@@ -551,30 +356,72 @@ pub struct NegAtom<F, S> {
     /// The atom that was negated.
     pub atom:      Atom<F, S>,
 }
-impl<F, S> Display for NegAtom<F, S>
-where
-    S: SpannableDisplay,
-{
+impl<F, S: SpannableDisplay> Display for NegAtom<F, S> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "not {}", self.atom) }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for NegAtom<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        self.not_token.reserialize_fmt(f)?;
-        write!(f, " ")?;
-        self.atom.reserialize_fmt(f)
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "not ")?;
+        self.atom.fmt(f)
     }
 }
 impl_map!(NegAtom, atom);
 
 
 
-/// Defines a constructor application of facts.
+/// Defines a constructor application of facts _or_ a variable.
+///
+/// # Syntax
+/// ```plain
+/// foo
+/// foo(bar, Baz)
+/// Bar
+/// ```
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "railroad", derive(ToNode))]
+#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
+pub enum Atom<F, S> {
+    /// It's a Fact.
+    ///
+    /// # Syntax
+    /// ```plain
+    /// foo
+    /// foo(bar, Baz)
+    /// ```
+    Fact(Fact<F, S>),
+    /// It's a variable.
+    ///
+    /// # Syntax
+    /// ```plain
+    /// Bar
+    /// ```
+    Var(Ident<F, S>),
+}
+impl<F, S> Atom<F, S> {
+    /// Returns if there are any variables in this atom.
+    ///
+    /// # Returns
+    /// True if there is at least one [`Atom::Var`] recursively, or false otherwise.
+    #[inline]
+    pub fn has_vars(&self) -> bool {
+        match self {
+            Self::Fact(f) => f.has_vars(),
+            Self::Var(_) => true,
+        }
+    }
+}
+impl<F, S: SpannableDisplay> Display for Atom<F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        match self {
+            Self::Fact(fa) => fa.fmt(f),
+            Self::Var(v) => v.fmt(f),
+        }
+    }
+}
+impl_enum_map!(Atom, Fact(fact), Var(ident));
+
+/// Defines a fact, which is an identifier followed by zero or more arguments.
+///
+/// Kinda like a function application. Can be recursive.
 ///
 /// # Syntax
 /// ```plain
@@ -584,171 +431,88 @@ impl_map!(NegAtom, atom);
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
-pub struct Atom<F, S> {
+pub struct Fact<F, S> {
     /// The identifier itself.
     pub ident: Ident<F, S>,
     /// Any arguments.
-    pub args:  Option<AtomArgs<F, S>>,
+    pub args:  Option<FactArgs<F, S>>,
 }
-impl<F, S> Atom<F, S>
-where
-    F: Clone,
-    S: Clone + Spannable,
-{
-    /// Returns if there are any variables in the antecedents.
+impl<F, S> Fact<F, S> {
+    /// Returns if there are any variables in the argument to this fact, if any.
     ///
     /// # Returns
-    /// True if there is at least one [`AtomArg::Var`], or false otherwise.
+    /// True if there is at least one [`Atom::Var`] recursively, or false otherwise.
     #[inline]
-    pub fn has_vars(&self) -> bool { self.args.iter().flat_map(|a| a.args.values()).find(|a| matches!(a, AtomArg::Var(_))).is_some() }
-
-    /// Creates a new [`Span`] that covers the entire Atom.
-    ///
-    /// # Returns
-    /// A new [`Span`] that is this atom.
-    pub fn span(&self) -> Span<F, S> {
+    pub fn has_vars(&self) -> bool {
         match &self.args {
-            Some(args) => self.ident.value.join(&args.paren_tokens.span()).unwrap_or_else(|| self.ident.value.clone()),
-            None => self.ident.value.clone(),
+            Some(args) => args.has_vars(),
+            None => false,
         }
     }
 }
-impl<F, S> Display for Atom<F, S>
-where
-    S: SpannableDisplay,
-{
+impl<F, S: SpannableDisplay> Display for Fact<F, S> {
     #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "{}{}", self.ident, if let Some(args) = &self.args { args.to_string() } else { String::new() })
-    }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for Atom<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        self.ident.reserialize_fmt(f)?;
+    fn fmt(&self, f: &mut Formatter) -> FResult {
+        self.ident.fmt(f)?;
         if let Some(args) = &self.args {
-            args.reserialize_fmt(f)?;
+            args.fmt(f)?;
         }
         Ok(())
     }
 }
-impl_map!(Atom, ident, args);
+impl_map!(Fact, ident, args);
 
 /// Defines the (optional) arguments-part of the constructor application.
 ///
 /// # Syntax
 /// ```plain
-/// (foo, bar(baz))
+/// (foo, bar(baz), Baz)
 /// ```
 #[derive(Clone, Debug)]
-pub struct AtomArgs<F, S> {
+pub struct FactArgs<F, S> {
     /// The parenthesis wrapping the arguments.
     pub paren_tokens: Parens<F, S>,
     /// The arguments contained within.
-    pub args: Punctuated<AtomArg<F, S>, Comma<F, S>>,
+    pub args: Punctuated<Atom<F, S>, Comma<F, S>>,
 }
-impl<F, S> Display for AtomArgs<F, S>
-where
-    S: SpannableDisplay,
-{
+impl<F, S> FactArgs<F, S> {
+    /// Returns if there are any variables in the arguments to this fact.
+    ///
+    /// # Returns
+    /// True if there is at least one [`Atom::Var`] recursively, or false otherwise.
+    #[inline]
+    pub fn has_vars(&self) -> bool { self.args.values().any(Atom::has_vars) }
+}
+impl<F, S: SpannableDisplay> Display for FactArgs<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        write!(f, "({})", self.args.values().map(|a| a.to_string()).collect::<Vec<String>>().join(","))
-    }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for AtomArgs<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        self.paren_tokens.reserialize_open_fmt(f)?;
-        for (value, punct) in self.args.pairs() {
-            value.reserialize_fmt(f)?;
-            if let Some(punct) = punct {
-                punct.reserialize_fmt(f)?;
-                write!(f, " ")?;
-            };
+        write!(f, "(")?;
+        for (i, arg) in self.args.values().enumerate() {
+            if i > 0 {
+                write!(f, ",")?;
+                if f.alternate() {
+                    write!(f, " ")?;
+                }
+            }
+            arg.fmt(f)?;
         }
-        self.paren_tokens.reserialize_close_fmt(f)?;
-        Ok(())
+        write!(f, ")")
     }
 }
 #[cfg(feature = "railroad")]
-impl<F, S> ToNode for AtomArgs<F, S> {
+impl<F, S> ToNode for FactArgs<F, S> {
     type Node = rr::Sequence<Box<dyn rr::Node>>;
 
     #[inline]
     fn railroad() -> Self::Node {
         rr::Sequence::new(vec![
             Box::new(Parens::<F, S>::railroad_open()),
-            Box::new(rr::Repeat::new(AtomArg::<F, S>::railroad(), Comma::<F, S>::railroad())),
+            Box::new(rr::Repeat::new(Atom::<F, S>::railroad(), Comma::<F, S>::railroad())),
             Box::new(Parens::<F, S>::railroad_close()),
         ])
     }
 }
-impl_map!(AtomArgs, args);
-
-/// Represents an argument to an Atom, which is either a variable or a nested atom.
-///
-/// # Syntax
-/// ```plain
-/// foo
-/// Baz
-/// ```
-#[derive(Clone, Debug, EnumDebug)]
-#[cfg_attr(feature = "railroad", derive(ToNode))]
-#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
-pub enum AtomArg<F, S> {
-    /// It's a nested atom.
-    ///
-    /// Note that $Datalog^\neg$ does not support full nesting, so only direct identifiers allowed.
-    ///
-    /// # Syntax
-    /// ```plain
-    /// foo
-    /// ```
-    Atom(Box<Atom<F, S>>),
-    /// It's a variable.
-    ///
-    /// # Syntax
-    /// ```plain
-    /// Foo
-    /// ```
-    #[cfg_attr(feature = "railroad", railroad(regex = "^[A-Z_][a-zA-Z_-]*$"))]
-    Var(Ident<F, S>),
-}
-impl<F, S> Display for AtomArg<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        match self {
-            Self::Atom(a) => a.fmt(f),
-            Self::Var(v) => v.fmt(f),
-        }
-    }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for AtomArg<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        match self {
-            Self::Atom(a) => a.reserialize_fmt(f),
-            Self::Var(v) => v.reserialize_fmt(f),
-        }
-    }
-}
-impl_enum_map!(AtomArg, Atom(ident), Var(ident));
+impl_map!(FactArgs, args);
 
 /// Represents identifiers.
 ///
@@ -763,20 +527,9 @@ pub struct Ident<F, S> {
     /// The value of the identifier itself.
     pub value: Span<F, S>,
 }
-impl<F, S> Display for Ident<F, S>
-where
-    S: SpannableDisplay,
-{
+impl<F, S: SpannableDisplay> Display for Ident<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", self.value) }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for Ident<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{}", self.value) }
 }
 impl_map!(Ident, value);
 
@@ -802,34 +555,4 @@ mod railroad_impl {
     utf8_token_railroad!(Dot, ".");
     utf8_token_railroad!(Not, "not");
     utf8_delimiter_railroad!(Parens, "(", ")");
-}
-
-// Implement reserialize
-#[doc(hidden)]
-#[cfg(feature = "reserialize")]
-mod reserialize_impl {
-    use super::*;
-
-    impl<F, S> Reserialize for Arrow<F, S> {
-        #[inline]
-        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ":-") }
-    }
-    impl<F, S> Reserialize for Comma<F, S> {
-        #[inline]
-        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ",") }
-    }
-    impl<F, S> Reserialize for Dot<F, S> {
-        #[inline]
-        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ".") }
-    }
-    impl<F, S> Reserialize for Not<F, S> {
-        #[inline]
-        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "not") }
-    }
-    impl<F, S> ReserializeDelim for Parens<F, S> {
-        #[inline]
-        fn reserialize_open_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "(") }
-        #[inline]
-        fn reserialize_close_fmt(&self, f: &mut Formatter) -> FResult { write!(f, ")") }
-    }
 }

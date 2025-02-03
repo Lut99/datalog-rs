@@ -4,7 +4,7 @@
 //  Created:
 //    03 Feb 2025, 17:11:26
 //  Last edited:
-//    03 Feb 2025, 18:20:39
+//    03 Feb 2025, 18:35:18
 //  Auto updated?
 //    Yes
 //
@@ -15,10 +15,11 @@
 //
 
 use std::collections::HashSet;
+use std::marker::PhantomData;
 
 use stackvec::StackVec;
 
-use crate::ast::Atom;
+use crate::ast::{Atom, Literal, Spec};
 
 
 /***** LIBRARY *****/
@@ -30,39 +31,56 @@ use crate::ast::Atom;
 /// _interpretation_ where all of them have a truth value assigned to them (true, false, or
 /// unknown).
 #[derive(Debug, Clone)]
-pub struct State<F, S> {
-    /// All atoms in the universe.
+pub struct State<'s, F, S> {
+    /// All non-grounded atoms in the spec, i.e., atoms with variables in them.
     ///
-    /// Will be allocated to a specific size beforehand. This capacity represents the maximum size
-    /// we're willing to commit to.
-    universe: Vec<Atom<F, S>>,
+    /// This is what we use to generate new inhabitants of the set below when new grounded atoms
+    /// are discovered. This can happen at creation (i.e., read from the spec) or during
+    /// derivation, when we potentially construct new atoms.
+    vars: Vec<&'s Atom<F, S>>,
 
     /// Which of the atoms in the universe are _true_.
     ///
     /// They are identified by index in the `universe` set, and guaranteed to be in ONLY one of the
     /// sets { truths, falses, unknwns }.
-    truths: HashSet<usize>,
+    truths: HashSet<*const Atom<F, S>>,
     /// Which of the atoms in the universe are _false_.
     ///
     /// They are identified by index in the `universe` set, and guaranteed to be in ONLY one of the
     /// sets { truths, falses, unknwns }.
-    falses: HashSet<usize>,
+    falses: HashSet<*const Atom<F, S>>,
     /// Which of the atoms in the universe are _unknown_.
     ///
     /// They are identified by index in the `universe` set, and guaranteed to be in ONLY one of the
     /// sets { truths, falses, unkwns }.
-    unkwns: HashSet<usize>,
+    unkwns: HashSet<*const Atom<F, S>>,
+
+    /// Phony lifetime link to ensure the pointers remain valid.
+    _lt: PhantomData<&'s ()>,
 }
-impl<F, S> State<F, S> {
-    /// Constructor for the State that initializes it without any universe.
-    /// 
+impl<'s, F, S> State<'s, F, S> {
+    /// Constructor for the State that initializes it from the given spec.
+    ///
     /// # Arguments
-    /// - `max_universe_size`: The maximum size the universe can have. I.e., the maximum number of
-    ///   concrete atoms to quantify over.
-    /// 
+    /// - `spec`: Some [`Spec<'s, F, S>`] to interpret.
+    ///
     /// # Returns
-    /// A new State that doesn't know anything, not even how the universe of potential looks like.
-    /// Rather sad!
-    #[inline]
-    pub fn new()
+    /// A new State that is initialized to the universe of possible atoms read from the spec.
+    ///
+    /// Note that ALL atoms are assumed to be _false_ initially.
+    pub fn new(spec: &'s Spec<F, S>) -> Self {
+        // Let's start by quantifying and collecting grounded- and non-grounded atoms.
+        let mut falses: Vec<*const Atom<F, S>> = Vec::new();
+        let mut vars: Vec<&'s Atom<F, S>> = Vec::new();
+        for rule in &spec.rules {
+            for atom in rule.consequents.values().chain(rule.tail.iter().flat_map(|t| {
+                t.antecedents.values().map(|l| match l {
+                    Literal::Atom(a) => a,
+                    Literal::NegAtom(na) => &na.atom,
+                })
+            })) {}
+        }
+
+        todo!()
+    }
 }

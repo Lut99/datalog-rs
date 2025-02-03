@@ -22,7 +22,7 @@ required-features = ["railroad"]
 ast-toolkit = { git = "https://github.com/Lut99/ast-toolkit-rs", features = ["derive", "punctuated", "span", "tokens"] }
 enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
 indexmap = "2.7.0"
-itertools = "0.13.0"
+itertools = "0.14.0"
 log = { version = "0.4.22", optional = true }
 paste = "1.0.15"
 stackvec = { git = "https://github.com/Lut99/stackvec-rs", optional = true }
@@ -45,7 +45,6 @@ transitions = ["datalog-macros/transitions"]
 
 interpreter = ["dep:stackvec"]
 parser = ["ast-toolkit/snack"]
-reserialize = []
 
 macros = ["dep:datalog-macros"]
 log = ["dep:log"]

@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    04 Dec 2024, 17:22:04
+//    03 Feb 2025, 19:28:46
 //  Auto updated?
 //    Yes
 //
@@ -23,8 +23,6 @@ use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
 use paste::paste;
 
 use crate::ast::{Atom, Comma, Dot, Ident, Rule, RuleAntecedents, impl_enum_map, impl_map};
-#[cfg(feature = "reserialize")]
-use crate::ast::{Reserialize, ReserializeDelim};
 
 
 /***** HELPERS *****/
@@ -57,27 +55,11 @@ pub struct TransitionSpec<F, S> {
     /// The list of phrases (rules|transitions) in this program.
     pub phrases: Vec<Phrase<F, S>>,
 }
-impl<F, S> Display for TransitionSpec<F, S>
-where
-    S: SpannableDisplay,
-{
+impl<F, S: SpannableDisplay> Display for TransitionSpec<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         for phrase in &self.phrases {
-            writeln!(f, "{phrase}")?;
-        }
-        Ok(())
-    }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for TransitionSpec<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        for phrase in &self.phrases {
-            phrase.reserialize_fmt(f)?;
+            phrase.fmt(f)?;
             writeln!(f)?;
         }
         Ok(())
@@ -109,32 +91,14 @@ pub enum Phrase<F, S> {
     /// It's the trigger of zero or more transitions.
     Trigger(Trigger<F, S>),
 }
-impl<F, S> Display for Phrase<F, S>
-where
-    S: SpannableDisplay,
-{
+impl<F, S: SpannableDisplay> Display for Phrase<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
-            Self::Postulation(p) => write!(f, "{p}"),
-            Self::Rule(r) => write!(f, "{r}"),
-            Self::Transition(t) => write!(f, "{t}"),
-            Self::Trigger(t) => write!(f, "{t}"),
-        }
-    }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for Phrase<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        match self {
-            Self::Postulation(p) => p.reserialize_fmt(f),
-            Self::Rule(r) => r.reserialize_fmt(f),
-            Self::Transition(t) => t.reserialize_fmt(f),
-            Self::Trigger(t) => t.reserialize_fmt(f),
+            Self::Postulation(p) => p.fmt(f),
+            Self::Rule(r) => r.fmt(f),
+            Self::Transition(t) => t.fmt(f),
+            Self::Trigger(t) => t.fmt(f),
         }
     }
 }
@@ -172,10 +136,7 @@ impl<F: Clone, S: Clone> Postulation<F, S> {
     /// A [`Rule`] that can be used to find out if the post conditions hold.
     pub fn to_rule(&self) -> Rule<F, S> { Rule { consequents: self.consequents.clone(), tail: self.tail.clone(), dot: self.dot.clone() } }
 }
-impl<F, S> Display for Postulation<F, S>
-where
-    S: SpannableDisplay,
-{
+impl<F, S: SpannableDisplay> Display for Postulation<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "{}{{", self.op)?;
@@ -183,43 +144,20 @@ where
             write!(f, " ")?;
             for (i, atom) in self.consequents.values().enumerate() {
                 if i > 0 {
-                    write!(f, ", ")?;
+                    write!(f, ",")?;
+                    if f.alternate() {
+                        write!(f, " ")?;
+                    }
                 }
-                write!(f, "{atom}")?;
+                atom.fmt(f)?;
             }
             write!(f, " ")?;
         }
         write!(f, "}}")?;
         if let Some(tail) = &self.tail {
-            write!(f, "{tail}")?;
+            tail.fmt(f)?;
         }
         write!(f, ".")
-    }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for Postulation<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        self.op.reserialize_fmt(f)?;
-        self.curly_tokens.reserialize_open_fmt(f)?;
-        if !self.consequents.is_empty() {
-            write!(f, " ")?;
-            for (i, atom) in self.consequents.values().enumerate() {
-                if i > 0 {
-                    write!(f, ", ")?;
-                }
-                atom.reserialize_fmt(f)?;
-            }
-            write!(f, " ")?;
-        }
-        self.curly_tokens.reserialize_close_fmt(f)?;
-        if let Some(tail) = &self.tail {
-            tail.reserialize_fmt(f)?;
-        }
-        self.dot.reserialize_fmt(f)
     }
 }
 #[cfg(feature = "railroad")]
@@ -259,16 +197,6 @@ impl<F, S> Display for PostulationOp<F, S> {
         }
     }
 }
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for PostulationOp<F, S> {
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        match self {
-            Self::Create(c) => c.reserialize_fmt(f),
-            Self::Obfuscate(o) => o.reserialize_fmt(f),
-        }
-    }
-}
 impl_enum_map!(PostulationOp, Create(op), Obfuscate(op));
 
 
@@ -293,40 +221,27 @@ pub struct Transition<F, S> {
     /// The dot token at the end.
     pub dot: Dot<F, S>,
 }
-impl<F, S> Display for Transition<F, S>
-where
-    S: SpannableDisplay,
-{
+impl<F, S: SpannableDisplay> Display for Transition<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "{} {{", self.ident)?;
-        if !self.postulations.is_empty() {
+        if f.alternate() && !self.postulations.is_empty() {
             writeln!(f)?;
         }
-        for post in &self.postulations {
-            writeln!(f, "    {post}")?;
+        for post in self.postulations.iter() {
+            write!(f, " ")?;
+            if f.alternate() {
+                write!(f, "   ")?;
+            }
+            post.fmt(f)?;
+            if f.alternate() {
+                writeln!(f)?;
+            }
+        }
+        if !f.alternate() {
+            write!(f, " ")?;
         }
         write!(f, "}}")
-    }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for Transition<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        self.ident.reserialize_fmt(f)?;
-        self.curly_tokens.reserialize_open_fmt(f)?;
-        if !self.postulations.is_empty() {
-            writeln!(f)?;
-        }
-        for post in &self.postulations {
-            write!(f, "    ")?;
-            post.reserialize_fmt(f)?;
-            writeln!(f)?;
-        }
-        self.curly_tokens.reserialize_close_fmt(f)
     }
 }
 #[cfg(feature = "railroad")]
@@ -364,40 +279,24 @@ pub struct Trigger<F, S> {
     /// The dot token at the end.
     pub dot: Dot<F, S>,
 }
-impl<F, S> Display for Trigger<F, S>
-where
-    S: SpannableDisplay,
-{
+impl<F, S: SpannableDisplay> Display for Trigger<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "!{{")?;
-        if !self.idents.is_empty() {
+        if f.alternate() && !self.idents.is_empty() {
             writeln!(f)?;
         }
         for ident in &self.idents {
-            writeln!(f, "    {ident}")?;
+            write!(f, " ")?;
+            if f.alternate() {
+                write!(f, "   ")?;
+            }
+            ident.fmt(f)?;
+        }
+        if !f.alternate() {
+            write!(f, " ")?;
         }
         write!(f, "}}")
-    }
-}
-#[cfg(feature = "reserialize")]
-impl<F, S> Reserialize for Trigger<F, S>
-where
-    S: SpannableDisplay,
-{
-    #[inline]
-    fn reserialize_fmt(&self, f: &mut Formatter) -> FResult {
-        self.exclaim_token.reserialize_fmt(f)?;
-        self.curly_tokens.reserialize_open_fmt(f)?;
-        if !self.idents.is_empty() {
-            writeln!(f)?;
-        }
-        for ident in &self.idents {
-            write!(f, "    ")?;
-            ident.reserialize_fmt(f)?;
-            writeln!(f)?;
-        }
-        self.curly_tokens.reserialize_close_fmt(f)
     }
 }
 #[cfg(feature = "railroad")]
@@ -438,30 +337,4 @@ mod railroad_impl {
     utf8_token_railroad!(Squiggly, "~");
     utf8_token_railroad!(Exclaim, "!");
     utf8_delimiter_railroad!(Curly, "{", "}");
-}
-
-// Implement reserialize
-#[doc(hidden)]
-#[cfg(feature = "reserialize")]
-mod reserialize_impl {
-    use super::*;
-
-    impl<F, S> Reserialize for Add<F, S> {
-        #[inline]
-        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "+") }
-    }
-    impl<F, S> Reserialize for Squiggly<F, S> {
-        #[inline]
-        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "~") }
-    }
-    impl<F, S> Reserialize for Exclaim<F, S> {
-        #[inline]
-        fn reserialize_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "!") }
-    }
-    impl<F, S> ReserializeDelim for Curly<F, S> {
-        #[inline]
-        fn reserialize_open_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "{{") }
-        #[inline]
-        fn reserialize_close_fmt(&self, f: &mut Formatter) -> FResult { write!(f, "}}") }
-    }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 11:10:12
 //  Last edited:
-//    03 Feb 2025, 15:12:45
+//    03 Feb 2025, 19:30:19
 //  Auto updated?
 //    Yes
 //
@@ -158,7 +158,7 @@ where
 /// use ast_toolkit::snack::error::{Common, Error, Failure};
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
-/// use datalog::ast::{Arrow, Atom, AtomArg, AtomArgs, Comma, Dot, Ident, Literal, Parens, Rule, RuleAntecedents};
+/// use datalog::ast::{Arrow, Atom, Fact, FactArgs, Comma, Dot, Ident, Literal, Parens, Rule, RuleAntecedents};
 /// use datalog::transitions::ast::{Add, Curly, Postulation, PostulationOp, Squiggly};
 /// use datalog::transitions::parser::postulations::{postulation, ParseError};
 ///
@@ -175,7 +175,7 @@ where
 ///     (span1.slice(9..), Postulation {
 ///         op: PostulationOp::Create(Add { span: span1.slice(..1) }),
 ///         curly_tokens: Curly { open: span1.slice(1..2), close: span1.slice(7..8) },
-///         consequents: punct![v => Atom { ident: Ident { value: span1.slice(3..6) }, args: None }],
+///         consequents: punct![v => Atom::Fact(Fact { ident: Ident { value: span1.slice(3..6) }, args: None })],
 ///         tail: None,
 ///         dot: Dot { span: span1.slice(8..9) },
 ///     })
@@ -185,19 +185,19 @@ where
 ///     (span2.slice(21..), Postulation {
 ///         op: PostulationOp::Obfuscate(Squiggly { span: span2.slice(..1) }),
 ///         curly_tokens: Curly { open: span2.slice(1..2), close: span2.slice(7..8) },
-///         consequents: punct![v => Atom { ident: Ident { value: span2.slice(3..6) }, args: None }],
+///         consequents: punct![v => Atom::Fact(Fact { ident: Ident { value: span2.slice(3..6) }, args: None })],
 ///         tail: Some(RuleAntecedents {
 ///             arrow_token: Arrow { span: span2.slice(9..11) },
-///             antecedents: punct![v => Literal::Atom(Atom {
+///             antecedents: punct![v => Literal::Atom(Atom::Fact(Fact {
 ///                 ident: Ident { value: span2.slice(12..15) },
-///                 args: Some(AtomArgs {
+///                 args: Some(FactArgs {
 ///                     paren_tokens: Parens { open: span2.slice(15..16), close: span2.slice(19..20) },
-///                     args: punct![v => AtomArg::Atom(Box::new(Atom {
+///                     args: punct![v => Atom::Fact(Fact {
 ///                         ident: Ident { value: span2.slice(16..19) },
 ///                         args: None,
-///                     }))]
+///                     })]
 ///                 })
-///             })]
+///             }))]
 ///         }),
 ///         dot: Dot { span: span2.slice(20..21) }
 ///     })
@@ -218,9 +218,9 @@ where
 ///         op: PostulationOp::Create(Add { span: span4.slice(..1) }),
 ///         curly_tokens: Curly { open: span4.slice(1..2), close: span4.slice(12..13) },
 ///         consequents: punct![
-///             v => Atom { ident: Ident { value: span4.slice(3..6) }, args: None },
+///             v => Atom::Fact(Fact { ident: Ident { value: span4.slice(3..6) }, args: None }),
 ///             p => Comma { span: span4.slice(6..7) },
-///             v => Atom { ident: Ident { value: span4.slice(8..11) }, args: None }
+///             v => Atom::Fact(Fact { ident: Ident { value: span4.slice(8..11) }, args: None })
 ///         ],
 ///         tail: None,
 ///         dot: Dot { span: span4.slice(13..14) }
