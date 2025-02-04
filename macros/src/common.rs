@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 10:47:06
 //  Last edited:
-//    03 Feb 2025, 14:29:58
+//    04 Feb 2025, 18:03:50
 //  Auto updated?
 //    Yes
 //
@@ -348,9 +348,9 @@ impl ToTokens for Atom {
                     } else {
                         quote_spanned! { arg.span() => <#crate_path::ast::Punctuated<_, _>>::push(&punct, #crate_path::ast::Comma{ span: #crate_path::ast::Span::new(#from_str, ",") }, #arg); }
                     }).collect();
-                    quote_spanned! { arg.span() => #crate_path::ast::AtomArg::Atom(::std::boxed::Box::new(#crate_path::ast::Atom {
+                    quote_spanned! { arg.span() => #crate_path::ast::Atom::Fact(#crate_path::ast::Fact {
                         ident: #crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sarg) },
-                        args: ::std::option::Option::Some(#crate_path::ast::AtomArgs {
+                        args: ::std::option::Option::Some(#crate_path::ast::FactArgs {
                             paren_tokens: #crate_path::ast::Parens { open: #crate_path::ast::Span::new(#from_str, "("), close: #crate_path::ast::Span::new(#from_str, ")") },
                             args: {
                                 let mut punct = #crate_path::ast::Punctuated::new();
@@ -358,15 +358,15 @@ impl ToTokens for Atom {
                                 punct
                             },
                         }),
-                    })) }
+                    }) }
                 } else if sarg.chars().next().expect("Got empty consequence argument identifier").is_uppercase() {
                     // Note it down as a variable if it starts with an uppercase
-                    quote_spanned! { arg.span() => #crate_path::ast::AtomArg::Var(#crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sarg) }) }
+                    quote_spanned! { arg.span() => #crate_path::ast::Atom::Var(#crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sarg) }) }
                 } else {
-                    quote_spanned! { arg.span() => #crate_path::ast::AtomArg::Atom(::std::boxed::Box::new(#crate_path::ast::Atom {
+                    quote_spanned! { arg.span() => #crate_path::ast::Atom::Fact(#crate_path::ast::Fact {
                         ident: #crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sarg) },
                         args: ::std::option::Option::None,
-                    })) }
+                    }) }
                 }
             }).collect();
 
@@ -383,7 +383,7 @@ impl ToTokens for Atom {
                 quote_spanned! { Span::call_site() => { let mut punct = #crate_path::ast::Punctuated::new(); #args_tokens punct } };
 
             // Serialize it to one set of arguments
-            (Some(paren.span.join()), quote_spanned! { paren.span.join() => Some(#crate_path::ast::AtomArgs {
+            (Some(paren.span.join()), quote_spanned! { paren.span.join() => Some(#crate_path::ast::FactArgs {
                 paren_tokens: #crate_path::ast::Parens { open: #crate_path::ast::Span::new(#from_str, "("), close: #crate_path::ast::Span::new(#from_str, ")") },
                 args: #args_tokens,
             })})
@@ -395,10 +395,10 @@ impl ToTokens for Atom {
         let sname: String = self.ident.to_string();
         tokens.extend(quote_spanned! {
             if let Some(paren) = paren_span { self.ident.span().join(paren).unwrap_or_else(|| self.ident.span()) } else { self.ident.span() } =>
-            #crate_path::ast::Atom {
+            #crate_path::ast::Atom::Fact(#crate_path::ast::Fact {
                 ident: #crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sname) },
                 args: #args_tokens,
-            }
+            })
         });
     }
 }

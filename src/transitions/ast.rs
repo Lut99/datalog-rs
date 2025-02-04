@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    03 Feb 2025, 19:28:46
+//    04 Feb 2025, 17:28:33
 //  Auto updated?
 //    Yes
 //
@@ -20,6 +20,7 @@ use ast_toolkit::punctuated::Punctuated;
 use ast_toolkit::railroad::{ToDelimNode, ToNode, ToNonTerm, railroad as rr};
 use ast_toolkit::span::SpannableDisplay;
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
+use better_derive::{Clone, Copy, Debug};
 use paste::paste;
 
 use crate::ast::{Atom, Comma, Dot, Ident, Rule, RuleAntecedents, impl_enum_map, impl_map};
@@ -126,7 +127,13 @@ pub struct Postulation<F, S> {
     /// The dot token at the end.
     pub dot: Dot<F, S>,
 }
-impl<F: Clone, S: Clone> Postulation<F, S> {
+impl<F, S> Postulation<F, S>
+where
+    Atom<F, S>: Clone,
+    Comma<F, S>: Clone,
+    Dot<F, S>: Clone,
+    RuleAntecedents<F, S>: Clone,
+{
     /// Gets the postulation as a regular rule.
     ///
     /// This is powerful for reasoning, where the postconditions are computed on whether the

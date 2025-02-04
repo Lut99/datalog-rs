@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    03 Feb 2025, 18:59:51
+//    04 Feb 2025, 18:08:28
 //  Auto updated?
 //    Yes
 //
@@ -23,6 +23,7 @@ use ast_toolkit::railroad::{ToDelimNode, ToNode, ToNonTerm, railroad as rr};
 use ast_toolkit::span::SpannableDisplay;
 pub use ast_toolkit::span::{Span, Spanning as _};
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
+use better_derive::{Clone, Copy, Debug};
 // Re-export the derive macro
 #[cfg(feature = "macros")]
 pub use datalog_macros::datalog;
@@ -187,6 +188,25 @@ pub struct Rule<F, S> {
     /// The closing dot after each rule.
     pub dot: Dot<F, S>,
 }
+impl<F, S> Rule<F, S> {
+    /// Returns an iterator over the atoms in the rule's consequents and antecedents, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more atoms.
+    #[inline]
+    pub fn atoms<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<F, S>> {
+        self.consequents.values().chain(self.tail.iter().flat_map(RuleAntecedents::atoms))
+    }
+
+    /// Returns an iterator over the atoms in the rule's consequents and antecedents, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more mutable references to atoms.
+    #[inline]
+    pub fn atoms_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> {
+        self.consequents.values_mut().chain(self.tail.iter_mut().flat_map(RuleAntecedents::atoms_mut))
+    }
+}
 impl<F, S: SpannableDisplay> Display for Rule<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
@@ -232,6 +252,21 @@ pub struct RuleAntecedents<F, S> {
     pub arrow_token: Arrow<F, S>,
     /// The list of antecedents.
     pub antecedents: Punctuated<Literal<F, S>, Comma<F, S>>,
+}
+impl<F, S> RuleAntecedents<F, S> {
+    /// Returns an iterator over the atoms in the rule's antecedents, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more antecedents.
+    #[inline]
+    pub fn atoms<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<F, S>> { self.antecedents.values().map(Literal::atom) }
+
+    /// Returns an iterator over the atoms in the rule's antecedents, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more mutable references to antecedents.
+    #[inline]
+    pub fn atoms_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> { self.antecedents.values_mut().map(Literal::atom_mut) }
 }
 impl<F, S: SpannableDisplay> Display for RuleAntecedents<F, S> {
     #[inline]
@@ -407,6 +442,53 @@ impl<F, S> Atom<F, S> {
             Self::Var(_) => true,
         }
     }
+
+    /// Returns an iterator over the arguments in this atom, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more arguments.
+    #[inline]
+    pub fn args<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<F, S>> {
+        match self {
+            Self::Fact(f) => Some(f.args.iter().flat_map(|t| t.args.values())).into_iter().flatten(),
+            Self::Var(_) => None.into_iter().flatten(),
+        }
+    }
+    /// Returns an iterator over the arguments in this atom, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more mutable references to elements.
+    #[inline]
+    pub fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> {
+        match self {
+            Self::Fact(f) => Some(f.args.iter_mut().flat_map(|t| t.args.values_mut())).into_iter().flatten(),
+            Self::Var(_) => None.into_iter().flatten(),
+        }
+    }
+
+    /// Returns an iterator over all variables in this atom, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more [`Ident`]ifiers representing each variable.
+    #[inline]
+    pub fn vars<'s>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>> {
+        match self {
+            Self::Fact(f) => Box::new(f.vars()) as Box<dyn 's + Iterator<Item = &'s Ident<F, S>>>,
+            Self::Var(v) => Box::new(Some(v).into_iter()),
+        }
+    }
+    /// Returns an iterator over all variables in this atom, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more mutable references to [`Ident`]ifiers representing
+    /// each variable.
+    #[inline]
+    pub fn vars_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>> {
+        match self {
+            Self::Fact(f) => Box::new(f.vars_mut()) as Box<dyn 's + Iterator<Item = &'s mut Ident<F, S>>>,
+            Self::Var(v) => Box::new(Some(v).into_iter()),
+        }
+    }
 }
 impl<F, S: SpannableDisplay> Display for Atom<F, S> {
     #[inline]
@@ -449,6 +531,46 @@ impl<F, S> Fact<F, S> {
             None => false,
         }
     }
+
+    /// Returns an iterator over the arguments in this fact, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more [`Atom`]s representing each argument.
+    #[inline]
+    pub fn args<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<F, S>> { self.args.iter().flat_map(|t| t.args.values()).into_iter() }
+    /// Returns an iterator over the arguments in this fact, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more mutable references to [`Atom`]s representing each
+    /// argument.
+    #[inline]
+    pub fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> {
+        self.args.iter_mut().flat_map(|t| t.args.values_mut()).into_iter()
+    }
+
+    /// Returns an iterator over all variables in the arguments of this fact, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more [`Ident`]ifiers representing each variable.
+    #[inline]
+    pub fn vars<'s>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>> {
+        self.args().flat_map(|a| match a {
+            Atom::Fact(f) => Box::new(f.vars()) as Box<dyn 's + Iterator<Item = &'s Ident<F, S>>>,
+            Atom::Var(v) => Box::new(Some(v).into_iter()),
+        })
+    }
+    /// Returns an iterator over all variables in the arguments of this fact, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more mutable references to  [`Ident`]ifiers representing
+    /// each variable.
+    #[inline]
+    pub fn vars_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>> {
+        self.args_mut().flat_map(|a| match a {
+            Atom::Fact(f) => Box::new(f.vars_mut()) as Box<dyn 's + Iterator<Item = &'s mut Ident<F, S>>>,
+            Atom::Var(v) => Box::new(Some(v).into_iter()),
+        })
+    }
 }
 impl<F, S: SpannableDisplay> Display for Fact<F, S> {
     #[inline]
@@ -468,12 +590,37 @@ impl_map!(Fact, ident, args);
 /// ```plain
 /// (foo, bar(baz), Baz)
 /// ```
-#[derive(Clone, Debug)]
 pub struct FactArgs<F, S> {
     /// The parenthesis wrapping the arguments.
     pub paren_tokens: Parens<F, S>,
     /// The arguments contained within.
     pub args: Punctuated<Atom<F, S>, Comma<F, S>>,
+}
+// NOTE: We implement `Clone` manually to prevent an endless cycle in deriving that
+// `Punctuated<Atom, Comma>` implements `Clone` (since the question of whether it does depends on
+// `Atom`, which transitively depends on `FactArgs`).
+impl<F, S> Clone for FactArgs<F, S>
+where
+    Span<F, S>: Clone,
+{
+    #[inline]
+    fn clone(&self) -> Self { Self { paren_tokens: self.paren_tokens.clone(), args: self.args.clone() } }
+}
+// NOTE: We implement `Debug` manually to prevent an endless cycle in deriving that
+// `Punctuated<Atom, Comma>` implements `Debug` (since the question of whether it does depends on
+// `Atom`, which transitively depends on `FactArgs`).
+impl<F, S> std::fmt::Debug for FactArgs<F, S>
+where
+    Span<F, S>: std::fmt::Debug,
+{
+    #[inline]
+    fn fmt(&self, f: &mut Formatter) -> FResult {
+        let Self { paren_tokens, args } = self;
+        let mut fmt = f.debug_struct("FactArgs");
+        fmt.field("paren_tokens", paren_tokens);
+        fmt.field("args", args);
+        fmt.finish()
+    }
 }
 impl<F, S> FactArgs<F, S> {
     /// Returns if there are any variables in the arguments to this fact.

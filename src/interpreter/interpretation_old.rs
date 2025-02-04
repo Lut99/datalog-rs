@@ -4,7 +4,7 @@
 //  Created:
 //    21 Mar 2024, 10:22:40
 //  Last edited:
-//    19 Dec 2024, 11:19:02
+//    04 Feb 2025, 18:05:19
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@ use std::hash::{BuildHasher, DefaultHasher, Hash as _, Hasher, RandomState};
 use indexmap::IndexSet;
 
 use super::quantify::RuleQuantifier;
-use crate::ast::{Atom, AtomArg, Ident, Literal, NegAtom, Rule, Spec};
+use crate::ast::{Atom, Ident, Literal, NegAtom, Rule, Spec};
 use crate::log::warn;
 
 
@@ -389,8 +389,8 @@ impl<'f, 's, R: BuildHasher> Interpretation<'f, 's, R> {
         atom.ident.value.value().hash(&mut state);
         for arg in atom.args.iter().flat_map(|a| a.args.values()) {
             // Warn if it's a var
-            if matches!(arg, AtomArg::Var(_)) {
-                warn!("Hashing an `AtomArg::Var` (this is probably unintended)");
+            if matches!(arg, Atom::Var(_)) {
+                warn!("Hashing an `Atom::Var` (this is probably unintended)");
             }
 
             // Hash the AtomArg

@@ -4,7 +4,7 @@
 //  Created:
 //    03 Feb 2025, 17:11:26
 //  Last edited:
-//    03 Feb 2025, 18:35:18
+//    04 Feb 2025, 18:34:54
 //  Auto updated?
 //    Yes
 //
@@ -14,12 +14,50 @@
 //!   integers.
 //
 
+use std::borrow::Cow;
 use std::collections::HashSet;
+use std::hash::Hash;
 use std::marker::PhantomData;
 
-use stackvec::StackVec;
+use better_derive::{Clone, Debug};
 
-use crate::ast::{Atom, Literal, Spec};
+use crate::ast::{Atom, Ident, Literal, Spec};
+
+
+/***** HELPER FUNCTIONS *****/
+/// Does recursive sorting of the atom as either a grounded one or one containing a variable.
+///
+/// Note that the recursion means that any arguments to the given atom will be sorted too.
+///
+/// # Arguments
+/// - `atom`: The [`Atom`] to sort.
+/// - `grounded`: The list of grounded atoms (= atoms without variables) to potentially add to.
+/// - `vars`: The list of non-grounded atoms (= atoms with variables) to potentially add to.
+fn sort_atom<'a, F, S>(atom: &'a Atom<F, S>, grounded: &mut Vec<Cow<'a, Atom<F, S>>>, vars: &mut Vec<&'a Atom<F, S>>)
+where
+    Atom<F, S>: Clone,
+{
+    // Sort the atom itself
+    if atom.has_vars() {
+        if vars.len() + 1 > vars.capacity() {
+            vars.reserve(2 * vars.capacity());
+        }
+        vars.push(atom);
+    } else {
+        if grounded.len() + 1 > grounded.capacity() {
+            grounded.reserve(2 * vars.capacity());
+        }
+        grounded.push(Cow::Borrowed(atom));
+    }
+
+    // Then sort its arguments
+    for atom in atom.args() {
+        sort_atom(atom, grounded, vars);
+    }
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -30,35 +68,47 @@ use crate::ast::{Atom, Literal, Spec};
 /// shuffled around as we learn information about them. This lands you in a specific
 /// _interpretation_ where all of them have a truth value assigned to them (true, false, or
 /// unknown).
-#[derive(Debug, Clone)]
-pub struct State<'s, F, S> {
+#[derive(Clone, Debug)]
+pub struct State<'s, F, S>
+where
+    Atom<F, S>: Clone,
+{
+    /// The universe of things we iterate over. This is either collected constants from the State,
+    /// or generated instantiations from the `vars`.
+    universe: Vec<Cow<'s, Atom<F, S>>>,
     /// All non-grounded atoms in the spec, i.e., atoms with variables in them.
     ///
     /// This is what we use to generate new inhabitants of the set below when new grounded atoms
     /// are discovered. This can happen at creation (i.e., read from the spec) or during
     /// derivation, when we potentially construct new atoms.
-    vars: Vec<&'s Atom<F, S>>,
+    vars:     Vec<&'s Atom<F, S>>,
 
     /// Which of the atoms in the universe are _true_.
     ///
     /// They are identified by index in the `universe` set, and guaranteed to be in ONLY one of the
     /// sets { truths, falses, unknwns }.
-    truths: HashSet<*const Atom<F, S>>,
+    truths: HashSet<usize>,
     /// Which of the atoms in the universe are _false_.
     ///
     /// They are identified by index in the `universe` set, and guaranteed to be in ONLY one of the
     /// sets { truths, falses, unknwns }.
-    falses: HashSet<*const Atom<F, S>>,
+    falses: HashSet<usize>,
     /// Which of the atoms in the universe are _unknown_.
     ///
     /// They are identified by index in the `universe` set, and guaranteed to be in ONLY one of the
     /// sets { truths, falses, unkwns }.
-    unkwns: HashSet<*const Atom<F, S>>,
+    unkwns: HashSet<usize>,
 
     /// Phony lifetime link to ensure the pointers remain valid.
     _lt: PhantomData<&'s ()>,
 }
-impl<'s, F, S> State<'s, F, S> {
+
+// Constructors
+impl<'s, F, S> State<'s, F, S>
+where
+    Atom<F, S>: Clone,
+    Ident<F, S>: Clone + Eq + Hash,
+{
     /// Constructor for the State that initializes it from the given spec.
     ///
     /// # Arguments
@@ -70,7 +120,7 @@ impl<'s, F, S> State<'s, F, S> {
     /// Note that ALL atoms are assumed to be _false_ initially.
     pub fn new(spec: &'s Spec<F, S>) -> Self {
         // Let's start by quantifying and collecting grounded- and non-grounded atoms.
-        let mut falses: Vec<*const Atom<F, S>> = Vec::new();
+        let mut universe: Vec<Cow<'s, Atom<F, S>>> = Vec::new();
         let mut vars: Vec<&'s Atom<F, S>> = Vec::new();
         for rule in &spec.rules {
             for atom in rule.consequents.values().chain(rule.tail.iter().flat_map(|t| {
@@ -78,9 +128,23 @@ impl<'s, F, S> State<'s, F, S> {
                     Literal::Atom(a) => a,
                     Literal::NegAtom(na) => &na.atom,
                 })
-            })) {}
+            })) {
+                sort_atom(atom, &mut universe, &mut vars);
+            }
         }
 
-        todo!()
+        // Now we add the instantiated variables
+        let mut grounded: Vec<Cow<'s, Atom<F, S>>> = Vec::with_capacity(vars.len() * universe.len());
+        for var in &vars {
+            // Quantify over the atom
+            let iter = var.quantify(universe.iter().map(Cow::as_ref));
+            grounded.reserve(iter.len());
+            for atom in iter {
+                grounded.push(Cow::Owned(atom));
+            }
+        }
+        universe.extend(grounded);
+
+        // Now we can construct self
     }
 }
