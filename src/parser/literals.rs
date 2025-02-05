@@ -4,7 +4,7 @@
 //  Created:
 //    07 May 2024, 14:20:04
 //  Last edited:
-//    03 Feb 2025, 19:16:24
+//    05 Feb 2025, 17:21:01
 //  Auto updated?
 //    Yes
 //
@@ -165,7 +165,7 @@ where
 /// ));
 /// ```
 #[inline]
-#[comb(snack = ::ast_toolkit::snack, expected = "either a positive or negative atom", Output = ast::Literal<F, S>, Error = ParseError<F, S>)]
+#[comb(snack = ::ast_toolkit::snack, expected = "either a positive or negative atom", Output = ast::Literal<ast::Atom<F, S>, F, S>, Error = ParseError<F, S>)]
 pub fn literal<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,
@@ -248,7 +248,7 @@ where
 /// ));
 /// ```
 #[inline]
-#[comb(snack = ::ast_toolkit::snack, expected = "a negated atom", Output = ast::NegAtom<F, S>, Error = ParseError<F, S>)]
+#[comb(snack = ::ast_toolkit::snack, expected = "a negated atom", Output = ast::NegAtom<ast::Atom<F, S>, F, S>, Error = ParseError<F, S>)]
 pub fn neg_atom<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,

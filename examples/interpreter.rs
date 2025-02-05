@@ -4,7 +4,7 @@
 //  Created:
 //    03 May 2024, 14:14:18
 //  Last edited:
-//    03 Feb 2025, 17:16:23
+//    05 Feb 2025, 14:23:32
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@ use clap::Parser;
 #[cfg(feature = "transitions")]
 use datalog::transitions::{ast::TransitionSpec, interpreter::Effect, parser};
 #[cfg(not(feature = "transitions"))]
-use datalog::{ast::Spec, interpreter::state::Interpretation, parser};
+use datalog::{ast::Spec, interpreter::knowledge_base::Interpretation, parser};
 use error_trace::trace;
 use humanlog::{DebugMode, HumanLogger};
 use log::{debug, error, info};

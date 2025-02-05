@@ -4,7 +4,7 @@
 //  Created:
 //    08 May 2024, 11:12:42
 //  Last edited:
-//    03 Feb 2025, 19:22:01
+//    05 Feb 2025, 17:21:35
 //  Auto updated?
 //    Yes
 //
@@ -164,7 +164,7 @@ impl<F: Clone, S: Clone> Spanning<F, S> for ParseError<F, S> {
 /// assert!(if let SResult::Fail(Failure::Common(Common::Custom(ParseError::Rule { span }))) = comb.parse(span4) { span == span4.slice(22..) } else { false });
 /// ```
 #[inline]
-#[comb(snack = ::ast_toolkit::snack, expected = "zero or more rules", Output = ast::Spec<F, S>, Error = ParseError<F, S>)]
+#[comb(snack = ::ast_toolkit::snack, expected = "zero or more rules", Output = ast::Spec<ast::Atom<F, S>, F, S>, Error = ParseError<F, S>)]
 pub fn spec<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,

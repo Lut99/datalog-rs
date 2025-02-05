@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    04 Feb 2025, 18:08:28
+//    05 Feb 2025, 17:47:26
 //  Auto updated?
 //    Yes
 //
@@ -13,7 +13,6 @@
 //
 
 use std::fmt::{Display, Formatter, Result as FResult};
-use std::hash::{Hash, Hasher};
 
 pub use ast_toolkit::punctuated::Punctuated;
 #[cfg(feature = "macros")]
@@ -23,82 +22,48 @@ use ast_toolkit::railroad::{ToDelimNode, ToNode, ToNonTerm, railroad as rr};
 use ast_toolkit::span::SpannableDisplay;
 pub use ast_toolkit::span::{Span, Spanning as _};
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
-use better_derive::{Clone, Copy, Debug};
+use better_derive::{Clone, Copy, Debug, Eq, Hash, PartialEq};
 // Re-export the derive macro
 #[cfg(feature = "macros")]
 pub use datalog_macros::datalog;
 use enum_debug::EnumDebug;
-use paste::paste;
 
 
-/***** HELPER MACROS *****/
-/// Automatically implements [`Eq`], [`Hash`] and [`PartialEq`] for the given fields in the given
-/// struct.
-macro_rules! impl_map {
-    ($for:ident, $($fields:ident),+) => {
-        impl<F, S> Eq for $for<F, S> where S: ast_toolkit::span::SpannableEq {}
+/***** INTERFACES *****/
+/// Generalizes over different kinds of atoms.
+pub trait Atomlike<F, S> {
+    /// Returns whether this atom has any arguments.
+    ///
+    /// If true, implies [`Atomlike::is_grounded`] will also return true.
+    ///
+    /// # Returns
+    /// False if it has, true if it hasn't.
+    fn is_constant(&self) -> bool;
 
-        impl<F, S> Hash for $for<F, S> where S: ast_toolkit::span::SpannableHash {
-            #[inline]
-            fn hash<H: Hasher>(&self, state: &mut H) {
-                $(
-                    self.$fields.hash(state);
-                )+
-            }
-        }
+    /// Returns whether this atom has any variables.
+    ///
+    /// # Returns
+    /// False if it has, true if it hasn't.
+    fn is_grounded(&self) -> bool;
 
-        impl<F, S> PartialEq for $for<F, S> where S: ast_toolkit::span::SpannableEq {
-            #[inline]
-            fn eq(&self, other: &Self) -> bool {
-                $(
-                    self.$fields == other.$fields
-                )&&+
-            }
-        }
-    };
+    /// Returns an iterator over the internal variables.
+    ///
+    /// # Returns
+    /// Some [`Iterator`] over [`Ident`] (references).
+    fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>>
+    where
+        'i: 's,
+        Ident<F, S>: 'i;
+
+    /// Returns an iterator over the internal variables.
+    ///
+    /// # Returns
+    /// Some [`Iterator`] over [`Ident`] (mutable references).
+    fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>>
+    where
+        'i: 's,
+        Ident<F, S>: 'i;
 }
-pub(crate) use impl_map;
-
-/// Automatically implements [`Eq`], [`Hash`] and [`PartialEq`] for the given fields of the given
-/// variants in the given enum.
-macro_rules! impl_enum_map {
-    ($for:ident, $($variants:ident($($fields:ident),+)),+) => {
-        impl<F, S> Eq for $for<F, S> where S: ast_toolkit::span::SpannableEq {}
-
-        impl<F, S> Hash for $for<F, S> where S: ast_toolkit::span::SpannableHash {
-            #[inline]
-            fn hash<H: Hasher>(&self, state: &mut H) {
-                match self {
-                    $(
-                        Self::$variants ( $($fields),+ ) => {
-                            stringify!($variants).hash(state);
-                            $($fields.hash(state);)+
-                        }
-                    ),+
-                }
-            }
-        }
-
-        paste! {
-            impl<F, S> PartialEq for $for<F, S> where S: ast_toolkit::span::SpannableEq {
-                #[inline]
-                fn eq(&self, other: &Self) -> bool {
-                    match (self, other) {
-                        $(
-                            (Self::$variants ( $([< $fields _lhs >]),+ ), Self::$variants ( $([< $fields _rhs >]),+ )) => {
-                                $([< $fields _lhs >] == [< $fields _rhs >])&&+
-                            }
-                        ),+
-
-                        // Any other variant is inequal by default
-                        (_, _) => false,
-                    }
-                }
-            }
-        }
-    };
-}
-pub(crate) use impl_enum_map;
 
 
 
@@ -115,7 +80,7 @@ pub(crate) use impl_enum_map;
 #[inline]
 pub fn diagram() -> rr::Diagram<rr::VerticalGrid<Box<dyn rr::Node>>> {
     ast_toolkit::railroad::diagram!(
-        Spec::<(), ()> as "Spec",
+        Spec::<Atom<(), ()>, (), ()> as "Spec",
     )
 }
 
@@ -151,14 +116,14 @@ pub fn diagram_to_path(path: impl AsRef<std::path::Path>) -> Result<(), std::io:
 /// foo :- bar, baz(quz).
 /// foo.
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "railroad", derive(ToNonTerm))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
-pub struct Spec<F, S> {
+pub struct Spec<A, F, S> {
     /// The list of rules in this program.
-    pub rules: Vec<Rule<F, S>>,
+    pub rules: Vec<Rule<A, F, S>>,
 }
-impl<F, S: SpannableDisplay> Display for Spec<F, S> {
+impl<A: Display, F, S: SpannableDisplay> Display for Spec<A, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         for rule in &self.rules {
@@ -168,7 +133,6 @@ impl<F, S: SpannableDisplay> Display for Spec<F, S> {
         Ok(())
     }
 }
-impl_map!(Spec, rules);
 
 
 
@@ -179,22 +143,22 @@ impl_map!(Spec, rules);
 /// foo :- bar, baz(quz).
 /// foo.
 /// ```
-#[derive(Clone, Debug)]
-pub struct Rule<F, S> {
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Rule<A, F, S> {
     /// A list of consequents (i.e., instances produced by this rule).
-    pub consequents: Punctuated<Atom<F, S>, Comma<F, S>>,
+    pub consequents: Punctuated<A, Comma<F, S>>,
     /// An optional second part that describes the antecedents.
-    pub tail: Option<RuleAntecedents<F, S>>,
+    pub tail: Option<RuleAntecedents<A, F, S>>,
     /// The closing dot after each rule.
     pub dot: Dot<F, S>,
 }
-impl<F, S> Rule<F, S> {
+impl<A, F, S> Rule<A, F, S> {
     /// Returns an iterator over the atoms in the rule's consequents and antecedents, if any.
     ///
     /// # Returns
     /// An [`Iterator`] yielding zero or more atoms.
     #[inline]
-    pub fn atoms<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<F, S>> {
+    pub fn atoms<'s>(&'s self) -> impl 's + Iterator<Item = &'s A> {
         self.consequents.values().chain(self.tail.iter().flat_map(RuleAntecedents::atoms))
     }
 
@@ -203,11 +167,11 @@ impl<F, S> Rule<F, S> {
     /// # Returns
     /// An [`Iterator`] yielding zero or more mutable references to atoms.
     #[inline]
-    pub fn atoms_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> {
+    pub fn atoms_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut A> {
         self.consequents.values_mut().chain(self.tail.iter_mut().flat_map(RuleAntecedents::atoms_mut))
     }
 }
-impl<F, S: SpannableDisplay> Display for Rule<F, S> {
+impl<A: Display, F, S: SpannableDisplay> Display for Rule<A, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         for (i, atom) in self.consequents.values().enumerate() {
@@ -226,19 +190,18 @@ impl<F, S: SpannableDisplay> Display for Rule<F, S> {
     }
 }
 #[cfg(feature = "railroad")]
-impl<F, S> ToNode for Rule<F, S> {
+impl<A: ToNode, F, S> ToNode for Rule<A, F, S> {
     type Node = rr::Sequence<Box<dyn rr::Node>>;
 
     #[inline]
     fn railroad() -> Self::Node {
         rr::Sequence::new(vec![
-            Box::new(rr::Repeat::new(Atom::<F, S>::railroad(), Comma::<F, S>::railroad())),
-            Box::new(rr::Optional::new(RuleAntecedents::<F, S>::railroad())),
+            Box::new(rr::Repeat::new(A::railroad(), Comma::<F, S>::railroad())),
+            Box::new(rr::Optional::new(RuleAntecedents::<A, F, S>::railroad())),
             Box::new(Dot::<F, S>::railroad()),
         ])
     }
 }
-impl_map!(Rule, consequents, tail);
 
 /// Defines the second half of the rule, if any.
 ///
@@ -246,29 +209,29 @@ impl_map!(Rule, consequents, tail);
 /// ```plain
 /// :- foo, bar(baz)
 /// ```
-#[derive(Clone, Debug)]
-pub struct RuleAntecedents<F, S> {
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct RuleAntecedents<A, F, S> {
     /// The arrow token.
     pub arrow_token: Arrow<F, S>,
     /// The list of antecedents.
-    pub antecedents: Punctuated<Literal<F, S>, Comma<F, S>>,
+    pub antecedents: Punctuated<Literal<A, F, S>, Comma<F, S>>,
 }
-impl<F, S> RuleAntecedents<F, S> {
+impl<A, F, S> RuleAntecedents<A, F, S> {
     /// Returns an iterator over the atoms in the rule's antecedents, if any.
     ///
     /// # Returns
     /// An [`Iterator`] yielding zero or more antecedents.
     #[inline]
-    pub fn atoms<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<F, S>> { self.antecedents.values().map(Literal::atom) }
+    pub fn atoms<'s>(&'s self) -> impl 's + Iterator<Item = &'s A> { self.antecedents.values().map(Literal::atom) }
 
     /// Returns an iterator over the atoms in the rule's antecedents, if any.
     ///
     /// # Returns
     /// An [`Iterator`] yielding zero or more mutable references to antecedents.
     #[inline]
-    pub fn atoms_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> { self.antecedents.values_mut().map(Literal::atom_mut) }
+    pub fn atoms_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut A> { self.antecedents.values_mut().map(Literal::atom_mut) }
 }
-impl<F, S: SpannableDisplay> Display for RuleAntecedents<F, S> {
+impl<A: Display, F, S: SpannableDisplay> Display for RuleAntecedents<A, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, " :- ")?;
@@ -285,18 +248,17 @@ impl<F, S: SpannableDisplay> Display for RuleAntecedents<F, S> {
     }
 }
 #[cfg(feature = "railroad")]
-impl<F, S> ToNode for RuleAntecedents<F, S> {
+impl<A: ToNode, F, S> ToNode for RuleAntecedents<A, F, S> {
     type Node = rr::Sequence<Box<dyn rr::Node>>;
 
     #[inline]
     fn railroad() -> Self::Node {
         rr::Sequence::new(vec![
             Box::new(Arrow::<F, S>::railroad()),
-            Box::new(rr::Repeat::new(Literal::<F, S>::railroad(), Comma::<F, S>::railroad())),
+            Box::new(rr::Repeat::new(Literal::<A, F, S>::railroad(), Comma::<F, S>::railroad())),
         ])
     }
 }
-impl_map!(RuleAntecedents, antecedents);
 
 
 
@@ -308,10 +270,10 @@ impl_map!(RuleAntecedents, antecedents);
 /// foo(bar)
 /// not foo
 /// ```
-#[derive(Clone, Debug, EnumDebug)]
+#[derive(Clone, Debug, EnumDebug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
-pub enum Literal<F, S> {
+pub enum Literal<A, F, S> {
     /// Non-negated atom.
     ///
     /// # Syntax
@@ -319,16 +281,16 @@ pub enum Literal<F, S> {
     /// foo
     /// foo(bar)
     /// ```
-    Atom(Atom<F, S>),
+    Atom(A),
     /// Negated atom.
     ///
     /// # Syntax
     /// ```plain
     /// not foo
     /// ```
-    NegAtom(NegAtom<F, S>),
+    NegAtom(NegAtom<A, F, S>),
 }
-impl<F, S> Literal<F, S> {
+impl<A, F, S> Literal<A, F, S> {
     /// Returns the polarity of the literal.
     ///
     /// # Returns
@@ -339,7 +301,7 @@ impl<F, S> Literal<F, S> {
     ///
     /// # Returns
     /// A reference to the [`Atom`] contained within.
-    pub fn atom(&self) -> &Atom<F, S> {
+    pub fn atom(&self) -> &A {
         match self {
             Self::Atom(a) => a,
             Self::NegAtom(na) => &na.atom,
@@ -350,7 +312,7 @@ impl<F, S> Literal<F, S> {
     ///
     /// # Returns
     /// A mutable reference to the [`Atom`] contained within.
-    pub fn atom_mut(&mut self) -> &mut Atom<F, S> {
+    pub fn atom_mut(&mut self) -> &mut A {
         match self {
             Self::Atom(a) => a,
             Self::NegAtom(na) => &mut na.atom,
@@ -360,11 +322,11 @@ impl<F, S> Literal<F, S> {
     /// Returns if there are any variables in the nested atom.
     ///
     /// # Returns
-    /// True if there is at least one [`Atom::Var`] recursively, or false otherwise.
+    /// False if there is at least one [`Atom::Var`] recursively, or true otherwise.
     #[inline]
-    pub fn has_vars(&self) -> bool { self.atom().has_vars() }
+    pub fn is_grounded(&self) -> bool { self.atom().is_grounded() }
 }
-impl<F, S: SpannableDisplay> Display for Literal<F, S> {
+impl<A: Display, F, S: SpannableDisplay> Display for Literal<A, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -373,7 +335,6 @@ impl<F, S: SpannableDisplay> Display for Literal<F, S> {
         }
     }
 }
-impl_enum_map!(Literal, Atom(atom), NegAtom(atom));
 
 /// Wraps around an [`Atom`] to express its non-existance.
 ///
@@ -382,23 +343,22 @@ impl_enum_map!(Literal, Atom(atom), NegAtom(atom));
 /// not foo
 /// not foo(bar)
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
-pub struct NegAtom<F, S> {
+pub struct NegAtom<A, F, S> {
     /// The not-token.
     pub not_token: Not<F, S>,
     /// The atom that was negated.
-    pub atom:      Atom<F, S>,
+    pub atom:      A,
 }
-impl<F, S: SpannableDisplay> Display for NegAtom<F, S> {
+impl<A: Display, F, S: SpannableDisplay> Display for NegAtom<A, F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "not ")?;
         self.atom.fmt(f)
     }
 }
-impl_map!(NegAtom, atom);
 
 
 
@@ -410,7 +370,7 @@ impl_map!(NegAtom, atom);
 /// foo(bar, Baz)
 /// Bar
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
 pub enum Atom<F, S> {
@@ -431,59 +391,65 @@ pub enum Atom<F, S> {
     Var(Ident<F, S>),
 }
 impl<F, S> Atom<F, S> {
-    /// Returns if there are any variables in this atom.
+    /// Returns an iterator over the internal arguments.
     ///
     /// # Returns
-    /// True if there is at least one [`Atom::Var`] recursively, or false otherwise.
+    /// Some [`Iterator`] over [`Atom`] (references).
     #[inline]
-    pub fn has_vars(&self) -> bool {
-        match self {
-            Self::Fact(f) => f.has_vars(),
-            Self::Var(_) => true,
-        }
-    }
-
-    /// Returns an iterator over the arguments in this atom, if any.
-    ///
-    /// # Returns
-    /// An [`Iterator`] yielding zero or more arguments.
-    #[inline]
-    pub fn args<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<F, S>> {
+    fn args<'s>(&'s self) -> impl 's + Iterator<Item = &'s Self> {
         match self {
             Self::Fact(f) => Some(f.args.iter().flat_map(|t| t.args.values())).into_iter().flatten(),
             Self::Var(_) => None.into_iter().flatten(),
         }
     }
-    /// Returns an iterator over the arguments in this atom, if any.
+
+    /// Returns an iterator over the internal arguments.
     ///
     /// # Returns
-    /// An [`Iterator`] yielding zero or more mutable references to elements.
+    /// Some [`Iterator`] over [`Atom`] (mutable references).
     #[inline]
-    pub fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> {
+    fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Self> {
         match self {
             Self::Fact(f) => Some(f.args.iter_mut().flat_map(|t| t.args.values_mut())).into_iter().flatten(),
             Self::Var(_) => None.into_iter().flatten(),
         }
     }
-
-    /// Returns an iterator over all variables in this atom, if any.
-    ///
-    /// # Returns
-    /// An [`Iterator`] yielding zero or more [`Ident`]ifiers representing each variable.
+}
+impl<F, S> Atomlike<F, S> for Atom<F, S> {
     #[inline]
-    pub fn vars<'s>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>> {
+    fn is_constant(&self) -> bool {
+        match self {
+            Self::Fact(f) => f.is_constant(),
+            Self::Var(_) => false,
+        }
+    }
+
+    #[inline]
+    fn is_grounded(&self) -> bool {
+        match self {
+            Self::Fact(f) => f.is_grounded(),
+            Self::Var(_) => false,
+        }
+    }
+
+    #[inline]
+    fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>>
+    where
+        'i: 's,
+        Ident<F, S>: 'i,
+    {
         match self {
             Self::Fact(f) => Box::new(f.vars()) as Box<dyn 's + Iterator<Item = &'s Ident<F, S>>>,
             Self::Var(v) => Box::new(Some(v).into_iter()),
         }
     }
-    /// Returns an iterator over all variables in this atom, if any.
-    ///
-    /// # Returns
-    /// An [`Iterator`] yielding zero or more mutable references to [`Ident`]ifiers representing
-    /// each variable.
+
     #[inline]
-    pub fn vars_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>> {
+    fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>>
+    where
+        'i: 's,
+        Ident<F, S>: 'i,
+    {
         match self {
             Self::Fact(f) => Box::new(f.vars_mut()) as Box<dyn 's + Iterator<Item = &'s mut Ident<F, S>>>,
             Self::Var(v) => Box::new(Some(v).into_iter()),
@@ -499,7 +465,6 @@ impl<F, S: SpannableDisplay> Display for Atom<F, S> {
         }
     }
 }
-impl_enum_map!(Atom, Fact(fact), Var(ident));
 
 /// Defines a fact, which is an identifier followed by zero or more arguments.
 ///
@@ -510,7 +475,7 @@ impl_enum_map!(Atom, Fact(fact), Var(ident));
 /// foo
 /// foo(bar, Baz)
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
 pub struct Fact<F, S> {
@@ -520,18 +485,6 @@ pub struct Fact<F, S> {
     pub args:  Option<FactArgs<F, S>>,
 }
 impl<F, S> Fact<F, S> {
-    /// Returns if there are any variables in the argument to this fact, if any.
-    ///
-    /// # Returns
-    /// True if there is at least one [`Atom::Var`] recursively, or false otherwise.
-    #[inline]
-    pub fn has_vars(&self) -> bool {
-        match &self.args {
-            Some(args) => args.has_vars(),
-            None => false,
-        }
-    }
-
     /// Returns an iterator over the arguments in this fact, if any.
     ///
     /// # Returns
@@ -547,29 +500,35 @@ impl<F, S> Fact<F, S> {
     pub fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> {
         self.args.iter_mut().flat_map(|t| t.args.values_mut()).into_iter()
     }
+}
+impl<F, S> Atomlike<F, S> for Fact<F, S> {
+    #[inline]
+    fn is_constant(&self) -> bool { self.args.as_ref().map(|a| a.args.is_empty()).unwrap_or(true) }
 
-    /// Returns an iterator over all variables in the arguments of this fact, if any.
-    ///
-    /// # Returns
-    /// An [`Iterator`] yielding zero or more [`Ident`]ifiers representing each variable.
     #[inline]
-    pub fn vars<'s>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>> {
-        self.args().flat_map(|a| match a {
-            Atom::Fact(f) => Box::new(f.vars()) as Box<dyn 's + Iterator<Item = &'s Ident<F, S>>>,
-            Atom::Var(v) => Box::new(Some(v).into_iter()),
-        })
+    fn is_grounded(&self) -> bool {
+        match &self.args {
+            Some(args) => args.args.values().all(Atomlike::is_grounded),
+            None => false,
+        }
     }
-    /// Returns an iterator over all variables in the arguments of this fact, if any.
-    ///
-    /// # Returns
-    /// An [`Iterator`] yielding zero or more mutable references to  [`Ident`]ifiers representing
-    /// each variable.
+
     #[inline]
-    pub fn vars_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>> {
-        self.args_mut().flat_map(|a| match a {
-            Atom::Fact(f) => Box::new(f.vars_mut()) as Box<dyn 's + Iterator<Item = &'s mut Ident<F, S>>>,
-            Atom::Var(v) => Box::new(Some(v).into_iter()),
-        })
+    fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>>
+    where
+        'i: 's,
+        Ident<F, S>: 'i,
+    {
+        self.args.iter().flat_map(|args| args.args.values().flat_map(Atomlike::vars))
+    }
+
+    #[inline]
+    fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>>
+    where
+        'i: 's,
+        Ident<F, S>: 'i,
+    {
+        self.args.iter_mut().flat_map(|args| args.args.values_mut().flat_map(Atomlike::vars_mut))
     }
 }
 impl<F, S: SpannableDisplay> Display for Fact<F, S> {
@@ -582,9 +541,11 @@ impl<F, S: SpannableDisplay> Display for Fact<F, S> {
         Ok(())
     }
 }
-impl_map!(Fact, ident, args);
 
 /// Defines the (optional) arguments-part of the constructor application.
+///
+/// # Generics
+/// - `A`: Some [atom-like](Atomlike) object that represents an atom.
 ///
 /// # Syntax
 /// ```plain
@@ -596,9 +557,9 @@ pub struct FactArgs<F, S> {
     /// The arguments contained within.
     pub args: Punctuated<Atom<F, S>, Comma<F, S>>,
 }
-// NOTE: We implement `Clone` manually to prevent an endless cycle in deriving that
-// `Punctuated<Atom, Comma>` implements `Clone` (since the question of whether it does depends on
-// `Atom`, which transitively depends on `FactArgs`).
+// NOTE: We implement `Clone`, `Debug`, `Eq`, `Hash` and `PartialEq` manually to prevent an endless
+// cycle in deriving that `Punctuated<Atom, Comma>` implements one of those traits (since the
+// question of whether it does depends on `Atom`, which transitively depends on `FactArgs`).
 impl<F, S> Clone for FactArgs<F, S>
 where
     Span<F, S>: Clone,
@@ -606,9 +567,6 @@ where
     #[inline]
     fn clone(&self) -> Self { Self { paren_tokens: self.paren_tokens.clone(), args: self.args.clone() } }
 }
-// NOTE: We implement `Debug` manually to prevent an endless cycle in deriving that
-// `Punctuated<Atom, Comma>` implements `Debug` (since the question of whether it does depends on
-// `Atom`, which transitively depends on `FactArgs`).
 impl<F, S> std::fmt::Debug for FactArgs<F, S>
 where
     Span<F, S>: std::fmt::Debug,
@@ -622,13 +580,23 @@ where
         fmt.finish()
     }
 }
-impl<F, S> FactArgs<F, S> {
-    /// Returns if there are any variables in the arguments to this fact.
-    ///
-    /// # Returns
-    /// True if there is at least one [`Atom::Var`] recursively, or false otherwise.
+impl<F, S> std::cmp::Eq for FactArgs<F, S> where Span<F, S>: std::cmp::Eq {}
+impl<F, S> std::hash::Hash for FactArgs<F, S>
+where
+    Span<F, S>: std::hash::Hash,
+{
     #[inline]
-    pub fn has_vars(&self) -> bool { self.args.values().any(Atom::has_vars) }
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) { self.args.hash(state); }
+}
+impl<F, S> std::cmp::PartialEq for FactArgs<F, S>
+where
+    Span<F, S>: std::cmp::PartialEq,
+{
+    #[inline]
+    fn eq(&self, other: &Self) -> bool { self.args.values().zip(other.args.values()).all(|(lhs, rhs)| lhs == rhs) }
+
+    #[inline]
+    fn ne(&self, other: &Self) -> bool { self.args.values().zip(other.args.values()).any(|(lhs, rhs)| lhs != rhs) }
 }
 impl<F, S: SpannableDisplay> Display for FactArgs<F, S> {
     #[inline]
@@ -654,12 +622,13 @@ impl<F, S> ToNode for FactArgs<F, S> {
     fn railroad() -> Self::Node {
         rr::Sequence::new(vec![
             Box::new(Parens::<F, S>::railroad_open()),
-            Box::new(rr::Repeat::new(Atom::<F, S>::railroad(), Comma::<F, S>::railroad())),
+            Box::new(rr::Repeat::new(Fact::<F, S>::railroad(), Comma::<F, S>::railroad())),
             Box::new(Parens::<F, S>::railroad_close()),
         ])
     }
 }
-impl_map!(FactArgs, args);
+
+
 
 /// Represents identifiers.
 ///
@@ -667,7 +636,7 @@ impl_map!(FactArgs, args);
 /// ```plain
 /// foo
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad), regex = "^[a-z_][a-z_-]*$"))]
 pub struct Ident<F, S> {
@@ -678,7 +647,6 @@ impl<F, S: SpannableDisplay> Display for Ident<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", self.value) }
 }
-impl_map!(Ident, value);
 
 
 

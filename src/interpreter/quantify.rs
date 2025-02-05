@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 17:58:01
 //  Last edited:
-//    04 Feb 2025, 18:26:34
+//    05 Feb 2025, 17:38:50
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,8 @@ use std::hash::Hash;
 use better_derive::{Clone, Debug};
 use indexmap::IndexSet;
 
-use crate::ast::{Atom, Ident, Rule};
+use crate::ast::{Atom, Atomlike, Ident};
+use crate::safe_ast::{GroundedAtom, SafeRule};
 
 
 /***** LIBRARY *****/
@@ -241,113 +242,113 @@ where
 
 
 
-/// Quantifies over an atom given a Herbrand universe to quantify over.
+// /// Quantifies over an atom given a Herbrand universe to quantify over.
+// #[derive(Clone, Debug)]
+// pub struct AtomQuantifier<'a, F, S, I>
+// where
+//     I: Iterator,
+// {
+//     /// The atom to quantify.
+//     atom: Option<&'a Atom<F, S>>,
+//     /// The names of the variables. Corresponds one-to-one with the values produced by the power-
+//     /// set.
+//     vars: IndexSet<Ident<F, S>>,
+//     /// Defines an iterator over the powerset of the given constants.
+//     iter: PowerSet<I>,
+// }
+// impl<'a, F, S, I> AtomQuantifier<'a, F, S, I>
+// where
+//     I: Clone + ExactSizeIterator + Iterator,
+//     Ident<F, S>: Clone + Eq + Hash,
+// {
+//     /// Constructor for the AtomQuantifier.
+//     ///
+//     /// # Arguments
+//     /// - `atom`: The [`Atom`] to quantify over.
+//     /// - `consts`: The set of constants that make up the Herbrand universe of the spec (i.e., the
+//     ///   space to quantify over).
+//     ///
+//     /// # Returns
+//     /// A new AtomQuantifier, ready to quantify.
+//     pub fn new(atom: &'a Atom<F, S>, consts: impl IntoIterator<IntoIter = I>) -> Self {
+//         // Count the number of unique variables in the atom
+//         let vars: IndexSet<Ident<F, S>> = atom.vars().cloned().collect();
+
+//         // OK, create the powerset based on that
+//         let n_vars: usize = vars.len();
+//         Self { atom: Some(atom), vars, iter: PowerSet::new(consts, n_vars) }
+//     }
+// }
+// impl<'i, 'a, F, S, I> Iterator for AtomQuantifier<'a, F, S, I>
+// where
+//     I: Clone + Iterator<Item = &'i Atom<F, S>>,
+//     I::Item: Clone,
+//     Atom<F, S>: 'i + Clone,
+//     Ident<F, S>: Eq + Hash,
+// {
+//     type Item = Atom<F, S>;
+
+//     #[inline]
+//     fn next(&mut self) -> Option<Self::Item> {
+//         // Special case: if there are no variables, simply return the original atom once
+//         if self.iter.n_vars() == 0 {
+//             return self.atom.take().cloned();
+//         }
+//         let mut atom: Atom<F, S> = self.atom?.clone();
+
+//         // Get a next concretization of all the variables in the rule
+//         let values: Vec<&'i Atom<F, S>> = self.iter.next()?;
+
+//         // Go through the rule to apply it
+//         for arg in atom.args_mut() {
+//             if let Atom::Var(var) = arg {
+//                 // Find which value to take the value of
+//                 let value: &'i Atom<F, S> = values
+//                     .get(
+//                         self.vars
+//                             .get_index_of(var)
+//                             .unwrap_or_else(|| panic!("Unknown variable after already analysing variables; this should never happen!")),
+//                     )
+//                     .unwrap_or_else(|| panic!("Variables list is longer than values list; this should never happen!"));
+
+//                 // Set it as the atom's value
+//                 *arg = value.clone();
+//             }
+//         }
+
+//         // Done!
+//         Some(atom)
+//     }
+
+//     #[inline]
+//     fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+// }
+// impl<'i, 'a, F, S, I> ExactSizeIterator for AtomQuantifier<'a, F, S, I>
+// where
+//     I: Clone + Iterator<Item = &'i Atom<F, S>>,
+//     I::Item: Clone,
+//     Atom<F, S>: 'i + Clone,
+//     Ident<F, S>: Eq + Hash,
+// {
+//     #[inline]
+//     fn len(&self) -> usize { self.iter.len() }
+// }
+
+/// Quantifies over a rule's variables to produce a grounded rule.
 #[derive(Clone, Debug)]
-pub struct AtomQuantifier<'a, F, S, I>
-where
-    I: Iterator,
-{
-    /// The atom to quantify.
-    atom: Option<&'a Atom<F, S>>,
-    /// The names of the variables. Corresponds one-to-one with the values produced by the power-
-    /// set.
-    vars: IndexSet<Ident<F, S>>,
-    /// Defines an iterator over the powerset of the given constants.
-    iter: PowerSet<I>,
-}
-impl<'a, F, S, I> AtomQuantifier<'a, F, S, I>
-where
-    I: Clone + ExactSizeIterator + Iterator,
-    Ident<F, S>: Clone + Eq + Hash,
-{
-    /// Constructor for the AtomQuantifier.
-    ///
-    /// # Arguments
-    /// - `atom`: The [`Atom`] to quantify over.
-    /// - `consts`: The set of constants that make up the Herbrand universe of the spec (i.e., the
-    ///   space to quantify over).
-    ///
-    /// # Returns
-    /// A new AtomQuantifier, ready to quantify.
-    pub fn new(atom: &'a Atom<F, S>, consts: impl IntoIterator<IntoIter = I>) -> Self {
-        // Count the number of unique variables in the atom
-        let vars: IndexSet<Ident<F, S>> = atom.vars().cloned().collect();
-
-        // OK, create the powerset based on that
-        let n_vars: usize = vars.len();
-        Self { atom: Some(atom), vars, iter: PowerSet::new(consts, n_vars) }
-    }
-}
-impl<'i, 'a, F, S, I> Iterator for AtomQuantifier<'a, F, S, I>
-where
-    I: Clone + Iterator<Item = &'i Atom<F, S>>,
-    I::Item: Clone,
-    Atom<F, S>: 'i + Clone,
-    Ident<F, S>: Eq + Hash,
-{
-    type Item = Atom<F, S>;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        // Special case: if there are no variables, simply return the original atom once
-        if self.iter.n_vars() == 0 {
-            return self.atom.take().cloned();
-        }
-        let mut atom: Atom<F, S> = self.atom?.clone();
-
-        // Get a next concretization of all the variables in the rule
-        let values: Vec<&'i Atom<F, S>> = self.iter.next()?;
-
-        // Go through the rule to apply it
-        for arg in atom.args_mut() {
-            if let Atom::Var(var) = arg {
-                // Find which value to take the value of
-                let value: &'i Atom<F, S> = values
-                    .get(
-                        self.vars
-                            .get_index_of(var)
-                            .unwrap_or_else(|| panic!("Unknown variable after already analysing variables; this should never happen!")),
-                    )
-                    .unwrap_or_else(|| panic!("Variables list is longer than values list; this should never happen!"));
-
-                // Set it as the atom's value
-                *arg = value.clone();
-            }
-        }
-
-        // Done!
-        Some(atom)
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
-}
-impl<'i, 'a, F, S, I> ExactSizeIterator for AtomQuantifier<'a, F, S, I>
-where
-    I: Clone + Iterator<Item = &'i Atom<F, S>>,
-    I::Item: Clone,
-    Atom<F, S>: 'i + Clone,
-    Ident<F, S>: Eq + Hash,
-{
-    #[inline]
-    fn len(&self) -> usize { self.iter.len() }
-}
-
-/// Quantifies over a rule given a Herbrand universe to quantify over.
-#[derive(Clone, Debug)]
-pub struct RuleQuantifier<'r, F, S, I>
+pub struct SafeRuleQuantifier<'r, F, S, I>
 where
     I: Iterator,
 {
     /// The rule to quantify.
-    rule: Option<&'r Rule<F, S>>,
+    rule: Option<&'r SafeRule<Atom<F, S>>>,
     /// The names of the variables. Corresponds one-to-one with the values produced by the power-
     /// set.
     vars: IndexSet<Ident<F, S>>,
     /// Defines an iterator over the powerset of the given constants.
     iter: PowerSet<I>,
 }
-impl<'r, F, S, I> RuleQuantifier<'r, F, S, I>
+impl<'r, F, S, I> SafeRuleQuantifier<'r, F, S, I>
 where
     I: Clone + ExactSizeIterator + Iterator,
     Ident<F, S>: Clone + Eq + Hash,
@@ -361,24 +362,24 @@ where
     ///
     /// # Returns
     /// A new RuleQuantifier, ready to quantify.
-    pub fn new(rule: &'r Rule<F, S>, consts: impl IntoIterator<IntoIter = I>) -> Self {
+    pub fn new(rule: &'r SafeRule<Atom<F, S>>, consts: impl IntoIterator<IntoIter = I>) -> Self {
         // Count the number of unique variables in the rule
-        let vars: IndexSet<Ident<F, S>> = rule.atoms().flat_map(Atom::vars).cloned().collect();
+        let vars: IndexSet<Ident<F, S>> = rule.atoms().flat_map(Atomlike::vars).cloned().collect();
 
         // OK, create the powerset based on that
         let n_vars: usize = vars.len();
         Self { rule: Some(rule), vars, iter: PowerSet::new(consts, n_vars) }
     }
 }
-impl<'i, 'r, F, S, I> Iterator for RuleQuantifier<'r, F, S, I>
+impl<'i, 'r, F, S, I> Iterator for SafeRuleQuantifier<'r, F, S, I>
 where
     I: Clone + Iterator<Item = &'i Atom<F, S>>,
     I::Item: Clone,
     Atom<F, S>: Clone,
     Ident<F, S>: Eq + Hash,
-    Rule<F, S>: 'i + Clone,
+    SafeRule<Atom<F, S>>: 'i + Clone,
 {
-    type Item = Rule<F, S>;
+    type Item = SafeRule<GroundedAtom<F, S>>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -386,7 +387,7 @@ where
         if self.iter.n_vars() == 0 {
             return self.rule.take().cloned();
         }
-        let mut rule: Rule<F, S> = self.rule?.clone();
+        let mut rule: SafeRule<Atom<F, S>> = self.rule?.clone();
 
         // Get a next concretization of all the variables in the rule
         let values: Vec<&'i Atom<F, S>> = self.iter.next()?;
@@ -415,13 +416,13 @@ where
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
 }
-impl<'i, 'r, F, S, I> ExactSizeIterator for RuleQuantifier<'r, F, S, I>
+impl<'i, 'r, F, S, I> ExactSizeIterator for SafeRuleQuantifier<'r, F, S, I>
 where
     I: Clone + Iterator<Item = &'i Atom<F, S>>,
     I::Item: Clone,
     Atom<F, S>: Clone,
     Ident<F, S>: Eq + Hash,
-    Rule<F, S>: 'i + Clone,
+    SafeRule<Atom<F, S>>: 'i + Clone,
 {
     #[inline]
     fn len(&self) -> usize { self.iter.len() }
@@ -432,39 +433,21 @@ where
 
 
 /***** IMPLEMENTATIONS *****/
-impl<F, S> Atom<F, S> {
-    /// Convenient way to instantiate an atom for a powerset of the Herbrand universe.
+impl<F, S> SafeRule<Atom<F, S>> {
+    /// Convenient way to instantiate a rule for a powerset of the given atoms.
     ///
     /// # Arguments
-    /// - `consts`: The Herbrand universe to powerset over.
+    /// - `domain`: Some kind of universe of atoms to quantify over.
     ///
     /// # Returns
-    /// An [`AtomQuantifier`] that will produce concrete atoms without variables in them.
+    /// A [`SafeRuleQuantifier`] that will produce concrete rules without variables in them.
     #[inline]
-    pub fn quantify<'r, I>(&'r self, consts: impl IntoIterator<IntoIter = I>) -> AtomQuantifier<'r, F, S, I>
+    pub fn quantify<'r, I>(&'r self, domain: impl IntoIterator<IntoIter = I>) -> SafeRuleQuantifier<'r, F, S, I>
     where
         I: Clone + ExactSizeIterator + Iterator,
         Ident<F, S>: Clone + Eq + Hash,
     {
-        AtomQuantifier::new(self, consts)
-    }
-}
-
-impl<F, S> Rule<F, S> {
-    /// Convenient way to instantiate a rule for a powerset of the Herbrand universe.
-    ///
-    /// # Arguments
-    /// - `consts`: The Herbrand universe to powerset over.
-    ///
-    /// # Returns
-    /// A [`RuleQuantifier`] that will produce concrete rules without variables in them.
-    #[inline]
-    pub fn quantify<'r, I>(&'r self, consts: impl IntoIterator<IntoIter = I>) -> RuleQuantifier<'r, F, S, I>
-    where
-        I: Clone + ExactSizeIterator + Iterator,
-        Ident<F, S>: Clone + Eq + Hash,
-    {
-        RuleQuantifier::new(self, consts)
+        SafeRuleQuantifier::new(self, domain)
     }
 }
 
@@ -476,7 +459,7 @@ impl<F, S> Rule<F, S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{make_atom, make_lit, make_rule};
+    use crate::tests::{make_atom, make_grounded_atom, make_safe_rule};
 
     #[test]
     fn test_cycle_repeat_empty_set() {
@@ -649,147 +632,99 @@ mod tests {
     }
 
     #[test]
-    fn test_atom_quantifier_no_vars_no_args() {
+    fn test_safe_rule_quantifier_no_vars_no_args() {
         #[cfg(feature = "log")]
         crate::tests::setup_logger();
 
         let consts: Vec<Atom<&str, &str>> = vec![make_atom("foo", []), make_atom("bar", []), make_atom("baz", [])];
-        let inst: Vec<Atom<&str, &str>> = make_atom("atom", None).quantify(&consts).collect();
-        assert_eq!(inst, vec![make_atom("atom", None)]);
+        let inst: Vec<SafeRule<GroundedAtom<&str, &str>>> = make_safe_rule([make_atom("atom", [])], [], []).quantify(&consts).collect();
+        assert_eq!(inst, vec![make_safe_rule([make_grounded_atom("atom", [])], [], [])]);
     }
 
     #[test]
-    fn test_atom_quantifier_no_vars_args() {
+    fn test_safe_rule_quantifier_no_vars_args() {
         #[cfg(feature = "log")]
         crate::tests::setup_logger();
 
         let consts: Vec<Atom<&str, &str>> = vec![make_atom("foo", []), make_atom("bar", []), make_atom("baz", [])];
-        let inst: Vec<Atom<&str, &str>> = make_atom("atom", Some("other")).quantify(&consts).collect();
-        assert_eq!(inst, vec![make_atom("atom", Some("other"))]);
+        let inst1: Vec<SafeRule<GroundedAtom<&str, &str>>> = make_safe_rule([make_atom("atom1", ["foo"])], [], []).quantify(&consts).collect();
+        let inst2: Vec<SafeRule<GroundedAtom<&str, &str>>> =
+            make_safe_rule([make_atom("atom2", [])], [make_atom("atom1", [])], []).quantify(&consts).collect();
+        assert_eq!(inst1, vec![make_safe_rule([make_grounded_atom("atom1", ["foo"])], [], [])]);
+        assert_eq!(inst2, vec![make_safe_rule([make_grounded_atom("atom2", [])], [make_grounded_atom("atom1", [])], [])]);
     }
 
     #[test]
-    fn test_atom_quantifier_vars_1() {
+    fn test_safe_rule_quantifier_vars_1() {
         #[cfg(feature = "log")]
         crate::tests::setup_logger();
 
         let consts: Vec<Atom<&str, &str>> = vec![make_atom("foo", []), make_atom("bar", []), make_atom("baz", [])];
-        let inst: Vec<Atom<&str, &str>> = make_atom("atom", ["X"]).quantify(&consts).collect();
-        assert_eq!(inst, vec![make_atom("atom", ["foo"]), make_atom("atom", ["bar"]), make_atom("atom", ["baz"])])
-    }
-
-    #[test]
-    fn test_atom_quantifier_vars_2() {
-        #[cfg(feature = "log")]
-        crate::tests::setup_logger();
-
-        let consts: Vec<Atom<&str, &str>> = vec![make_atom("foo", []), make_atom("bar", []), make_atom("baz", [])];
-        let inst: Vec<Atom<&str, &str>> = make_atom("atom", ["X", "Y"]).quantify(&consts).collect();
-        assert_eq!(inst, vec![
-            make_atom("atom", ["foo", "foo"]),
-            make_atom("atom", ["foo", "bar"]),
-            make_atom("atom", ["foo", "baz"]),
-            make_atom("atom", ["bar", "foo"]),
-            make_atom("atom", ["bar", "bar"]),
-            make_atom("atom", ["bar", "baz"]),
-            make_atom("atom", ["baz", "foo"]),
-            make_atom("atom", ["baz", "bar"]),
-            make_atom("atom", ["baz", "baz"])
-        ])
-    }
-
-    #[test]
-    fn test_rule_quantifier_no_vars_no_args() {
-        #[cfg(feature = "log")]
-        crate::tests::setup_logger();
-
-        let consts: Vec<Atom<&str, &str>> = vec![make_atom("foo", []), make_atom("bar", []), make_atom("baz", [])];
-        let inst: Vec<Rule<&str, &str>> = make_rule([make_atom("atom", None)], None).quantify(&consts).collect();
-        assert_eq!(inst, vec![make_rule([make_atom("atom", None)], None)]);
-    }
-
-    #[test]
-    fn test_rule_quantifier_no_vars_args() {
-        #[cfg(feature = "log")]
-        crate::tests::setup_logger();
-
-        let consts: Vec<Atom<&str, &str>> = vec![make_atom("foo", []), make_atom("bar", []), make_atom("baz", [])];
-        let inst1: Vec<Rule<&str, &str>> = make_rule([make_atom("atom1", Some("foo"))], None).quantify(&consts).collect();
-        let inst2: Vec<Rule<&str, &str>> = make_rule([make_atom("atom2", None)], Some(make_lit(true, "atom1", None))).quantify(&consts).collect();
-        assert_eq!(inst1, vec![make_rule([make_atom("atom1", Some("foo"))], None)]);
-        assert_eq!(inst2, vec![make_rule([make_atom("atom2", None)], Some(make_lit(true, "atom1", None)))]);
-    }
-
-    #[test]
-    fn test_rule_quantifier_vars_1() {
-        #[cfg(feature = "log")]
-        crate::tests::setup_logger();
-
-        let consts: Vec<Atom<&str, &str>> = vec![make_atom("foo", []), make_atom("bar", []), make_atom("baz", [])];
-        let inst1: Vec<Rule<&str, &str>> = make_rule([make_atom("atom1", Some("X"))], None).quantify(&consts).collect();
-        let inst2: Vec<Rule<&str, &str>> =
-            make_rule([make_atom("atom2", None)], Some(make_lit(true, "atom1", Some("Y")))).quantify(&consts).collect();
-        let inst3: Vec<Rule<&str, &str>> =
-            make_rule([make_atom("atom3", Some("Z"))], Some(make_lit(true, "atom1", Some("Z")))).quantify(&consts).collect();
+        let inst1: Vec<SafeRule<GroundedAtom<&str, &str>>> = make_safe_rule([make_atom("atom1", ["X"])], [], []).quantify(&consts).collect();
+        let inst2: Vec<SafeRule<GroundedAtom<&str, &str>>> =
+            make_safe_rule([make_atom("atom2", [])], [make_atom("atom1", ["Y"])], []).quantify(&consts).collect();
+        let inst3: Vec<SafeRule<GroundedAtom<&str, &str>>> =
+            make_safe_rule([make_atom("atom3", ["Z"])], [make_atom("atom1", ["Z"])], []).quantify(&consts).collect();
         assert_eq!(inst1, vec![
-            make_rule([make_atom("atom1", Some("foo"))], None),
-            make_rule([make_atom("atom1", Some("bar"))], None),
-            make_rule([make_atom("atom1", Some("baz"))], None)
+            make_safe_rule([make_grounded_atom("atom1", ["foo"])], [], []),
+            make_safe_rule([make_grounded_atom("atom1", ["bar"])], [], []),
+            make_safe_rule([make_grounded_atom("atom1", ["baz"])], [], [])
         ]);
         assert_eq!(inst2, vec![
-            make_rule([make_atom("atom2", None)], Some(make_lit(true, "atom1", Some("foo")))),
-            make_rule([make_atom("atom2", None)], Some(make_lit(true, "atom1", Some("bar")))),
-            make_rule([make_atom("atom2", None)], Some(make_lit(true, "atom1", Some("baz"))))
+            make_safe_rule([make_grounded_atom("atom2", [])], [make_grounded_atom("atom1", ["foo"])], []),
+            make_safe_rule([make_grounded_atom("atom2", [])], [make_grounded_atom("atom1", ["bar"])], []),
+            make_safe_rule([make_grounded_atom("atom2", [])], [make_grounded_atom("atom1", ["baz"])], [])
         ]);
         assert_eq!(inst3, vec![
-            make_rule([make_atom("atom3", Some("foo"))], Some(make_lit(true, "atom1", Some("foo")))),
-            make_rule([make_atom("atom3", Some("bar"))], Some(make_lit(true, "atom1", Some("bar")))),
-            make_rule([make_atom("atom3", Some("baz"))], Some(make_lit(true, "atom1", Some("baz"))))
+            make_safe_rule([make_grounded_atom("atom3", ["foo"])], [make_grounded_atom("atom1", ["foo"])], []),
+            make_safe_rule([make_grounded_atom("atom3", ["bar"])], [make_grounded_atom("atom1", ["bar"])], []),
+            make_safe_rule([make_grounded_atom("atom3", ["baz"])], [make_grounded_atom("atom1", ["baz"])], [])
         ]);
     }
 
     #[test]
-    fn test_rule_quantifier_vars_2() {
+    fn test_safe_rule_quantifier_vars_2() {
         #[cfg(feature = "log")]
         crate::tests::setup_logger();
 
         let consts: Vec<Atom<&str, &str>> = vec![make_atom("foo", []), make_atom("bar", []), make_atom("baz", [])];
-        let inst1: Vec<Rule<&str, &str>> = make_rule([make_atom("atom1", ["X", "Y"])], None).quantify(&consts).collect();
-        let inst2: Vec<Rule<&str, &str>> = make_rule([make_atom("atom2", ["X"])], Some(make_lit(true, "atom1", ["Y"]))).quantify(&consts).collect();
-        let inst3: Vec<Rule<&str, &str>> =
-            make_rule([make_atom("atom3", ["X", "Y"])], Some(make_lit(true, "atom1", ["Y", "X"]))).quantify(&consts).collect();
+        let inst1: Vec<SafeRule<GroundedAtom<&str, &str>>> = make_safe_rule([make_atom("atom1", ["X", "Y"])], [], []).quantify(&consts).collect();
+        let inst2: Vec<SafeRule<GroundedAtom<&str, &str>>> =
+            make_safe_rule([make_atom("atom2", ["X"])], [make_atom("atom1", ["Y"])], []).quantify(&consts).collect();
+        let inst3: Vec<SafeRule<GroundedAtom<&str, &str>>> =
+            make_safe_rule([make_atom("atom3", ["X", "Y"])], [make_atom("atom1", ["Y", "X"])], []).quantify(&consts).collect();
         assert_eq!(inst1, vec![
-            make_rule([make_atom("atom1", ["foo", "foo"])], None),
-            make_rule([make_atom("atom1", ["foo", "bar"])], None),
-            make_rule([make_atom("atom1", ["foo", "baz"])], None),
-            make_rule([make_atom("atom1", ["bar", "foo"])], None),
-            make_rule([make_atom("atom1", ["bar", "bar"])], None),
-            make_rule([make_atom("atom1", ["bar", "baz"])], None),
-            make_rule([make_atom("atom1", ["baz", "foo"])], None),
-            make_rule([make_atom("atom1", ["baz", "bar"])], None),
-            make_rule([make_atom("atom1", ["baz", "baz"])], None)
+            make_safe_rule([make_grounded_atom("atom1", ["foo", "foo"])], [], []),
+            make_safe_rule([make_grounded_atom("atom1", ["foo", "bar"])], [], []),
+            make_safe_rule([make_grounded_atom("atom1", ["foo", "baz"])], [], []),
+            make_safe_rule([make_grounded_atom("atom1", ["bar", "foo"])], [], []),
+            make_safe_rule([make_grounded_atom("atom1", ["bar", "bar"])], [], []),
+            make_safe_rule([make_grounded_atom("atom1", ["bar", "baz"])], [], []),
+            make_safe_rule([make_grounded_atom("atom1", ["baz", "foo"])], [], []),
+            make_safe_rule([make_grounded_atom("atom1", ["baz", "bar"])], [], []),
+            make_safe_rule([make_grounded_atom("atom1", ["baz", "baz"])], [], [])
         ]);
         assert_eq!(inst2, vec![
-            make_rule([make_atom("atom2", ["foo"])], Some(make_lit(true, "atom1", ["foo"]))),
-            make_rule([make_atom("atom2", ["foo"])], Some(make_lit(true, "atom1", ["bar"]))),
-            make_rule([make_atom("atom2", ["foo"])], Some(make_lit(true, "atom1", ["baz"]))),
-            make_rule([make_atom("atom2", ["bar"])], Some(make_lit(true, "atom1", ["foo"]))),
-            make_rule([make_atom("atom2", ["bar"])], Some(make_lit(true, "atom1", ["bar"]))),
-            make_rule([make_atom("atom2", ["bar"])], Some(make_lit(true, "atom1", ["baz"]))),
-            make_rule([make_atom("atom2", ["baz"])], Some(make_lit(true, "atom1", ["foo"]))),
-            make_rule([make_atom("atom2", ["baz"])], Some(make_lit(true, "atom1", ["bar"]))),
-            make_rule([make_atom("atom2", ["baz"])], Some(make_lit(true, "atom1", ["baz"])))
+            make_safe_rule([make_grounded_atom("atom2", ["foo"])], [make_grounded_atom("atom1", ["foo"])], []),
+            make_safe_rule([make_grounded_atom("atom2", ["foo"])], [make_grounded_atom("atom1", ["bar"])], []),
+            make_safe_rule([make_grounded_atom("atom2", ["foo"])], [make_grounded_atom("atom1", ["baz"])], []),
+            make_safe_rule([make_grounded_atom("atom2", ["bar"])], [make_grounded_atom("atom1", ["foo"])], []),
+            make_safe_rule([make_grounded_atom("atom2", ["bar"])], [make_grounded_atom("atom1", ["bar"])], []),
+            make_safe_rule([make_grounded_atom("atom2", ["bar"])], [make_grounded_atom("atom1", ["baz"])], []),
+            make_safe_rule([make_grounded_atom("atom2", ["baz"])], [make_grounded_atom("atom1", ["foo"])], []),
+            make_safe_rule([make_grounded_atom("atom2", ["baz"])], [make_grounded_atom("atom1", ["bar"])], []),
+            make_safe_rule([make_grounded_atom("atom2", ["baz"])], [make_grounded_atom("atom1", ["baz"])], [])
         ]);
         assert_eq!(inst3, vec![
-            make_rule([make_atom("atom3", ["foo", "foo"])], Some(make_lit(true, "atom1", ["foo", "foo"]))),
-            make_rule([make_atom("atom3", ["foo", "bar"])], Some(make_lit(true, "atom1", ["bar", "foo"]))),
-            make_rule([make_atom("atom3", ["foo", "baz"])], Some(make_lit(true, "atom1", ["baz", "foo"]))),
-            make_rule([make_atom("atom3", ["bar", "foo"])], Some(make_lit(true, "atom1", ["foo", "bar"]))),
-            make_rule([make_atom("atom3", ["bar", "bar"])], Some(make_lit(true, "atom1", ["bar", "bar"]))),
-            make_rule([make_atom("atom3", ["bar", "baz"])], Some(make_lit(true, "atom1", ["baz", "bar"]))),
-            make_rule([make_atom("atom3", ["baz", "foo"])], Some(make_lit(true, "atom1", ["foo", "baz"]))),
-            make_rule([make_atom("atom3", ["baz", "bar"])], Some(make_lit(true, "atom1", ["bar", "baz"]))),
-            make_rule([make_atom("atom3", ["baz", "baz"])], Some(make_lit(true, "atom1", ["baz", "baz"])))
+            make_safe_rule([make_grounded_atom("atom3", ["foo", "foo"])], [make_grounded_atom("atom1", ["foo", "foo"])], []),
+            make_safe_rule([make_grounded_atom("atom3", ["foo", "bar"])], [make_grounded_atom("atom1", ["bar", "foo"])], []),
+            make_safe_rule([make_grounded_atom("atom3", ["foo", "baz"])], [make_grounded_atom("atom1", ["baz", "foo"])], []),
+            make_safe_rule([make_grounded_atom("atom3", ["bar", "foo"])], [make_grounded_atom("atom1", ["foo", "bar"])], []),
+            make_safe_rule([make_grounded_atom("atom3", ["bar", "bar"])], [make_grounded_atom("atom1", ["bar", "bar"])], []),
+            make_safe_rule([make_grounded_atom("atom3", ["bar", "baz"])], [make_grounded_atom("atom1", ["baz", "bar"])], []),
+            make_safe_rule([make_grounded_atom("atom3", ["baz", "foo"])], [make_grounded_atom("atom1", ["foo", "baz"])], []),
+            make_safe_rule([make_grounded_atom("atom3", ["baz", "bar"])], [make_grounded_atom("atom1", ["bar", "baz"])], []),
+            make_safe_rule([make_grounded_atom("atom3", ["baz", "baz"])], [make_grounded_atom("atom1", ["baz", "baz"])], [])
         ]);
     }
 }

@@ -19,14 +19,15 @@ required-features = ["railroad"]
 
 
 [dependencies]
-ast-toolkit = { git = "https://github.com/Lut99/ast-toolkit-rs", features = ["derive", "punctuated", "span", "tokens"] }
-better-derive = { git = "https://github.com/Lut99/better-derive-rs" }
-enum-debug = { git = "https://github.com/Lut99/enum-debug", features = ["derive"] }
 indexmap = "2.7.1"
 itertools = "0.14.0"
 log = { version = "0.4.25", optional = true }
 paste = "1.0.15"
-stackvec = { git = "https://github.com/Lut99/stackvec-rs", optional = true }
+
+ast-toolkit = { git = "https://github.com/Lut99/ast-toolkit-rs", features = ["derive", "punctuated", "span", "tokens"] }
+enum-debug = { git = "https://github.com/Lut99/enum-debug", tag = "v1.1.0", features = ["derive"] }
+better-derive = { git = "https://github.com/Lut99/better-derive-rs", tag = "v1.2.0" }
+# stackvec = { git = "https://github.com/Lut99/stackvec-rs", optional = true }
 
 datalog-macros = { path = "./macros", optional = true }
 
@@ -34,9 +35,10 @@ datalog-macros = { path = "./macros", optional = true }
 [dev-dependencies]
 clap = { version = "4.5.28", features = ["derive"] }
 console = "0.15.10"
+log = "0.4.22"
+
 error-trace = { git = "https://github.com/Lut99/error-trace-rs" }
 humanlog = { git = "https://github.com/Lut99/humanlog-rs" }
-log = "0.4.22"
 
 
 [features]
@@ -44,7 +46,7 @@ default = []
 
 transitions = ["datalog-macros/transitions"]
 
-interpreter = ["dep:stackvec"]
+interpreter = []
 parser = ["ast-toolkit/snack"]
 
 macros = ["dep:datalog-macros"]

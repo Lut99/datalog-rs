@@ -4,7 +4,7 @@
 //  Created:
 //    03 May 2024, 13:42:38
 //  Last edited:
-//    28 Nov 2024, 17:34:10
+//    05 Feb 2025, 17:21:18
 //  Auto updated?
 //    Yes
 //
@@ -26,7 +26,7 @@ use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
 use ast_toolkit::snack::{Combinator as _, Result as SResult};
 use ast_toolkit::span::{Span, Spannable};
 
-use crate::ast::Spec;
+use crate::ast::{Atom, Spec};
 
 
 /***** ERRORS *****/
@@ -50,7 +50,7 @@ pub type Error<F, S> = ast_toolkit::snack::error::Error<'static, F, S, specs::Pa
 /// # Errors
 /// This function returns an [`Error`] if the given `input` was not a valid $Datalog^\neg$-program.
 #[inline]
-pub fn parse<F, S>(what: F, source: S) -> Result<Spec<F, S>, Error<F, S>>
+pub fn parse<F, S>(what: F, source: S) -> Result<Spec<Atom<F, S>, F, S>, Error<F, S>>
 where
     F: Clone,
     S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + Spannable + WhileUtf8,
