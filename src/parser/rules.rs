@@ -4,7 +4,7 @@
 //  Created:
 //    07 May 2024, 16:38:16
 //  Last edited:
-//    05 Feb 2025, 17:21:31
+//    06 Feb 2025, 10:20:07
 //  Auto updated?
 //    Yes
 //
@@ -206,7 +206,7 @@ where
 /// assert!(matches!(comb.parse(span5), SResult::Fail(Failure::Common(Common::PunctuatedList1 { .. }))));
 /// ```
 #[inline]
-#[comb(snack = ::ast_toolkit::snack, expected = "a rule", Output = ast::Rule<ast::Atom<F, S>, F, S>, Error = ParseError<F, S>)]
+#[comb(snack = ::ast_toolkit::snack, expected = "a rule", Output = ast::Rule<F, S>, Error = ParseError<F, S>)]
 pub fn rule<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,
@@ -311,7 +311,7 @@ where
 /// ));
 /// ```
 #[inline]
-#[comb(snack = ::ast_toolkit::snack, expected = "an arrow symbol followed by antecedents", Output = ast::RuleAntecedents<ast::Atom<F, S>, F, S>, Error = ParseError<F, S>)]
+#[comb(snack = ::ast_toolkit::snack, expected = "an arrow symbol followed by antecedents", Output = ast::RuleAntecedents<F, S>, Error = ParseError<F, S>)]
 pub fn rule_antecedents<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,

@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 14:32:43
 //  Last edited:
-//    05 Feb 2025, 17:36:16
+//    06 Feb 2025, 16:45:46
 //  Auto updated?
 //    Yes
 //
@@ -15,7 +15,7 @@
 #![allow(unused)]
 
 use crate::ast::{Arrow, Atom, Comma, Dot, Fact, FactArgs, Ident, Literal, NegAtom, Not, Parens, Punctuated, Rule, RuleAntecedents, Span};
-use crate::safe_ast::{GroundedAtom, SafeRule};
+use crate::ir;
 #[cfg(feature = "transitions")]
 use crate::transitions::ast::Curly;
 
@@ -39,19 +39,44 @@ pub fn setup_logger() {
 
 
 
-/// Makes a [`SafeRule`] conveniently.
-pub fn make_safe_rule<A>(
+/// Makes an [`ir::Rule`] conveniently.
+pub fn make_ir_rule<A>(
     consequents: impl IntoIterator<Item = A>,
     pos_antecedents: impl IntoIterator<Item = A>,
     neg_antecedents: impl IntoIterator<Item = A>,
-) -> SafeRule<A> {
+) -> ir::Rule<A> {
     // Convert the consequents and antecedents first
     let consequents: Vec<A> = consequents.into_iter().collect();
     let pos_antecedents: Vec<A> = pos_antecedents.into_iter().collect();
     let neg_antecedents: Vec<A> = neg_antecedents.into_iter().collect();
 
     // Now build the rule
-    SafeRule { consequents, pos_antecedents, neg_antecedents }
+    ir::Rule { consequents, pos_antecedents, neg_antecedents }
+}
+
+/// Makes an [`ir::Atom`] conveniently.
+pub fn make_ir_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> ir::Atom<&'static str, &'static str> {
+    // Make the punctuation
+    let mut vals: Vec<ir::Atom<&'static str, &'static str>> = Vec::new();
+    for arg in args {
+        // Either push as atom or as variable
+        vals.push(if arg.chars().next().unwrap_or_else(|| panic!("Empty argument given")).is_uppercase() {
+            ir::Atom::Var(Ident { value: Span::new("make_ir_atom::var", arg) })
+        } else {
+            ir::Atom::Fact(ir::Fact { ident: Ident { value: Span::new("make_ir_atom::arg", arg) }, args: vec![] })
+        })
+    }
+
+    // Make the atom
+    ir::Atom::Fact(ir::Fact { ident: Ident { value: Span::new("make_ir_atom::name", name) }, args: vals })
+}
+
+/// Makes an [`ir::GroundAtom`] conveniently.
+pub fn make_ir_ground_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> ir::GroundAtom<&'static str, &'static str> {
+    ir::GroundAtom {
+        ident: Ident { value: Span::new("make_ir_ground_atom::name", name) },
+        args:  args.into_iter().map(|a| ir::GroundAtom { ident: Ident { value: Span::new("make_ir_ground_atom::arg", a) }, args: vec![] }).collect(),
+    }
 }
 
 
@@ -59,12 +84,11 @@ pub fn make_safe_rule<A>(
 /// Makes a [`Rule`] conveniently.
 pub fn make_rule(
     consequents: impl IntoIterator<Item = Atom<&'static str, &'static str>>,
-    antecedents: impl IntoIterator<Item = Literal<Atom<&'static str, &'static str>, &'static str, &'static str>>,
-) -> Rule<Atom<&'static str, &'static str>, &'static str, &'static str> {
+    antecedents: impl IntoIterator<Item = Literal<&'static str, &'static str>>,
+) -> Rule<&'static str, &'static str> {
     // Convert the consequents and antecedents first
     let consequents: Punctuated<Atom<&'static str, &'static str>, Comma<&'static str, &'static str>> = consequents.into_iter().collect();
-    let antecedents: Punctuated<Literal<Atom<&'static str, &'static str>, &'static str, &'static str>, Comma<&'static str, &'static str>> =
-        antecedents.into_iter().collect();
+    let antecedents: Punctuated<Literal<&'static str, &'static str>, Comma<&'static str, &'static str>> = antecedents.into_iter().collect();
 
     // Now build the rule
     Rule {
@@ -78,12 +102,10 @@ pub fn make_rule(
     }
 }
 
+
+
 /// Makes a [`Literal`] conveniently.
-pub fn make_lit(
-    polarity: bool,
-    name: &'static str,
-    args: impl IntoIterator<Item = &'static str>,
-) -> Literal<Atom<&'static str, &'static str>, &'static str, &'static str> {
+pub fn make_lit(polarity: bool, name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Literal<&'static str, &'static str> {
     if polarity {
         Literal::Atom(make_atom(name, args))
     } else {
@@ -126,18 +148,7 @@ pub fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str
     })
 }
 
-/// Makes an [`GroundedAtom`] conveniently.
-#[track_caller]
-pub fn make_grounded_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> GroundedAtom<&'static str, &'static str> {
-    // Make the punctuation
-    let mut atoms: Vec<GroundedAtom<&'static str, &'static str>> = Vec::new();
-    for (i, arg) in args.into_iter().enumerate() {
-        atoms.push(GroundedAtom { ident: Ident { value: Span::new("make_grounded_atom::ident", arg) }, args: vec![] });
-    }
 
-    // Make the atom
-    GroundedAtom { ident: Ident { value: Span::new("make_atom::name", name) }, args: atoms }
-}
 
 /// Makes an [`Ident`] conveniently.
 pub fn make_ident(value: &'static str) -> Ident<&'static str, &'static str> {

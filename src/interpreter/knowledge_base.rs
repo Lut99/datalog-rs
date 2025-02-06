@@ -4,7 +4,7 @@
 //  Created:
 //    03 Feb 2025, 17:11:26
 //  Last edited:
-//    05 Feb 2025, 17:39:11
+//    06 Feb 2025, 17:44:25
 //  Auto updated?
 //    Yes
 //
@@ -23,7 +23,7 @@ use std::hash::Hash;
 use better_derive::{Clone, Debug};
 
 use crate::ast::{Atom, Ident, Span};
-use crate::safe_ast::SafeRule;
+use crate::ir::Rule;
 
 
 /***** LIBRARY *****/
@@ -86,9 +86,7 @@ where
 // Reasoning
 impl<'s, F, S> KnowledgeBase<'s, F, S>
 where
-    Atom<F, S>: Clone,
     Ident<F, S>: Eq + Hash,
-    SafeRule<Atom<F, S>>: Clone,
     Span<F, S>: Clone,
 {
     /// Updates the knowledge base with the consequents of the given rule if the rule's antecedents
@@ -98,7 +96,7 @@ where
     ///
     /// # Arguments
     /// - `rule`: Some rule to potentially concretize and potentially apply.
-    pub fn update(&mut self, rule: &'s SafeRule<Atom<F, S>>) {
+    pub fn update(&mut self, rule: &'s Rule<Atom<F, S>>) {
         // Concretize the rule first using the atoms that are true.
         for rule in rule.quantify(self.truths.iter().map(|i| self.universe[*i].as_ref())) {}
     }

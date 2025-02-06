@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    04 Feb 2025, 17:28:33
+//    06 Feb 2025, 10:21:54
 //  Auto updated?
 //    Yes
 //
@@ -13,17 +13,15 @@
 //
 
 use std::fmt::{Display, Formatter, Result as FResult};
-use std::hash::{Hash, Hasher};
 
 use ast_toolkit::punctuated::Punctuated;
 #[cfg(feature = "railroad")]
 use ast_toolkit::railroad::{ToDelimNode, ToNode, ToNonTerm, railroad as rr};
 use ast_toolkit::span::SpannableDisplay;
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
-use better_derive::{Clone, Copy, Debug};
-use paste::paste;
+use better_derive::{Clone, Copy, Debug, Eq, Hash, PartialEq};
 
-use crate::ast::{Atom, Comma, Dot, Ident, Rule, RuleAntecedents, impl_enum_map, impl_map};
+use crate::ast::{Atom, Comma, Dot, Ident, Rule, RuleAntecedents};
 
 
 /***** HELPERS *****/
@@ -49,7 +47,7 @@ fn railroad_trans_ident() -> Box<dyn rr::Node> {
 /// foo :- bar, baz(quz).
 /// foo.
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "railroad", derive(ToNonTerm))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
 pub struct TransitionSpec<F, S> {
@@ -66,7 +64,6 @@ impl<F, S: SpannableDisplay> Display for TransitionSpec<F, S> {
         Ok(())
     }
 }
-impl_map!(TransitionSpec, phrases);
 
 /// Specifies a single phrase.
 ///
@@ -79,7 +76,7 @@ impl_map!(TransitionSpec, phrases);
 /// !{ #foo }.
 /// foo :- bar, baz(quz).
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
 pub enum Phrase<F, S> {
@@ -103,7 +100,6 @@ impl<F, S: SpannableDisplay> Display for Phrase<F, S> {
         }
     }
 }
-impl_enum_map!(Phrase, Postulation(nested), Rule(nested), Transition(nested), Trigger(nested));
 
 
 
@@ -114,7 +110,7 @@ impl_enum_map!(Phrase, Postulation(nested), Rule(nested), Transition(nested), Tr
 /// +{ foo }.
 /// ~{ bar } :- baz(quz).
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Postulation<F, S> {
     /// The operator.
     pub op: PostulationOp<F, S>,
@@ -183,10 +179,9 @@ impl<F, S> ToNode for Postulation<F, S> {
         ])
     }
 }
-impl_map!(Postulation, consequents, tail);
 
 /// Specifies the possible postulation types.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
 pub enum PostulationOp<F, S> {
@@ -204,7 +199,6 @@ impl<F, S> Display for PostulationOp<F, S> {
         }
     }
 }
-impl_enum_map!(PostulationOp, Create(op), Obfuscate(op));
 
 
 
@@ -217,7 +211,7 @@ impl_enum_map!(PostulationOp, Create(op), Obfuscate(op));
 ///     ~{ bar } :- baz(quz).
 /// }.
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Transition<F, S> {
     /// The identifier of the transition.
     pub ident: Ident<F, S>,
@@ -265,7 +259,6 @@ impl<F, S> ToNode for Transition<F, S> {
         ])
     }
 }
-impl_map!(Transition, ident, postulations);
 
 
 
@@ -275,7 +268,7 @@ impl_map!(Transition, ident, postulations);
 /// ```plain
 /// !{ #foo }.
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Trigger<F, S> {
     /// The exclamation mark.
     pub exclaim_token: Exclaim<F, S>,
@@ -320,7 +313,6 @@ impl<F, S> ToNode for Trigger<F, S> {
         ])
     }
 }
-impl_map!(Trigger, idents);
 
 
 
