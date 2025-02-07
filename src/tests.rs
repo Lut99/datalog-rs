@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 14:32:43
 //  Last edited:
-//    06 Feb 2025, 16:45:46
+//    07 Feb 2025, 17:18:58
 //  Auto updated?
 //    Yes
 //
@@ -14,8 +14,9 @@
 
 #![allow(unused)]
 
-use crate::ast::{Arrow, Atom, Comma, Dot, Fact, FactArgs, Ident, Literal, NegAtom, Not, Parens, Punctuated, Rule, RuleAntecedents, Span};
-use crate::ir;
+use crate::ast::{Arrow, Atom, Comma, Dot, Fact, FactArgs, Ident, Literal, NegAtom, Not, Parens, Punctuated, Rule, RuleBody, Span};
+#[cfg(feature = "interpreter")]
+use crate::interpreter::ir;
 #[cfg(feature = "transitions")]
 use crate::transitions::ast::Curly;
 
@@ -40,6 +41,7 @@ pub fn setup_logger() {
 
 
 /// Makes an [`ir::Rule`] conveniently.
+#[cfg(feature = "interpreter")]
 pub fn make_ir_rule<A>(
     consequents: impl IntoIterator<Item = A>,
     pos_antecedents: impl IntoIterator<Item = A>,
@@ -55,6 +57,7 @@ pub fn make_ir_rule<A>(
 }
 
 /// Makes an [`ir::Atom`] conveniently.
+#[cfg(feature = "interpreter")]
 pub fn make_ir_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> ir::Atom<&'static str, &'static str> {
     // Make the punctuation
     let mut vals: Vec<ir::Atom<&'static str, &'static str>> = Vec::new();
@@ -72,6 +75,7 @@ pub fn make_ir_atom(name: &'static str, args: impl IntoIterator<Item = &'static 
 }
 
 /// Makes an [`ir::GroundAtom`] conveniently.
+#[cfg(feature = "interpreter")]
 pub fn make_ir_ground_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> ir::GroundAtom<&'static str, &'static str> {
     ir::GroundAtom {
         ident: Ident { value: Span::new("make_ir_ground_atom::name", name) },
@@ -94,7 +98,7 @@ pub fn make_rule(
     Rule {
         consequents,
         tail: if !antecedents.is_empty() {
-            Some(RuleAntecedents { arrow_token: Arrow { span: Span::new("make_rule::arrow", ":-") }, antecedents })
+            Some(RuleBody { arrow_token: Arrow { span: Span::new("make_rule::arrow", ":-") }, antecedents })
         } else {
             None
         },

@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 15:45:02
 //  Last edited:
-//    03 Feb 2025, 19:33:25
+//    07 Feb 2025, 17:44:40
 //  Auto updated?
 //    Yes
 //
@@ -130,7 +130,7 @@ where
 /// use ast_toolkit::punctuated::punct;
 /// use ast_toolkit::snack::Combinator as _;
 /// use ast_toolkit::span::Span;
-/// use datalog::ast::{Arrow, Atom, Fact, FactArgs, Comma, Dot, Ident, Literal, Parens, Rule, RuleAntecedents};
+/// use datalog::ast::{Arrow, Atom, Fact, FactArgs, Comma, Dot, Ident, Literal, Parens, Rule, RuleBody};
 /// use datalog::transitions::ast::{Add, Curly, Exclaim, Phrase, Postulation, PostulationOp, Squiggly, Transition, TransitionSpec, Trigger};
 /// use datalog::transitions::parser::specs::{ParseError, trans_spec};
 ///
@@ -165,7 +165,7 @@ where
 ///                             op: PostulationOp::Obfuscate(Squiggly { span: span1.slice(25..26) }),
 ///                             curly_tokens: Curly { open: span1.slice(26..27), close: span1.slice(32..33) },
 ///                             consequents: punct![v => Atom::Fact(Fact { ident: Ident { value: span1.slice(28..31) }, args: None })],
-///                             tail: Some(RuleAntecedents {
+///                             tail: Some(RuleBody {
 ///                                 arrow_token: Arrow { span: span1.slice(34..36) },
 ///                                 antecedents: punct![v => Literal::Atom(Atom::Fact(Fact {
 ///                                     ident: Ident { value: span1.slice(37..40) },
@@ -198,7 +198,7 @@ where
 ///                 }),
 ///                 Phrase::Rule(Rule {
 ///                     consequents: punct![v => Atom::Fact(Fact { ident: Ident { value: span1.slice(71..74) }, args: None })],
-///                     tail: Some(RuleAntecedents {
+///                     tail: Some(RuleBody {
 ///                         arrow_token: Arrow { span: span1.slice(75..77) },
 ///                         antecedents: punct![
 ///                             v => Literal::Atom(Atom::Fact(Fact {
@@ -254,7 +254,7 @@ where
 /// use ast_toolkit::punctuated::punct;
 /// use ast_toolkit::snack::Combinator as _;
 /// use ast_toolkit::span::Span;
-/// use datalog::ast::{Arrow, Atom, Fact, FactArgs, Comma, Dot, Ident, Literal, Parens, Rule, RuleAntecedents};
+/// use datalog::ast::{Arrow, Atom, Fact, FactArgs, Comma, Dot, Ident, Literal, Parens, Rule, RuleBody};
 /// use datalog::transitions::ast::{Add, Curly, Exclaim, Phrase, Postulation, PostulationOp, Squiggly, Transition, Trigger};
 /// use datalog::transitions::parser::specs::{ParseError, phrase};
 ///
@@ -283,7 +283,7 @@ where
 ///                     op: PostulationOp::Obfuscate(Squiggly { span: span1.slice(25..26) }),
 ///                     curly_tokens: Curly { open: span1.slice(26..27), close: span1.slice(32..33) },
 ///                     consequents: punct![v => Atom::Fact(Fact { ident: Ident { value: span1.slice(28..31) }, args: None })],
-///                     tail: Some(RuleAntecedents {
+///                     tail: Some(RuleBody {
 ///                         arrow_token: Arrow { span: span1.slice(34..36) },
 ///                         antecedents: punct![v => Literal::Atom(Atom::Fact(Fact {
 ///                             ident: Ident { value: span1.slice(37..40) },
@@ -326,7 +326,7 @@ where
 ///     comb.parse(span4).unwrap(),
 ///     (span4.slice(21..), Phrase::Rule(Rule {
 ///         consequents: punct![v => Atom::Fact(Fact { ident: Ident { value: span4.slice(..3) }, args: None })],
-///         tail: Some(RuleAntecedents {
+///         tail: Some(RuleBody {
 ///             arrow_token: Arrow { span: span4.slice(4..6) },
 ///             antecedents: punct![
 ///                 v => Literal::Atom(Atom::Fact(Fact {

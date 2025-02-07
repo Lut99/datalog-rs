@@ -4,7 +4,7 @@
 //  Created:
 //    07 May 2024, 16:38:16
 //  Last edited:
-//    06 Feb 2025, 10:20:07
+//    07 Feb 2025, 17:19:28
 //  Auto updated?
 //    Yes
 //
@@ -138,7 +138,7 @@ where
 /// use ast_toolkit::span::Span;
 /// use datalog::ast::{
 ///     Arrow, Atom, Fact, FactArgs, Dot, Comma, Ident, Literal, NegAtom, Not, Parens, Rule,
-///     RuleAntecedents,
+///     RuleBody,
 /// };
 /// use datalog::parser::rules::{rule, ParseError};
 ///
@@ -156,7 +156,7 @@ where
 ///             args: None,
 ///         })
 ///     ],
-///     tail: Some(RuleAntecedents {
+///     tail: Some(RuleBody {
 ///         arrow_token: Arrow { span: span1.slice(4..6) },
 ///         antecedents: punct![v => Literal::Atom(Atom::Fact(Fact { ident: Ident { value: span1.slice(7..10) }, args: None }))],
 ///     }),
@@ -190,7 +190,7 @@ where
 ///             }),
 ///         })
 ///     ],
-///     tail: Some(RuleAntecedents {
+///     tail: Some(RuleBody {
 ///         arrow_token: Arrow { span: span3.slice(9..11) },
 ///         antecedents: punct![v => Literal::Atom(Atom::Fact(Fact {
 ///             ident: Ident { value: span3.slice(12..15) },
@@ -228,7 +228,7 @@ where
             comb::map_err(tokens::comma(), |err| ParseError::Comma { span: err.into_span() }),
         ),
         error::transmute(whitespaces::whitespace()),
-        comb::opt(rule_antecedents()),
+        comb::opt(rule_body()),
         error::transmute(whitespaces::whitespace()),
         comb::map_err(tokens::dot(), |err| ParseError::Dot { span: err.into_span() }),
     ))
@@ -240,7 +240,7 @@ where
     }
 }
 
-/// Parses the antecedent-part of a rule.
+/// Parses the body-part of a rule.
 ///
 /// # Returns
 /// A combinator that parses `:-`, then a punctuated list of atoms.
@@ -255,26 +255,26 @@ where
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
 /// use datalog::ast::{
-///     Arrow, Atom, Fact, FactArgs, Comma, Ident, Literal, NegAtom, Not, Parens, RuleAntecedents,
+///     Arrow, Atom, Fact, FactArgs, Comma, Ident, Literal, NegAtom, Not, Parens, RuleBody,
 /// };
-/// use datalog::parser::rules::{rule_antecedents, ParseError};
+/// use datalog::parser::rules::{rule_body, ParseError};
 ///
 /// let span1 = Span::new("<example>", ":- foo");
 /// let span2 = Span::new("<example>", ":- not foo(), bar(baz)");
 /// let span3 = Span::new("<example>", "foo");
 /// let span4 = Span::new("<example>", ":-");
 ///
-/// let mut comb = rule_antecedents();
+/// let mut comb = rule_body();
 /// assert_eq!(
 ///     comb.parse(span1).unwrap(),
-///     (span1.slice(6..), RuleAntecedents {
+///     (span1.slice(6..), RuleBody {
 ///         arrow_token: Arrow { span: span1.slice(..2) },
 ///         antecedents: punct![v => Literal::Atom(Atom::Fact(Fact { ident: Ident { value: span1.slice(3..6) }, args: None }))],
 ///     }),
 /// );
 /// assert_eq!(
 ///     comb.parse(span2).unwrap(),
-///     (span2.slice(22..), RuleAntecedents {
+///     (span2.slice(22..), RuleBody {
 ///         arrow_token: Arrow { span: span2.slice(..2) },
 ///         antecedents: punct![
 ///             v => Literal::NegAtom(NegAtom {
@@ -311,8 +311,8 @@ where
 /// ));
 /// ```
 #[inline]
-#[comb(snack = ::ast_toolkit::snack, expected = "an arrow symbol followed by antecedents", Output = ast::RuleAntecedents<F, S>, Error = ParseError<F, S>)]
-pub fn rule_antecedents<F, S>(input: Span<F, S>) -> _
+#[comb(snack = ::ast_toolkit::snack, expected = "an arrow symbol followed by antecedents", Output = ast::RuleBody<F, S>, Error = ParseError<F, S>)]
+pub fn rule_body<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,
     S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + WhileUtf8,
@@ -339,7 +339,7 @@ where
     )
     .parse(input)
     {
-        SResult::Ok(rem, (arrow_token, antecedents)) => SResult::Ok(rem, ast::RuleAntecedents { arrow_token, antecedents }),
+        SResult::Ok(rem, (arrow_token, antecedents)) => SResult::Ok(rem, ast::RuleBody { arrow_token, antecedents }),
         SResult::Fail(fail) => SResult::Fail(fail),
         SResult::Error(err) => SResult::Error(err),
     }

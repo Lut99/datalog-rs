@@ -4,7 +4,7 @@
 //  Created:
 //    26 Mar 2024, 19:36:31
 //  Last edited:
-//    06 Feb 2025, 10:19:32
+//    07 Feb 2025, 16:30:36
 //  Auto updated?
 //    Yes
 //
@@ -26,6 +26,7 @@
 
 // Nested modules
 mod interpretation_old;
+pub mod ir;
 pub mod knowledge_base;
 pub mod quantify;
 

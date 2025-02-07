@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 11:01:38
 //  Last edited:
-//    03 Feb 2025, 19:34:02
+//    07 Feb 2025, 17:44:45
 //  Auto updated?
 //    Yes
 //
@@ -140,7 +140,7 @@ where
 /// use ast_toolkit::snack::error::{Common, Error, Failure};
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
-/// use datalog::ast::{Arrow, Atom, Fact, Comma, Dot, Ident, Literal, Parens, Rule, RuleAntecedents};
+/// use datalog::ast::{Arrow, Atom, Fact, Comma, Dot, Ident, Literal, Parens, Rule, RuleBody};
 /// use datalog::transitions::ast::{Add, Curly, Postulation, PostulationOp, Squiggly, Transition};
 /// use datalog::transitions::parser::transitions::{transition, ParseError};
 ///

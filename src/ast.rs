@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    06 Feb 2025, 15:51:31
+//    07 Feb 2025, 17:43:04
 //  Auto updated?
 //    Yes
 //
@@ -108,7 +108,7 @@ pub struct Rule<F, S> {
     /// A list of consequents (i.e., instances produced by this rule).
     pub consequents: Punctuated<Atom<F, S>, Comma<F, S>>,
     /// An optional second part that describes the antecedents.
-    pub tail: Option<RuleAntecedents<F, S>>,
+    pub tail: Option<RuleBody<F, S>>,
     /// The closing dot after each rule.
     pub dot: Dot<F, S>,
 }
@@ -119,7 +119,7 @@ impl<F, S> Rule<F, S> {
     /// An [`Iterator`] yielding zero or more atoms.
     #[inline]
     pub fn atoms<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<F, S>> {
-        self.consequents.values().chain(self.tail.iter().flat_map(RuleAntecedents::atoms))
+        self.consequents.values().chain(self.tail.iter().flat_map(RuleBody::atoms))
     }
 
     /// Returns an iterator over the atoms in the rule's consequents and antecedents, if any.
@@ -128,7 +128,7 @@ impl<F, S> Rule<F, S> {
     /// An [`Iterator`] yielding zero or more mutable references to atoms.
     #[inline]
     pub fn atoms_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> {
-        self.consequents.values_mut().chain(self.tail.iter_mut().flat_map(RuleAntecedents::atoms_mut))
+        self.consequents.values_mut().chain(self.tail.iter_mut().flat_map(RuleBody::atoms_mut))
     }
 }
 impl<F, S: SpannableDisplay> Display for Rule<F, S> {
@@ -157,7 +157,7 @@ impl<F, S> ToNode for Rule<F, S> {
     fn railroad() -> Self::Node {
         rr::Sequence::new(vec![
             Box::new(rr::Repeat::new(Atom::<F, S>::railroad(), Comma::<F, S>::railroad())),
-            Box::new(rr::Optional::new(RuleAntecedents::<F, S>::railroad())),
+            Box::new(rr::Optional::new(RuleBody::<F, S>::railroad())),
             Box::new(Dot::<F, S>::railroad()),
         ])
     }
@@ -170,13 +170,13 @@ impl<F, S> ToNode for Rule<F, S> {
 /// :- foo, bar(baz)
 /// ```
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct RuleAntecedents<F, S> {
+pub struct RuleBody<F, S> {
     /// The arrow token.
     pub arrow_token: Arrow<F, S>,
     /// The list of antecedents.
     pub antecedents: Punctuated<Literal<F, S>, Comma<F, S>>,
 }
-impl<F, S> RuleAntecedents<F, S> {
+impl<F, S> RuleBody<F, S> {
     /// Returns an iterator over the atoms in the rule's antecedents, if any.
     ///
     /// # Returns
@@ -191,7 +191,7 @@ impl<F, S> RuleAntecedents<F, S> {
     #[inline]
     pub fn atoms_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> { self.antecedents.values_mut().map(Literal::atom_mut) }
 }
-impl<F, S: SpannableDisplay> Display for RuleAntecedents<F, S> {
+impl<F, S: SpannableDisplay> Display for RuleBody<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, " :- ")?;
@@ -208,7 +208,7 @@ impl<F, S: SpannableDisplay> Display for RuleAntecedents<F, S> {
     }
 }
 #[cfg(feature = "railroad")]
-impl<F, S> ToNode for RuleAntecedents<F, S> {
+impl<F, S> ToNode for RuleBody<F, S> {
     type Node = rr::Sequence<Box<dyn rr::Node>>;
 
     #[inline]
@@ -358,7 +358,7 @@ impl<F, S> Atom<F, S> {
     /// # Returns
     /// False if it has, true if it hasn't.
     #[inline]
-    fn is_constant(&self) -> bool {
+    pub fn is_constant(&self) -> bool {
         match self {
             Self::Fact(f) => f.is_constant(),
             Self::Var(_) => false,
@@ -370,7 +370,7 @@ impl<F, S> Atom<F, S> {
     /// # Returns
     /// Some [`Iterator`] over [`Atom`] (references).
     #[inline]
-    fn args<'s>(&'s self) -> impl 's + Iterator<Item = &'s Self> {
+    pub fn args<'s>(&'s self) -> impl 's + Iterator<Item = &'s Self> {
         match self {
             Self::Fact(f) => Some(f.args.iter().flat_map(|t| t.args.values())).into_iter().flatten(),
             Self::Var(_) => None.into_iter().flatten(),
@@ -382,7 +382,7 @@ impl<F, S> Atom<F, S> {
     /// # Returns
     /// Some [`Iterator`] over [`Atom`] (mutable references).
     #[inline]
-    fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Self> {
+    pub fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Self> {
         match self {
             Self::Fact(f) => Some(f.args.iter_mut().flat_map(|t| t.args.values_mut())).into_iter().flatten(),
             Self::Var(_) => None.into_iter().flatten(),
@@ -396,7 +396,7 @@ impl<F, S> Atom<F, S> {
     /// # Returns
     /// False if it has, true if it hasn't.
     #[inline]
-    fn is_grounded(&self) -> bool {
+    pub fn is_grounded(&self) -> bool {
         match self {
             Self::Fact(f) => f.is_grounded(),
             Self::Var(_) => false,
@@ -408,7 +408,7 @@ impl<F, S> Atom<F, S> {
     /// # Returns
     /// Some [`Iterator`] over [`Ident`] (references).
     #[inline]
-    fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>>
+    pub fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>>
     where
         'i: 's,
         Ident<F, S>: 'i,
@@ -424,7 +424,7 @@ impl<F, S> Atom<F, S> {
     /// # Returns
     /// Some [`Iterator`] over [`Ident`] (mutable references).
     #[inline]
-    fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>>
+    pub fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>>
     where
         'i: 's,
         Ident<F, S>: 'i,
@@ -471,7 +471,7 @@ impl<F, S> Fact<F, S> {
     /// # Returns
     /// False if it has, true if it hasn't.
     #[inline]
-    fn is_constant(&self) -> bool { self.args.as_ref().map(|a| a.args.is_empty()).unwrap_or(true) }
+    pub fn is_constant(&self) -> bool { self.args.as_ref().map(|a| a.args.is_empty()).unwrap_or(true) }
 
     /// Returns an iterator over the arguments in this fact, if any.
     ///
@@ -496,7 +496,7 @@ impl<F, S> Fact<F, S> {
     /// # Returns
     /// False if it has, true if it hasn't.
     #[inline]
-    fn is_grounded(&self) -> bool {
+    pub fn is_grounded(&self) -> bool {
         match &self.args {
             Some(args) => args.args.values().all(Atom::is_grounded),
             None => false,
@@ -508,7 +508,7 @@ impl<F, S> Fact<F, S> {
     /// # Returns
     /// Some [`Iterator`] over [`Ident`] (references).
     #[inline]
-    fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>>
+    pub fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>>
     where
         'i: 's,
         Ident<F, S>: 'i,
@@ -521,7 +521,7 @@ impl<F, S> Fact<F, S> {
     /// # Returns
     /// Some [`Iterator`] over [`Ident`] (mutable references).
     #[inline]
-    fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>>
+    pub fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>>
     where
         'i: 's,
         Ident<F, S>: 'i,

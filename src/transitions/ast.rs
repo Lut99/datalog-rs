@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    06 Feb 2025, 10:21:54
+//    07 Feb 2025, 17:43:45
 //  Auto updated?
 //    Yes
 //
@@ -21,7 +21,7 @@ use ast_toolkit::span::SpannableDisplay;
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
 use better_derive::{Clone, Copy, Debug, Eq, Hash, PartialEq};
 
-use crate::ast::{Atom, Comma, Dot, Ident, Rule, RuleAntecedents};
+use crate::ast::{Atom, Comma, Dot, Ident, Rule, RuleBody};
 
 
 /***** HELPERS *****/
@@ -119,7 +119,7 @@ pub struct Postulation<F, S> {
     /// The fact(s) postulated.
     pub consequents: Punctuated<Atom<F, S>, Comma<F, S>>,
     /// The tail of the postulation.
-    pub tail: Option<RuleAntecedents<F, S>>,
+    pub tail: Option<RuleBody<F, S>>,
     /// The dot token at the end.
     pub dot: Dot<F, S>,
 }
@@ -128,7 +128,7 @@ where
     Atom<F, S>: Clone,
     Comma<F, S>: Clone,
     Dot<F, S>: Clone,
-    RuleAntecedents<F, S>: Clone,
+    RuleBody<F, S>: Clone,
 {
     /// Gets the postulation as a regular rule.
     ///
@@ -174,7 +174,7 @@ impl<F, S> ToNode for Postulation<F, S> {
             Box::new(Curly::<F, S>::railroad_open()),
             Box::new(rr::Repeat::new(Ident::<F, S>::railroad(), rr::Empty)),
             Box::new(Curly::<F, S>::railroad_close()),
-            Box::new(rr::Optional::new(RuleAntecedents::<F, S>::railroad())),
+            Box::new(rr::Optional::new(RuleBody::<F, S>::railroad())),
             Box::new(Dot::<F, S>::railroad()),
         ])
     }

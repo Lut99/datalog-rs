@@ -48,6 +48,7 @@ transitions = ["datalog-macros/transitions"]
 
 interpreter = []
 parser = ["ast-toolkit/snack"]
+visit = []
 
 macros = ["dep:datalog-macros"]
 log = ["dep:log"]

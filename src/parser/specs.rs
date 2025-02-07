@@ -4,7 +4,7 @@
 //  Created:
 //    08 May 2024, 11:12:42
 //  Last edited:
-//    06 Feb 2025, 10:20:14
+//    07 Feb 2025, 17:43:27
 //  Auto updated?
 //    Yes
 //
@@ -101,7 +101,7 @@ impl<F: Clone, S: Clone> Spanning<F, S> for ParseError<F, S> {
 /// use ast_toolkit::span::Span;
 /// use datalog::ast::{
 ///     Arrow, Atom, Fact, Dot, Comma, Ident, Literal, NegAtom, Not, Parens, Rule,
-///     RuleAntecedents, Spec,
+///     RuleBody, Spec,
 /// };
 /// use datalog::parser::specs::{spec, ParseError};
 ///
@@ -122,7 +122,7 @@ impl<F: Clone, S: Clone> Spanning<F, S> for ParseError<F, S> {
 ///                 args: None,
 ///             })
 ///         ],
-///         tail: Some(RuleAntecedents {
+///         tail: Some(RuleBody {
 ///             arrow_token: Arrow { span: span2.slice(4..6) },
 ///             antecedents: punct![v => Literal::Atom(Atom::Fact(Fact { ident: Ident { value: span2.slice(7..10) }, args: None }))],
 ///         }),
@@ -138,7 +138,7 @@ impl<F: Clone, S: Clone> Spanning<F, S> for ParseError<F, S> {
 ///                     args: None,
 ///                 })
 ///             ],
-///             tail: Some(RuleAntecedents {
+///             tail: Some(RuleBody {
 ///                 arrow_token: Arrow { span: span2.slice(4..6) },
 ///                 antecedents: punct![v => Literal::Atom(Atom::Fact(Fact { ident: Ident { value: span2.slice(7..10) }, args: None }))],
 ///             }),

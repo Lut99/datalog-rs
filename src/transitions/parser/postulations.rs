@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 11:10:12
 //  Last edited:
-//    03 Feb 2025, 19:30:19
+//    07 Feb 2025, 17:46:05
 //  Auto updated?
 //    Yes
 //
@@ -23,7 +23,7 @@ use ast_toolkit::span::{Span, Spanning};
 use super::super::ast;
 use super::tokens;
 use crate::parser::atoms::{self, AtomExpectsFormatter};
-use crate::parser::rules::{self, RuleAntecedentsExpectsFormatter};
+use crate::parser::rules::{self, RuleBodyExpectsFormatter};
 use crate::parser::whitespaces;
 
 
@@ -42,8 +42,8 @@ pub enum ParseError<F, S> {
     Dot { span: Span<F, S> },
     /// Failed to parse a [`PostulationOp`](ast::PostulationOp).
     PostulationOp { span: Span<F, S> },
-    /// Failed to parse a [`RuleAntecedents`](crate::ast::RuleAntecedents).
-    RuleAntecedents { span: Span<F, S> },
+    /// Failed to parse a [`RuleBody`](crate::ast::RuleBody).
+    RuleBody { span: Span<F, S> },
 }
 impl<F, S> Debug for ParseError<F, S> {
     #[inline]
@@ -80,8 +80,8 @@ impl<F, S> Debug for ParseError<F, S> {
                 fmt.field("span", span);
                 fmt.finish()
             },
-            RuleAntecedents { span } => {
-                let mut fmt = f.debug_struct("ParseError::RuleAntecedents");
+            RuleBody { span } => {
+                let mut fmt = f.debug_struct("ParseError::RuleBody");
                 fmt.field("span", span);
                 fmt.finish()
             },
@@ -99,7 +99,7 @@ impl<F, S> Display for ParseError<F, S> {
             CurlyOpen { .. } => write!(f, "Expected an opening curly bracket"),
             Dot { .. } => write!(f, "Expected a dot"),
             PostulationOp { .. } => write!(f, "{}", PostulationOpExpectsFormatter),
-            RuleAntecedents { .. } => write!(f, "{}", RuleAntecedentsExpectsFormatter),
+            RuleBody { .. } => write!(f, "{}", RuleBodyExpectsFormatter),
         }
     }
 }
@@ -118,7 +118,7 @@ where
             Self::CurlyOpen { span } => span.clone(),
             Self::Dot { span } => span.clone(),
             Self::PostulationOp { span } => span.clone(),
-            Self::RuleAntecedents { span } => span.clone(),
+            Self::RuleBody { span } => span.clone(),
         }
     }
 
@@ -134,7 +134,7 @@ where
             Self::CurlyOpen { span } => span,
             Self::Dot { span } => span,
             Self::PostulationOp { span } => span,
-            Self::RuleAntecedents { span } => span,
+            Self::RuleBody { span } => span,
         }
     }
 }
@@ -158,7 +158,7 @@ where
 /// use ast_toolkit::snack::error::{Common, Error, Failure};
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
-/// use datalog::ast::{Arrow, Atom, Fact, FactArgs, Comma, Dot, Ident, Literal, Parens, Rule, RuleAntecedents};
+/// use datalog::ast::{Arrow, Atom, Fact, FactArgs, Comma, Dot, Ident, Literal, Parens, Rule, RuleBody};
 /// use datalog::transitions::ast::{Add, Curly, Postulation, PostulationOp, Squiggly};
 /// use datalog::transitions::parser::postulations::{postulation, ParseError};
 ///
@@ -186,7 +186,7 @@ where
 ///         op: PostulationOp::Obfuscate(Squiggly { span: span2.slice(..1) }),
 ///         curly_tokens: Curly { open: span2.slice(1..2), close: span2.slice(7..8) },
 ///         consequents: punct![v => Atom::Fact(Fact { ident: Ident { value: span2.slice(3..6) }, args: None })],
-///         tail: Some(RuleAntecedents {
+///         tail: Some(RuleBody {
 ///             arrow_token: Arrow { span: span2.slice(9..11) },
 ///             antecedents: punct![v => Literal::Atom(Atom::Fact(Fact {
 ///                 ident: Ident { value: span2.slice(12..15) },
@@ -215,7 +215,7 @@ where
 /// assert_eq!(
 ///     comb.parse(span4).unwrap(),
 ///     (span4.slice(14..), Postulation {
-///         op: PostulationOp::Create(Add { span: span4.slice(..1) }),
+///         op: PostulationOp::Obfuscate(Squiggly { span: span4.slice(..1) }),
 ///         curly_tokens: Curly { open: span4.slice(1..2), close: span4.slice(12..13) },
 ///         consequents: punct![
 ///             v => Atom::Fact(Fact { ident: Ident { value: span4.slice(3..6) }, args: None }),
@@ -263,7 +263,7 @@ where
                     },
                 ),
                 error::transmute(whitespaces::whitespace()),
-                comb::map_err(comb::opt(rules::rule_antecedents()), |err| ParseError::RuleAntecedents { span: err.into_span() }),
+                comb::map_err(comb::opt(rules::rule_body()), |err| ParseError::RuleBody { span: err.into_span() }),
                 error::transmute(whitespaces::whitespace()),
                 comb::map_err(crate::parser::tokens::dot(), |err| ParseError::Dot { span: err.into_span() }),
             ))),
