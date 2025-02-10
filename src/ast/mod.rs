@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    10 Feb 2025, 10:12:02
+//    10 Feb 2025, 16:08:15
 //  Auto updated?
 //    Yes
 //
@@ -136,6 +136,22 @@ impl<F, S> Rule<F, S> {
     #[inline]
     pub fn atoms_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> {
         self.consequents.values_mut().chain(self.tail.iter_mut().flat_map(RuleBody::atoms_mut))
+    }
+
+    /// Returns an iterator over the atoms in the rule's antecedents, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more antecedents.
+    #[inline]
+    pub fn antecedents<'s>(&'s self) -> impl 's + Iterator<Item = &'s Literal<F, S>> { self.tail.iter().flat_map(|t| t.antecedents.values()) }
+
+    /// Returns an iterator over the atoms in the rule's antecedents, if any.
+    ///
+    /// # Returns
+    /// An [`Iterator`] yielding zero or more mutable references to antecedents.
+    #[inline]
+    pub fn antecedents_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Literal<F, S>> {
+        self.tail.iter_mut().flat_map(|t| t.antecedents.values_mut())
     }
 }
 impl<F, S: SpannableDisplay> Display for Rule<F, S> {
@@ -396,7 +412,22 @@ impl<F, S> Atom<F, S> {
         }
     }
 
+    /// Returns whether this atom is a variable
+    ///
+    /// Note that this is different from [`Atom::is_grounded()`]. That one checks if THIS atom
+    /// _or_, if not_ any ARGUMENTS are variables recursively; this function checks only if THIS
+    /// atom is a variable.
+    ///
+    /// # Returns
+    /// True if this is an [`Atom::Var`], or else false.
+    #[inline]
+    pub const fn is_var(&self) -> bool { matches!(self, Self::Var(_)) }
+
     /// Returns whether this atom has any variables.
+    ///
+    /// Note that this is different from [`Atom::is_var()`]. That one checks if THIS atom is a
+    /// variable; this function checks if THIS atom _or_, if not, any ARGUMENTS are variables
+    /// recursively.
     ///
     /// # Returns
     /// False if it has, true if it hasn't.

@@ -4,7 +4,7 @@
 //  Created:
 //    26 Mar 2024, 19:36:31
 //  Last edited:
-//    07 Feb 2025, 16:30:36
+//    10 Feb 2025, 17:10:50
 //  Auto updated?
 //    Yes
 //
@@ -25,21 +25,21 @@
 //!       <https://doi.org/10.1145/73721.73722>
 
 // Nested modules
-mod interpretation_old;
-pub mod ir;
+// mod interpretation_old;
 pub mod knowledge_base;
 pub mod quantify;
 
 // Imports
-use indexmap::set::IndexSet;
+use std::hash::Hash;
 
-use self::interpretation_old::Interpretation;
-use crate::ast::{Ident, Rule, Spec};
+use knowledge_base::KnowledgeBase;
+
+use crate::ir::{Atom, Rule, Span};
 use crate::log::{debug, trace};
 
 
 /***** LIBRARY FUNCTIONS *****/
-/// Performs forward derivation of the Spec.
+/// Performs forward derivation of a [`Spec`].
 ///
 /// In the paper, this is called the _immediate consequence operator_. It is simply defined as
 /// the "forward derivation" of all rules, where we note the rule's consequences as derived if we
@@ -50,17 +50,14 @@ use crate::log::{debug, trace};
 ///
 /// # Arguments
 /// - `rules`: A set of rules that are in the spec.
-/// - `int`: Some [`Interpretation`] to derive in. Specifically, will move atoms from unknown to known if they can be derived.
-pub fn immediate_consequence<'f: 'r, 's: 'r, 'r, 'i, I>(rules: I, int: &'i mut Interpretation<'f, 's>)
+/// - `kb`: Some [`KnowledgeBase`] to derive in. Specifically, will move atoms from unknown to known if they can be derived.
+pub fn immediate_consequence<'s, I, F, S>(rules: I, kb: &mut KnowledgeBase<F, S>)
 where
-    I: IntoIterator<Item = &'r Rule<&'f str, &'s str>>,
+    I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
     I::IntoIter: Clone,
+    Span<F, S>: 's + Clone + Eq + Hash,
 {
     let rules = rules.into_iter();
-    debug!("Running immediate consequent transformation");
-
-    // Some buffer referring to all the constants in the interpretation.
-    let consts: IndexSet<Ident<_, _>> = int.find_existing_consts();
 
     // This transformation is saturating, so continue until the database did not change anymore.
     // NOTE: Monotonic because we can never remove truths, inferring the same fact does not count
@@ -79,27 +76,7 @@ where
 
         // Go thru da rules
         for rule in rules.clone() {
-            'assign: for rule in rule.quantify(consts.iter()) {
-                // Quantify over this rule's instantiations
-                trace!("--> Rule '{rule}'");
-
-                // Do the antecedents for this assignment
-                for ant in rule.tail.iter().flat_map(|t| t.antecedents.values()) {
-                    if !int.knows_about_atom(ant.atom(), ant.polarity()) {
-                        // Not present; cannot derive
-                        trace!("-----> Antecedent '{ant}' not present in interpretation, rule does not apply");
-                        continue 'assign;
-                    }
-                }
-
-                // If here, then derive consequents
-                for con in rule.consequents.values() {
-                    trace!("-----> Deriving consequent '{con}'");
-                    if int.learn(con, true) != Some(true) {
-                        changed = true;
-                    }
-                }
-            }
+            changed |= kb.update(rule);
         }
     }
 
@@ -118,12 +95,13 @@ where
 ///
 /// # Returns
 /// A new [`Interpretation`] that contains the things we derived about the facts in the [`Spec`].
-pub fn alternating_fixpoint<'f: 'r, 's: 'r, 'r, I>(rules: I) -> Interpretation<'f, 's>
+pub fn alternating_fixpoint<'s, I, F, S>(rules: I) -> KnowledgeBase<F, S>
 where
-    I: IntoIterator<Item = &'r Rule<&'f str, &'s str>>,
+    I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
     I::IntoIter: Clone,
+    Span<F, S>: 's + Clone + Eq + Hash,
 {
-    let mut int: Interpretation = Interpretation::new();
+    let mut int: KnowledgeBase<F, S> = KnowledgeBase::new();
     alternating_fixpoint_mut(rules, &mut int);
     int
 }
@@ -139,10 +117,11 @@ where
 ///
 /// # Arguments
 /// - `int`: Some existing [`Interpretation`] to [`clear()`](Interpretation::clear()) and then populate again. Might be more efficient than allocating a new one if you already have one lying around.
-pub fn alternating_fixpoint_mut<'f: 'r, 's: 'r, 'r, 'i, I>(rules: I, int: &'i mut Interpretation<'f, 's>)
+pub fn alternating_fixpoint_mut<'s, I, F, S>(rules: I, int: &mut KnowledgeBase<F, S>)
 where
-    I: IntoIterator<Item = &'r Rule<&'f str, &'s str>>,
+    I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
     I::IntoIter: Clone,
+    Span<F, S>: 's + Clone + Eq + Hash,
 {
     let rules = rules.into_iter();
     debug!(
@@ -152,9 +131,6 @@ where
         (0..80).map(|_| '-').collect::<String>()
     );
     int.clear();
-
-    // Create the universe of atoms
-    int.extend_universe(rules.clone());
 
     // Contains the hash of the last three interpretations, to recognize when we found a stable model.
     let mut prev_hashes: [u64; 3] = [0; 3];

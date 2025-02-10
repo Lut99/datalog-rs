@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 17:58:01
 //  Last edited:
-//    06 Feb 2025, 17:43:28
+//    10 Feb 2025, 16:14:26
 //  Auto updated?
 //    Yes
 //
@@ -427,7 +427,7 @@ impl<F, S> Rule<Atom<F, S>> {
     /// # Returns
     /// A [`RuleQuantifier`] that will produce concrete rules without variables in them.
     #[inline]
-    pub fn quantify<'r, I>(&'r self, domain: impl IntoIterator<IntoIter = I>) -> RuleQuantifier<'r, F, S, I>
+    pub fn concretize_for<'r, I>(&'r self, domain: impl IntoIterator<IntoIter = I>) -> RuleQuantifier<'r, F, S, I>
     where
         I: Clone + ExactSizeIterator + Iterator,
         Ident<F, S>: Clone + Eq + Hash,
@@ -623,7 +623,7 @@ mod tests {
 
         let consts: Vec<GroundAtom<&str, &str>> =
             vec![make_ir_ground_atom("foo", []), make_ir_ground_atom("bar", []), make_ir_ground_atom("baz", [])];
-        let inst: Vec<Rule<GroundAtom<&str, &str>>> = make_ir_rule([make_ir_atom("atom", [])], [], []).quantify(&consts).collect();
+        let inst: Vec<Rule<GroundAtom<&str, &str>>> = make_ir_rule([make_ir_atom("atom", [])], [], []).concretize_for(&consts).collect();
         assert_eq!(inst, vec![make_ir_rule([make_ir_ground_atom("atom", [])], [], [])]);
     }
 
@@ -634,9 +634,9 @@ mod tests {
 
         let consts: Vec<GroundAtom<&str, &str>> =
             vec![make_ir_ground_atom("foo", []), make_ir_ground_atom("bar", []), make_ir_ground_atom("baz", [])];
-        let inst1: Vec<Rule<GroundAtom<&str, &str>>> = make_ir_rule([make_ir_atom("atom1", ["foo"])], [], []).quantify(&consts).collect();
+        let inst1: Vec<Rule<GroundAtom<&str, &str>>> = make_ir_rule([make_ir_atom("atom1", ["foo"])], [], []).concretize_for(&consts).collect();
         let inst2: Vec<Rule<GroundAtom<&str, &str>>> =
-            make_ir_rule([make_ir_atom("atom2", [])], [make_ir_atom("atom1", [])], []).quantify(&consts).collect();
+            make_ir_rule([make_ir_atom("atom2", [])], [make_ir_atom("atom1", [])], []).concretize_for(&consts).collect();
         assert_eq!(inst1, vec![make_ir_rule([make_ir_ground_atom("atom1", ["foo"])], [], [])]);
         assert_eq!(inst2, vec![make_ir_rule([make_ir_ground_atom("atom2", [])], [make_ir_ground_atom("atom1", [])], [])]);
     }
@@ -648,11 +648,11 @@ mod tests {
 
         let consts: Vec<GroundAtom<&str, &str>> =
             vec![make_ir_ground_atom("foo", []), make_ir_ground_atom("bar", []), make_ir_ground_atom("baz", [])];
-        let inst1: Vec<Rule<GroundAtom<&str, &str>>> = make_ir_rule([make_ir_atom("atom1", ["X"])], [], []).quantify(&consts).collect();
+        let inst1: Vec<Rule<GroundAtom<&str, &str>>> = make_ir_rule([make_ir_atom("atom1", ["X"])], [], []).concretize_for(&consts).collect();
         let inst2: Vec<Rule<GroundAtom<&str, &str>>> =
-            make_ir_rule([make_ir_atom("atom2", [])], [make_ir_atom("atom1", ["Y"])], []).quantify(&consts).collect();
+            make_ir_rule([make_ir_atom("atom2", [])], [make_ir_atom("atom1", ["Y"])], []).concretize_for(&consts).collect();
         let inst3: Vec<Rule<GroundAtom<&str, &str>>> =
-            make_ir_rule([make_ir_atom("atom3", ["Z"])], [make_ir_atom("atom1", ["Z"])], []).quantify(&consts).collect();
+            make_ir_rule([make_ir_atom("atom3", ["Z"])], [make_ir_atom("atom1", ["Z"])], []).concretize_for(&consts).collect();
         assert_eq!(inst1, vec![
             make_ir_rule([make_ir_ground_atom("atom1", ["foo"])], [], []),
             make_ir_rule([make_ir_ground_atom("atom1", ["bar"])], [], []),
@@ -677,11 +677,11 @@ mod tests {
 
         let consts: Vec<GroundAtom<&str, &str>> =
             vec![make_ir_ground_atom("foo", []), make_ir_ground_atom("bar", []), make_ir_ground_atom("baz", [])];
-        let inst1: Vec<Rule<GroundAtom<&str, &str>>> = make_ir_rule([make_ir_atom("atom1", ["X", "Y"])], [], []).quantify(&consts).collect();
+        let inst1: Vec<Rule<GroundAtom<&str, &str>>> = make_ir_rule([make_ir_atom("atom1", ["X", "Y"])], [], []).concretize_for(&consts).collect();
         let inst2: Vec<Rule<GroundAtom<&str, &str>>> =
-            make_ir_rule([make_ir_atom("atom2", ["X"])], [make_ir_atom("atom1", ["Y"])], []).quantify(&consts).collect();
+            make_ir_rule([make_ir_atom("atom2", ["X"])], [make_ir_atom("atom1", ["Y"])], []).concretize_for(&consts).collect();
         let inst3: Vec<Rule<GroundAtom<&str, &str>>> =
-            make_ir_rule([make_ir_atom("atom3", ["X", "Y"])], [make_ir_atom("atom1", ["Y", "X"])], []).quantify(&consts).collect();
+            make_ir_rule([make_ir_atom("atom3", ["X", "Y"])], [make_ir_atom("atom1", ["Y", "X"])], []).concretize_for(&consts).collect();
         assert_eq!(inst1, vec![
             make_ir_rule([make_ir_ground_atom("atom1", ["foo", "foo"])], [], []),
             make_ir_rule([make_ir_ground_atom("atom1", ["foo", "bar"])], [], []),

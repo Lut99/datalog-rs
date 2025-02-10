@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 14:32:43
 //  Last edited:
-//    07 Feb 2025, 17:18:58
+//    10 Feb 2025, 15:13:24
 //  Auto updated?
 //    Yes
 //
@@ -15,8 +15,8 @@
 #![allow(unused)]
 
 use crate::ast::{Arrow, Atom, Comma, Dot, Fact, FactArgs, Ident, Literal, NegAtom, Not, Parens, Punctuated, Rule, RuleBody, Span};
-#[cfg(feature = "interpreter")]
-use crate::interpreter::ir;
+#[cfg(feature = "ir")]
+use crate::ir;
 #[cfg(feature = "transitions")]
 use crate::transitions::ast::Curly;
 

@@ -4,7 +4,7 @@
 //  Created:
 //    05 Feb 2025, 14:24:31
 //  Last edited:
-//    10 Feb 2025, 15:00:14
+//    10 Feb 2025, 15:14:07
 //  Auto updated?
 //    Yes
 //
@@ -20,6 +20,7 @@
 //
 
 // Define the visiting modules
+pub mod compile;
 #[cfg(feature = "visit")]
 pub mod visit;
 #[cfg(feature = "visit-mut")]

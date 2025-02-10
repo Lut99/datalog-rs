@@ -46,7 +46,8 @@ default = []
 
 transitions = ["datalog-macros/transitions"]
 
-interpreter = []
+interpreter = ["ir"]
+ir = []
 parser = ["ast-toolkit/snack"]
 visit = []
 visit-mut = []
