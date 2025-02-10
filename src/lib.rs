@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:01
 //  Last edited:
-//    07 Feb 2025, 16:35:54
+//    10 Feb 2025, 10:11:38
 //  Auto updated?
 //    Yes
 //
@@ -24,5 +24,3 @@ pub mod parser;
 mod tests;
 #[cfg(feature = "transitions")]
 pub mod transitions;
-#[cfg(feature = "visit")]
-pub mod visit;

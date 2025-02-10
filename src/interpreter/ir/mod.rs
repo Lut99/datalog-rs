@@ -4,7 +4,7 @@
 //  Created:
 //    05 Feb 2025, 14:24:31
 //  Last edited:
-//    06 Feb 2025, 17:36:57
+//    10 Feb 2025, 15:00:14
 //  Auto updated?
 //    Yes
 //
@@ -19,6 +19,13 @@
 //!   property may cause some valid ASTs to be rejected as IRs.
 //
 
+// Define the visiting modules
+#[cfg(feature = "visit")]
+pub mod visit;
+#[cfg(feature = "visit-mut")]
+pub mod visit_mut;
+
+// Imports
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
@@ -26,7 +33,7 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use ast_toolkit::span::SpannableDisplay;
 use better_derive::{Clone, Debug, Eq, Hash, PartialEq};
 
-use crate::ast::{Ident, Span};
+pub use crate::ast::{Ident, Span};
 
 
 /***** ERRORS *****/
@@ -366,8 +373,6 @@ impl<F, S> Atomlike<F, S> for Atom<F, S> {
         }
     }
 
-
-
     #[inline]
     fn is_grounded(&self) -> bool {
         match self {
@@ -440,8 +445,6 @@ impl<F, S> Fact<F, S> {
     /// argument.
     #[inline]
     fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> { self.args.iter_mut().flat_map(Atom::args_mut) }
-
-
 
     /// Returns whether this atom has any variables.
     ///
@@ -604,8 +607,6 @@ impl<F, S> Atomlike<F, S> for GroundAtom<F, S> {
 
     #[inline]
     fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Self> { self.args.iter_mut() }
-
-
 
     #[inline]
     fn is_grounded(&self) -> bool { true }

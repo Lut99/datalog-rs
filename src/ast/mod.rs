@@ -1,10 +1,10 @@
-//  AST.rs
+//  MOD.rs
 //    by Lut99
 //
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    07 Feb 2025, 17:43:04
+//    10 Feb 2025, 10:12:02
 //  Auto updated?
 //    Yes
 //
@@ -12,6 +12,13 @@
 //!   Defines the datalog-with-negation AST.
 //
 
+// Define the visiting modules
+#[cfg(feature = "visit")]
+pub mod visit;
+#[cfg(feature = "visit-mut")]
+pub mod visit_mut;
+
+// Imports
 use std::fmt::{Display, Formatter, Result as FResult};
 
 pub use ast_toolkit::punctuated::Punctuated;
@@ -389,8 +396,6 @@ impl<F, S> Atom<F, S> {
         }
     }
 
-
-
     /// Returns whether this atom has any variables.
     ///
     /// # Returns
@@ -479,6 +484,7 @@ impl<F, S> Fact<F, S> {
     /// An [`Iterator`] yielding zero or more [`Atom`]s representing each argument.
     #[inline]
     pub fn args<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<F, S>> { self.args.iter().flat_map(|t| t.args.values()).into_iter() }
+
     /// Returns an iterator over the arguments in this fact, if any.
     ///
     /// # Returns
@@ -488,8 +494,6 @@ impl<F, S> Fact<F, S> {
     pub fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> {
         self.args.iter_mut().flat_map(|t| t.args.values_mut()).into_iter()
     }
-
-
 
     /// Returns whether this atom has any variables.
     ///
