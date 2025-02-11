@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 14:32:43
 //  Last edited:
-//    10 Feb 2025, 15:13:24
+//    11 Feb 2025, 16:06:35
 //  Auto updated?
 //    Yes
 //
@@ -27,11 +27,18 @@ use crate::transitions::ast::Curly;
 pub fn setup_logger() {
     use humanlog::{DebugMode, HumanLogger};
 
+    // Figure out the desired debug level
+    let mode: DebugMode = if let Ok(trace) = std::env::var("TRACE") {
+        if trace == "1" || trace == "true" { DebugMode::Full } else { DebugMode::Debug }
+    } else {
+        DebugMode::Debug
+    };
+
     // Check if the envs tell us to
     if let Ok(logger) = std::env::var("LOGGER") {
         if logger == "1" || logger == "true" {
             // Create the logger
-            if let Err(err) = HumanLogger::terminal(DebugMode::Full).init() {
+            if let Err(err) = HumanLogger::terminal(mode).init() {
                 eprintln!("WARNING: Failed to setup logger: {err} (no logging for this session)");
             }
         }

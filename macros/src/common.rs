@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 10:47:06
 //  Last edited:
-//    04 Feb 2025, 18:03:50
+//    11 Feb 2025, 11:18:38
 //  Auto updated?
 //    Yes
 //
@@ -215,10 +215,10 @@ impl ToTokens for Rule {
             // Generate all the antecedents
             let antecedents_tokens: TokenStream2 = serialize_punctuated(antecedents.iter());
 
-            // Serialize them to a single RuleAntecedents
+            // Serialize them to a single RuleBody
             quote_spanned! {
                 colon.span =>
-                Some(#crate_path::ast::RuleAntecedents {
+                Some(#crate_path::ast::RuleBody {
                     arrow_token: #crate_path::ast::Arrow { span: #crate_path::ast::Span::new(#from_str, ":-") },
                     antecedents: #antecedents_tokens,
                 })

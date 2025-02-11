@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    07 Feb 2025, 17:43:45
+//    11 Feb 2025, 17:58:09
 //  Auto updated?
 //    Yes
 //
@@ -21,7 +21,8 @@ use ast_toolkit::span::SpannableDisplay;
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
 use better_derive::{Clone, Copy, Debug, Eq, Hash, PartialEq};
 
-use crate::ast::{Atom, Comma, Dot, Ident, Rule, RuleBody};
+use crate::ast::{Atom, Comma, Dot, Ident, Literal, Rule, RuleBody, Span};
+use crate::ir;
 
 
 /***** HELPERS *****/
@@ -125,10 +126,7 @@ pub struct Postulation<F, S> {
 }
 impl<F, S> Postulation<F, S>
 where
-    Atom<F, S>: Clone,
-    Comma<F, S>: Clone,
-    Dot<F, S>: Clone,
-    RuleBody<F, S>: Clone,
+    Span<F, S>: Clone,
 {
     /// Gets the postulation as a regular rule.
     ///
@@ -137,7 +135,23 @@ where
     ///
     /// # Returns
     /// A [`Rule`] that can be used to find out if the post conditions hold.
-    pub fn to_rule(&self) -> Rule<F, S> { Rule { consequents: self.consequents.clone(), tail: self.tail.clone(), dot: self.dot.clone() } }
+    pub fn to_rule(&self) -> ir::Rule<ir::Atom<F, S>> {
+        ir::Rule {
+            consequents:     self.consequents.values().map(Atom::compile).collect(),
+            pos_antecedents: self
+                .tail
+                .iter()
+                .flat_map(|t| t.antecedents.values().filter(|l| l.is_positive()).map(Literal::atom))
+                .map(Atom::compile)
+                .collect(),
+            neg_antecedents: self
+                .tail
+                .iter()
+                .flat_map(|t| t.antecedents.values().filter(|l| !l.is_positive()).map(Literal::atom))
+                .map(Atom::compile)
+                .collect(),
+        }
+    }
 }
 impl<F, S: SpannableDisplay> Display for Postulation<F, S> {
     #[inline]

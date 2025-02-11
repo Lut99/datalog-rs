@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 11:04:28
 //  Last edited:
-//    03 Dec 2024, 17:32:31
+//    11 Feb 2025, 18:20:10
 //  Auto updated?
 //    Yes
 //
@@ -157,7 +157,7 @@ impl ToTokens for Postulation {
             // Serialize them to a single RuleAntecedents
             quote_spanned! {
                 colon.span =>
-                Some(#crate_path::ast::RuleAntecedents {
+                Some(#crate_path::ast::RuleBody {
                     arrow_token: #crate_path::ast::Arrow { span: #crate_path::ast::Span::new(#from_str, ":-") },
                     antecedents: #antecedents_tokens,
                 })

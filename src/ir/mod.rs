@@ -4,7 +4,7 @@
 //  Created:
 //    05 Feb 2025, 14:24:31
 //  Last edited:
-//    10 Feb 2025, 15:14:07
+//    11 Feb 2025, 11:08:22
 //  Auto updated?
 //    Yes
 //
@@ -126,6 +126,16 @@ pub trait Atomlike<F, S> {
 pub struct Spec<A> {
     /// The rules in this specification.
     pub rules: Vec<Rule<A>>,
+}
+impl<A: Display> Display for Spec<A> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        for rule in &self.rules {
+            rule.fmt(f)?;
+            writeln!(f)?;
+        }
+        Ok(())
+    }
 }
 
 /// Defines a safe rule, i.e., one with variables that don't quantify over thin air.
@@ -269,6 +279,49 @@ impl<F, S> Rule<GroundAtom<F, S>> {
         }
     }
 }
+impl<A: Display> Display for Rule<A> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        for (i, atom) in self.consequents.iter().enumerate() {
+            if i > 0 {
+                write!(f, ",")?;
+                if f.alternate() {
+                    write!(f, " ")?;
+                }
+            }
+            atom.fmt(f)?;
+        }
+        if !self.pos_antecedents.is_empty() || !self.neg_antecedents.is_empty() {
+            write!(f, " :- ")?;
+            let mut first: bool = true;
+            for atom in &self.pos_antecedents {
+                if first {
+                    first = false;
+                } else {
+                    write!(f, ",")?;
+                    if f.alternate() {
+                        write!(f, " ")?;
+                    }
+                }
+                atom.fmt(f)?;
+            }
+            for atom in &self.neg_antecedents {
+                if first {
+                    first = false;
+                } else {
+                    write!(f, ",")?;
+                    if f.alternate() {
+                        write!(f, " ")?;
+                    }
+                }
+                write!(f, "not ")?;
+                atom.fmt(f)?;
+            }
+        }
+        write!(f, ".")?;
+        Ok(())
+    }
+}
 
 
 
@@ -403,6 +456,15 @@ impl<F, S> Atomlike<F, S> for Atom<F, S> {
         match self {
             Self::Fact(f) => Box::new(f.vars_mut()) as Box<dyn 's + Iterator<Item = &'s mut Ident<F, S>>>,
             Self::Var(v) => Box::new(Some(v).into_iter()),
+        }
+    }
+}
+impl<F, S: SpannableDisplay> Display for Atom<F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        match self {
+            Self::Fact(fa) => fa.fmt(f),
+            Self::Var(v) => v.fmt(f),
         }
     }
 }
@@ -544,6 +606,26 @@ impl<F, S> Fact<F, S> {
         Some(GroundAtom { ident: self.ident, args })
     }
 }
+impl<F, S: SpannableDisplay> Display for Fact<F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        self.ident.fmt(f)?;
+        if !self.args.is_empty() {
+            write!(f, "(")?;
+            for (i, atom) in self.args.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ",")?;
+                    if f.alternate() {
+                        write!(f, " ")?;
+                    }
+                }
+                atom.fmt(f)?;
+            }
+            write!(f, ")")?;
+        }
+        Ok(())
+    }
+}
 impl<F, S> From<GroundAtom<F, S>> for Fact<F, S> {
     #[inline]
     fn from(value: GroundAtom<F, S>) -> Self { value.into_fact() }
@@ -628,6 +710,26 @@ impl<F, S> Atomlike<F, S> for GroundAtom<F, S> {
         Ident<F, S>: 'i,
     {
         None.into_iter()
+    }
+}
+impl<F, S: SpannableDisplay> Display for GroundAtom<F, S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        self.ident.fmt(f)?;
+        if !self.args.is_empty() {
+            write!(f, "(")?;
+            for (i, atom) in self.args.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ",")?;
+                    if f.alternate() {
+                        write!(f, " ")?;
+                    }
+                }
+                atom.fmt(f)?;
+            }
+            write!(f, ")")?;
+        }
+        Ok(())
     }
 }
 impl<F, S> TryFrom<Atom<F, S>> for GroundAtom<F, S> {

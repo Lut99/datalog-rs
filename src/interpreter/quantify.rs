@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 17:58:01
 //  Last edited:
-//    10 Feb 2025, 16:14:26
+//    11 Feb 2025, 18:13:04
 //  Auto updated?
 //    Yes
 //
@@ -244,97 +244,82 @@ where
 
 
 
-// /// Quantifies over an atom given a Herbrand universe to quantify over.
-// #[derive(Clone, Debug)]
-// pub struct AtomQuantifier<'a, F, S, I>
-// where
-//     I: Iterator,
-// {
-//     /// The atom to quantify.
-//     atom: Option<&'a Atom<F, S>>,
-//     /// The names of the variables. Corresponds one-to-one with the values produced by the power-
-//     /// set.
-//     vars: IndexSet<Ident<F, S>>,
-//     /// Defines an iterator over the powerset of the given constants.
-//     iter: PowerSet<I>,
-// }
-// impl<'a, F, S, I> AtomQuantifier<'a, F, S, I>
-// where
-//     I: Clone + ExactSizeIterator + Iterator,
-//     Ident<F, S>: Clone + Eq + Hash,
-// {
-//     /// Constructor for the AtomQuantifier.
-//     ///
-//     /// # Arguments
-//     /// - `atom`: The [`Atom`] to quantify over.
-//     /// - `consts`: The set of constants that make up the Herbrand universe of the spec (i.e., the
-//     ///   space to quantify over).
-//     ///
-//     /// # Returns
-//     /// A new AtomQuantifier, ready to quantify.
-//     pub fn new(atom: &'a Atom<F, S>, consts: impl IntoIterator<IntoIter = I>) -> Self {
-//         // Count the number of unique variables in the atom
-//         let vars: IndexSet<Ident<F, S>> = atom.vars().cloned().collect();
+/// Quantifies over an atom's variables to produce a grounded one.
+#[derive(Clone, Debug)]
+pub struct AtomQuantifier<'a, F, S, I>
+where
+    I: Iterator,
+{
+    /// The rule to quantify.
+    atom: Option<&'a Atom<F, S>>,
+    /// The names of the variables. Corresponds one-to-one with the values produced by the power-
+    /// set.
+    vars: IndexSet<Ident<F, S>>,
+    /// Defines an iterator over the powerset of the given constants.
+    iter: PowerSet<I>,
+}
+impl<'a, F, S, I> AtomQuantifier<'a, F, S, I>
+where
+    I: Clone + ExactSizeIterator + Iterator,
+    Ident<F, S>: Clone + Eq + Hash,
+{
+    /// Constructor for the AtomQuantifier.
+    ///
+    /// # Arguments
+    /// - `atom`: The [`Atom`] to quantify over.
+    /// - `consts`: The set of constants that make up the Herbrand universe of the spec (i.e., the
+    ///   space to quantify over).
+    ///
+    /// # Returns
+    /// A new AtomQuantifier, ready to quantify.
+    pub fn new(atom: &'a Atom<F, S>, consts: impl IntoIterator<IntoIter = I>) -> Self {
+        // Count the number of unique variables in the atom
+        let vars: IndexSet<Ident<F, S>> = atom.vars().cloned().collect();
 
-//         // OK, create the powerset based on that
-//         let n_vars: usize = vars.len();
-//         Self { atom: Some(atom), vars, iter: PowerSet::new(consts, n_vars) }
-//     }
-// }
-// impl<'i, 'a, F, S, I> Iterator for AtomQuantifier<'a, F, S, I>
-// where
-//     I: Clone + Iterator<Item = &'i Atom<F, S>>,
-//     I::Item: Clone,
-//     Atom<F, S>: 'i + Clone,
-//     Ident<F, S>: Eq + Hash,
-// {
-//     type Item = Atom<F, S>;
+        // OK, create the powerset based on that
+        let n_vars: usize = vars.len();
+        Self { atom: Some(atom), vars, iter: PowerSet::new(consts, n_vars) }
+    }
+}
+impl<'i, 'a, F, S, I> Iterator for AtomQuantifier<'a, F, S, I>
+where
+    I: Clone + Iterator<Item = &'i GroundAtom<F, S>>,
+    Ident<F, S>: Eq + Hash,
+    Atom<F, S>: 'i,
+    Span<F, S>: Clone,
+{
+    type Item = GroundAtom<F, S>;
 
-//     #[inline]
-//     fn next(&mut self) -> Option<Self::Item> {
-//         // Special case: if there are no variables, simply return the original atom once
-//         if self.iter.n_vars() == 0 {
-//             return self.atom.take().cloned();
-//         }
-//         let mut atom: Atom<F, S> = self.atom?.clone();
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Special case: if there are no variables, simply return the original atom once
+        if self.iter.n_vars() == 0 {
+            // SAFETY: No variables, so no risk of us not being able to turn it into a grounded rule
+            return self.atom.take().map(|r| r.to_ground_atom().unwrap());
+        }
+        let atom: &Atom<F, S> = self.atom?;
 
-//         // Get a next concretization of all the variables in the rule
-//         let values: Vec<&'i Atom<F, S>> = self.iter.next()?;
+        // Get a next concretization of all the variables in the rule
+        let values: Vec<&'i GroundAtom<F, S>> = self.iter.next()?;
+        let assign: HashMap<Ident<F, S>, GroundAtom<F, S>> = self.vars.iter().cloned().zip(values.into_iter().cloned()).collect();
 
-//         // Go through the rule to apply it
-//         for arg in atom.args_mut() {
-//             if let Atom::Var(var) = arg {
-//                 // Find which value to take the value of
-//                 let value: &'i Atom<F, S> = values
-//                     .get(
-//                         self.vars
-//                             .get_index_of(var)
-//                             .unwrap_or_else(|| panic!("Unknown variable after already analysing variables; this should never happen!")),
-//                     )
-//                     .unwrap_or_else(|| panic!("Variables list is longer than values list; this should never happen!"));
+        // Concretize the rule with that assignment (going through the internal map of index to name)
+        Some(atom.concretize(&assign).unwrap_or_else(|_| panic!("Unknown variable after already analysing variables; this should never happen!")))
+    }
 
-//                 // Set it as the atom's value
-//                 *arg = value.clone();
-//             }
-//         }
-
-//         // Done!
-//         Some(atom)
-//     }
-
-//     #[inline]
-//     fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
-// }
-// impl<'i, 'a, F, S, I> ExactSizeIterator for AtomQuantifier<'a, F, S, I>
-// where
-//     I: Clone + Iterator<Item = &'i Atom<F, S>>,
-//     I::Item: Clone,
-//     Atom<F, S>: 'i + Clone,
-//     Ident<F, S>: Eq + Hash,
-// {
-//     #[inline]
-//     fn len(&self) -> usize { self.iter.len() }
-// }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+}
+impl<'i, 'a, F, S, I> ExactSizeIterator for AtomQuantifier<'a, F, S, I>
+where
+    I: Clone + Iterator<Item = &'i GroundAtom<F, S>>,
+    Ident<F, S>: Eq + Hash,
+    Atom<F, S>: 'i,
+    Span<F, S>: Clone,
+{
+    #[inline]
+    fn len(&self) -> usize { self.iter.len() }
+}
 
 /// Quantifies over a rule's variables to produce a grounded rule.
 #[derive(Clone, Debug)]
@@ -433,6 +418,24 @@ impl<F, S> Rule<Atom<F, S>> {
         Ident<F, S>: Clone + Eq + Hash,
     {
         RuleQuantifier::new(self, domain)
+    }
+}
+
+impl<F, S> Atom<F, S> {
+    /// Convenient way to instantiate an atom for a powerset of the given atoms.
+    ///
+    /// # Arguments
+    /// - `domain`: Some kind of universe of atoms to quantify over.
+    ///
+    /// # Returns
+    /// An [`AtomQuantifier`] that will produce concrete atoms without variables in them.
+    #[inline]
+    pub fn concretize_for<'r, I>(&'r self, domain: impl IntoIterator<IntoIter = I>) -> AtomQuantifier<'r, F, S, I>
+    where
+        I: Clone + ExactSizeIterator + Iterator,
+        Ident<F, S>: Clone + Eq + Hash,
+    {
+        AtomQuantifier::new(self, domain)
     }
 }
 

@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 16:26:50
 //  Last edited:
-//    05 Feb 2025, 14:23:34
+//    11 Feb 2025, 18:20:41
 //  Auto updated?
 //    Yes
 //
@@ -16,37 +16,55 @@
 // Modules
 pub mod state;
 
-use std::error;
 // Imports
+use std::error;
 use std::fmt::{Display, Formatter, Result as FResult};
 
-use ast_toolkit::punctuated::punct;
-use indexmap::IndexSet;
+use ast_toolkit::span::SpannableDisplay;
+use better_derive::{Clone, Debug, Eq, Hash, PartialEq};
 use log::{debug, trace};
 use state::State;
 
 use super::ast::{Phrase, Postulation, TransitionSpec, Trigger};
-use crate::ast::{Atom, Dot, Ident, Rule, Spec};
-use crate::interpreter::knowledge_base::Interpretation;
+use crate::interpreter::KnowledgeBase;
+use crate::ir::{Atom, GroundAtom, Ident, Rule, Span, Spec};
 use crate::transitions::ast::{PostulationOp, Transition};
 
 
 /***** ERRORS *****/
 /// Defines errors occurring when computing transitions.
 #[derive(Debug)]
-pub enum Error<'f, 's> {
+pub enum Error<F, S> {
+    /// Failed to compile an input rule.
+    RuleCompile { err: crate::ir::compile::Error<F, S> },
     /// A given transition is undefined.
-    UndefinedTransition { ident: Ident<&'f str, &'s str> },
+    UndefinedTransition { ident: Ident<F, S> },
 }
-impl<'f, 's> Display for Error<'f, 's> {
+impl<F, S: SpannableDisplay> Display for Error<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
-            Self::UndefinedTransition { ident } => write!(f, "Undefined transition {:?}", ident.value.value()),
+            Self::RuleCompile { .. } => write!(f, "Failed to compile rule"),
+            Self::UndefinedTransition { ident } => write!(f, "Undefined transition \"{ident}\""),
         }
     }
 }
-impl<'f, 's> error::Error for Error<'f, 's> {}
+impl<F, S: SpannableDisplay> error::Error for Error<F, S>
+where
+    Span<F, S>: 'static,
+{
+    #[inline]
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            Self::RuleCompile { err } => Some(err),
+            Self::UndefinedTransition { .. } => None,
+        }
+    }
+}
+impl<F, S> From<crate::ir::compile::Error<F, S>> for Error<F, S> {
+    #[inline]
+    fn from(value: crate::ir::compile::Error<F, S>) -> Self { Self::RuleCompile { err: value } }
+}
 
 
 
@@ -54,15 +72,22 @@ impl<'f, 's> error::Error for Error<'f, 's> {}
 
 /***** HELPER FUNCTIONS ****/
 /// Computes a [`Spec`] from the given [`State`].
-fn state_to_spec<'a, 'f: 'a, 's: 'a>(
-    rules: impl IntoIterator<Item = &'a Rule<&'f str, &'s str>>,
-    posts: impl IntoIterator<Item = &'a Atom<&'f str, &'s str>>,
-) -> Spec<&'f str, &'s str> {
+fn state_to_spec<'a, F, S>(
+    rules: impl IntoIterator<Item = &'a Rule<Atom<F, S>>>,
+    posts: impl IntoIterator<Item = &'a GroundAtom<F, S>>,
+) -> Spec<Atom<F, S>>
+where
+    Span<F, S>: 'a + Clone,
+{
     Spec {
         rules: rules
             .into_iter()
             .cloned()
-            .chain(posts.into_iter().map(|atom| Rule { consequents: punct![v => atom.clone()], tail: None, dot: Dot::default() }))
+            .chain(posts.into_iter().map(|atom| Rule {
+                consequents:     vec![atom.to_atom()],
+                pos_antecedents: Vec::new(),
+                neg_antecedents: Vec::new(),
+            }))
             .collect(),
     }
 }
@@ -74,13 +99,13 @@ fn state_to_spec<'a, 'f: 'a, 's: 'a>(
 /***** AUXILLARY *****/
 /// Keeps track of effects as they occur during transitions.
 #[derive(Clone, Debug)]
-pub struct Effect<'f, 's> {
+pub struct Effect<F, S> {
     /// The phrase that triggered this effect.
-    pub trigger: EffectTrigger<'f, 's>,
+    pub trigger: EffectTrigger<F, S>,
     /// The denotation after the step.
-    pub interpretation: Interpretation<'f, 's>,
+    pub kb:      KnowledgeBase<F, S>,
 }
-impl<'f, 's> Effect<'f, 's> {
+impl<F, S> Effect<F, S> {
     /// Constructor for the Effect that initializes it to an empty one.
     ///
     /// # Arguments
@@ -89,20 +114,23 @@ impl<'f, 's> Effect<'f, 's> {
     /// # Returns
     /// A new Effect that has yet to be populated.
     #[inline]
-    pub fn new(trigger: impl Into<EffectTrigger<'f, 's>>) -> Self { Self { trigger: trigger.into(), interpretation: Interpretation::new() } }
+    pub fn new(trigger: impl Into<EffectTrigger<F, S>>) -> Self { Self { trigger: trigger.into(), kb: KnowledgeBase::new() } }
 }
 
 /// The reason that triggered an [`Effect`].
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum EffectTrigger<'f, 's> {
+pub enum EffectTrigger<F, S> {
     /// A raw postulation.
-    Postulation(Postulation<&'f str, &'s str>),
+    Postulation(Postulation<F, S>),
     /// A trigger.
-    Trigger(Trigger<&'f str, &'s str>),
+    Trigger(Trigger<F, S>),
     /// The end of the spec.
     End,
 }
-impl<'f, 's> Display for EffectTrigger<'f, 's> {
+impl<F, S> Display for EffectTrigger<F, S>
+where
+    S: SpannableDisplay,
+{
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -112,15 +140,15 @@ impl<'f, 's> Display for EffectTrigger<'f, 's> {
         }
     }
 }
-impl<'f, 's> From<Postulation<&'f str, &'s str>> for EffectTrigger<'f, 's> {
+impl<F, S> From<Postulation<F, S>> for EffectTrigger<F, S> {
     #[inline]
-    fn from(value: Postulation<&'f str, &'s str>) -> Self { Self::Postulation(value) }
+    fn from(value: Postulation<F, S>) -> Self { Self::Postulation(value) }
 }
-impl<'f, 's> From<Trigger<&'f str, &'s str>> for EffectTrigger<'f, 's> {
+impl<F, S> From<Trigger<F, S>> for EffectTrigger<F, S> {
     #[inline]
-    fn from(value: Trigger<&'f str, &'s str>) -> Self { Self::Trigger(value) }
+    fn from(value: Trigger<F, S>) -> Self { Self::Trigger(value) }
 }
-impl<'f, 's> From<()> for EffectTrigger<'f, 's> {
+impl<F, S> From<()> for EffectTrigger<F, S> {
     #[inline]
     fn from(_value: ()) -> Self { Self::End }
 }
@@ -130,7 +158,12 @@ impl<'f, 's> From<()> for EffectTrigger<'f, 's> {
 
 
 /***** LIBRARY *****/
-impl<'f, 's> TransitionSpec<&'f str, &'s str> {
+impl<F, S> TransitionSpec<F, S>
+where
+    S: SpannableDisplay,
+    for<'a> S::Slice<'a>: Ord,
+    Span<F, S>: Clone + Eq + std::hash::Hash,
+{
     /// Computes the denotation of the specification after every transition.
     ///
     /// # Returns
@@ -141,11 +174,11 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
     /// This function can error if the total number of arguments in a rule exceeds
     /// [`STACK_VEC_LEN`](crate::interpreter::interpretation::STACK_VEC_LEN).
     #[inline]
-    pub fn run(&self) -> Result<(State<'f, 's>, Vec<Effect<'f, 's>>), Error<'f, 's>> {
+    pub fn run(&self) -> Result<(State<F, S>, Vec<Effect<F, S>>), Error<F, S>> {
         let mut state = State::new();
 
         // Leave the rest to the mutable interface
-        let effects: Vec<Effect<'f, 's>> = self.run_mut(&mut state)?;
+        let effects: Vec<Effect<F, S>> = self.run_mut(&mut state)?;
         Ok((state, effects))
     }
 
@@ -165,7 +198,7 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
     /// This function can error if the total number of arguments in a rule exceeds
     /// [`STACK_VEC_LEN`](crate::interpreter::interpretation::STACK_VEC_LEN).
     #[inline]
-    pub fn run_mut(&self, state: &mut State<'f, 's>) -> Result<Vec<Effect<'f, 's>>, Error<'f, 's>> {
+    pub fn run_mut(&self, state: &mut State<F, S>) -> Result<Vec<Effect<F, S>>, Error<F, S>> {
         let State { trans: transitions, rules, posts } = state;
         debug!(
             "Running transitions\n\nTransitionSpec:\n{}\n{}{}\n",
@@ -175,17 +208,17 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
         );
 
         // Go through everything in the spec!
-        let mut effects: Vec<Effect<'f, 's>> = Vec::new();
+        let mut effects: Vec<Effect<F, S>> = Vec::new();
         for phrase in &self.phrases {
             match phrase {
                 // We collect rules & definitions as we find them.
                 Phrase::Rule(rule) => {
                     trace!("--> Rule '{rule}'");
-                    rules.insert(rule.clone());
+                    rules.insert(rule.compile()?);
                 },
                 Phrase::Transition(trans) => {
                     trace!("--> Transition '{trans}'");
-                    if transitions.insert(trans.ident, trans.clone()).is_some() {
+                    if transitions.insert(trans.ident.clone(), trans.clone()).is_some() {
                         // TODO: Already exists. Warning of some kind.
                     }
                 },
@@ -193,31 +226,36 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
                 // Postulations and triggers will trigger inferences
                 Phrase::Postulation(post) => {
                     trace!("--> Postulation '{post}'");
-                    let mut effect: Effect<'f, 's> = Effect::new(post.clone());
+                    let mut effect: Effect<F, S> = Effect::new(post.clone());
 
                     // First, with the current KB, do an inference run to find out which postconditions are derived
-                    let mut spec: Spec<&str, &str> = state_to_spec(rules.iter(), posts.iter());
+                    let mut spec: Spec<Atom<F, S>> = state_to_spec(rules.iter(), posts.iter());
                     spec.rules.push(post.to_rule());
                     // NOTE: This function clears the interpretation for us
                     debug!("Running post-condition inference step");
-                    let int: Interpretation = spec.alternating_fixpoint();
-                    let consts: IndexSet<Ident<&str, &str>> = int.find_existing_consts();
+                    let kb: KnowledgeBase<F, S> = spec.alternating_fixpoint();
 
                     // Update the state according to the current knowledge base
                     match post.op {
                         PostulationOp::Create(_) => {
-                            for atom in post.consequents.values().flat_map(|atom| atom.quantify(consts.iter())) {
-                                if int.closed_world_truth(&atom) == Some(true) {
-                                    debug!("Postulated '{atom}'");
-                                    posts.insert(atom);
+                            for atom in post.consequents.values() {
+                                let atom = atom.compile();
+                                for atom in atom.concretize_for(kb.truths()) {
+                                    if kb.closed_world_truth(&atom) == Some(true) {
+                                        debug!("Postulated '{atom}'");
+                                        posts.insert(atom);
+                                    }
                                 }
                             }
                         },
                         PostulationOp::Obfuscate(_) => {
-                            for atom in post.consequents.values().flat_map(|atom| atom.quantify(consts.iter())) {
-                                if int.closed_world_truth(&atom) == Some(true) {
-                                    debug!("Obfuscated '{atom}'");
-                                    posts.shift_remove(&atom);
+                            for atom in post.consequents.values() {
+                                let atom = atom.compile();
+                                for atom in atom.concretize_for(kb.truths()) {
+                                    if kb.closed_world_truth(&atom) == Some(true) {
+                                        debug!("Obfuscated '{atom}'");
+                                        posts.shift_remove(&atom);
+                                    }
                                 }
                             }
                         },
@@ -225,21 +263,22 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
 
                     // Now we run an interpretation FOR REAL
                     debug!("Running REAL inference step");
-                    state_to_spec(rules.iter(), posts.iter()).alternating_fixpoint_mut(&mut effect.interpretation);
+                    effect.kb.clear();
+                    state_to_spec(rules.iter(), posts.iter()).alternating_fixpoint_mut(&mut effect.kb);
 
                     // OK!
                     effects.push(effect);
                 },
                 Phrase::Trigger(trigger) => {
                     trace!("--> Trigger '{trigger}'");
-                    let mut effect: Effect<'f, 's> = Effect::new(trigger.clone());
+                    let mut effect: Effect<F, S> = Effect::new(trigger.clone());
 
                     // Process all the rules postulation by all referred transitions
-                    let mut creations: Vec<Atom<&'f str, &'s str>> = Vec::new();
-                    let mut obfuscations: Vec<Atom<&'f str, &'s str>> = Vec::new();
+                    let mut creations: Vec<GroundAtom<F, S>> = Vec::new();
+                    let mut obfuscations: Vec<GroundAtom<F, S>> = Vec::new();
                     for ident in &trigger.idents {
                         // Find the transition in the state
-                        let trans: &Transition<&'f str, &'s str> = match transitions.get(ident) {
+                        let trans: &Transition<F, S> = match transitions.get(ident) {
                             Some(trans) => trans,
                             None => return Err(Error::UndefinedTransition { ident: ident.clone() }),
                         };
@@ -247,30 +286,35 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
                         // Handle its postulations
                         for post in &trans.postulations {
                             // First, with the current KB, do an inference run to find out which postconditions are derived
-                            let mut spec: Spec<&str, &str> = state_to_spec(rules.iter(), posts.iter());
+                            let mut spec: Spec<Atom<F, S>> = state_to_spec(rules.iter(), posts.iter());
                             spec.rules.push(post.to_rule());
                             // NOTE: This function clears the interpretation for us
                             debug!("Running post-condition inference step");
-                            let int: Interpretation = spec.alternating_fixpoint();
-                            let consts: IndexSet<Ident<&str, &str>> = int.find_existing_consts();
+                            let kb: KnowledgeBase<F, S> = spec.alternating_fixpoint();
 
                             // Update the state according to the current knowledge base
                             match post.op {
                                 PostulationOp::Create(_) => {
-                                    for atom in post.consequents.values().flat_map(|atom| atom.quantify(consts.iter())) {
-                                        trace!("Considering atom '{atom}' for creation");
-                                        if int.closed_world_truth(&atom) == Some(true) {
-                                            debug!("--> Postulated '{atom}'");
-                                            creations.push(atom.clone());
+                                    for atom in post.consequents.values() {
+                                        let atom = atom.compile();
+                                        for atom in atom.concretize_for(kb.truths()) {
+                                            trace!("Considering atom '{atom}' for creation");
+                                            if kb.closed_world_truth(&atom) == Some(true) {
+                                                debug!("--> Postulated '{atom}'");
+                                                creations.push(atom.clone());
+                                            }
                                         }
                                     }
                                 },
                                 PostulationOp::Obfuscate(_) => {
-                                    for atom in post.consequents.values().flat_map(|atom| atom.quantify(consts.iter())) {
-                                        trace!("Considering atom '{atom}' for obfuscation");
-                                        if int.closed_world_truth(&atom) == Some(true) {
-                                            debug!("--> Obfuscated '{atom}'");
-                                            obfuscations.push(atom.clone());
+                                    for atom in post.consequents.values() {
+                                        let atom = atom.compile();
+                                        for atom in atom.concretize_for(kb.truths()) {
+                                            trace!("Considering atom '{atom}' for obfuscation");
+                                            if kb.closed_world_truth(&atom) == Some(true) {
+                                                debug!("--> Obfuscated '{atom}'");
+                                                obfuscations.push(atom.clone());
+                                            }
                                         }
                                     }
                                 },
@@ -288,7 +332,8 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
 
                     // Now we run an interpretation FOR REAL
                     debug!("Running REAL inference step");
-                    state_to_spec(rules.iter(), posts.iter()).alternating_fixpoint_mut(&mut effect.interpretation);
+                    effect.kb.clear();
+                    state_to_spec(rules.iter(), posts.iter()).alternating_fixpoint_mut(&mut effect.kb);
 
                     // OK!
                     effects.push(effect);
@@ -297,8 +342,9 @@ impl<'f, 's> TransitionSpec<&'f str, &'s str> {
         }
 
         // Run a final postulation
-        let mut effect: Effect<'f, 's> = Effect::new(EffectTrigger::End);
-        state_to_spec(rules.iter(), posts.iter()).alternating_fixpoint_mut(&mut effect.interpretation);
+        let mut effect: Effect<F, S> = Effect::new(EffectTrigger::End);
+        effect.kb.clear();
+        state_to_spec(rules.iter(), posts.iter()).alternating_fixpoint_mut(&mut effect.kb);
         effects.push(effect);
 
         // OK, report all effects back
@@ -320,9 +366,9 @@ mod tests {
     use datalog_macros::datalog_trans;
 
     use super::*;
-    use crate::ast::{Arrow, Atom, Comma, Dot, Literal, RuleAntecedents};
-    use crate::tests::{make_atom, make_curly, make_ident};
-    use crate::transitions::ast::{Add, Exclaim, Squiggly};
+    use crate::ast::{Arrow, Atom, Comma, Dot, Literal, RuleBody};
+    use crate::tests::{make_atom, make_curly, make_ident, make_ir_ground_atom};
+    use crate::transitions::ast::{Add, Squiggly};
 
 
     /// Makes a [`Postulation`] conveniently.
@@ -345,21 +391,11 @@ mod tests {
             curly_tokens: make_curly(),
             consequents,
             tail: if !antecedents.is_empty() {
-                Some(RuleAntecedents { arrow_token: Arrow { span: Span::new("make_postulation::arrow", ":-") }, antecedents })
+                Some(RuleBody { arrow_token: Arrow { span: Span::new("make_postulation::arrow", ":-") }, antecedents })
             } else {
                 None
             },
             dot: Dot { span: Span::new("make_postulation::dot", ".") },
-        }
-    }
-
-    /// Makes a [`Trigger`] conveniently.
-    fn make_trigger(idents: impl IntoIterator<Item = &'static str>) -> Trigger<&'static str, &'static str> {
-        Trigger {
-            exclaim_token: Exclaim { span: Span::new("make_trigger::exclaim", "!") },
-            curly_tokens: make_curly(),
-            idents: idents.into_iter().map(|i| Ident { value: Span::new("make_trigger::ident", i) }).collect(),
-            dot: Dot { span: Span::new("make_trigger::dot", ".") },
         }
     }
 
@@ -383,22 +419,21 @@ mod tests {
             r :- q.
             r :- not c.
         };
-        let mut effects: Vec<Effect> = match five_one.run() {
+        let mut effects: Vec<Effect<&'static str, &'static str>> = match five_one.run() {
             Ok((_, effects)) => effects,
             Err(err) => panic!("{err}"),
         };
         assert_eq!(effects.len(), 1);
 
-        let effect: Effect = effects.pop().unwrap();
-        assert_eq!(effect.interpretation.len(), 7);
-        assert_eq!(effect.interpretation.closed_world_truth(&make_atom("a", None)), None);
-        assert_eq!(effect.interpretation.closed_world_truth(&make_atom("b", None)), None);
-        assert_eq!(effect.interpretation.closed_world_truth(&make_atom("c", None)), Some(true));
-        assert_eq!(effect.interpretation.closed_world_truth(&make_atom("p", None)), Some(false));
-        assert_eq!(effect.interpretation.closed_world_truth(&make_atom("q", None)), Some(false));
-        assert_eq!(effect.interpretation.closed_world_truth(&make_atom("r", None)), Some(false));
-        assert_eq!(effect.interpretation.closed_world_truth(&make_atom("s", None)), Some(false));
-        assert_eq!(effect.interpretation.closed_world_truth(&make_atom("t", None)), Some(false));
+        let effect: Effect<&'static str, &'static str> = effects.pop().unwrap();
+        assert_eq!(effect.kb.closed_world_truth(&make_ir_ground_atom("a", None)), None);
+        assert_eq!(effect.kb.closed_world_truth(&make_ir_ground_atom("b", None)), None);
+        assert_eq!(effect.kb.closed_world_truth(&make_ir_ground_atom("c", None)), Some(true));
+        assert_eq!(effect.kb.closed_world_truth(&make_ir_ground_atom("p", None)), Some(false));
+        assert_eq!(effect.kb.closed_world_truth(&make_ir_ground_atom("q", None)), Some(false));
+        assert_eq!(effect.kb.closed_world_truth(&make_ir_ground_atom("r", None)), Some(false));
+        assert_eq!(effect.kb.closed_world_truth(&make_ir_ground_atom("s", None)), Some(false));
+        assert_eq!(effect.kb.closed_world_truth(&make_ir_ground_atom("t", None)), Some(false));
     }
 
     #[test]
@@ -411,7 +446,7 @@ mod tests {
             #![crate]
             #foo {}.
         };
-        let (state, mut effects): (State, Vec<Effect>) = match def.run() {
+        let (state, mut effects): (State<&'static str, &'static str>, Vec<Effect<&'static str, &'static str>>) = match def.run() {
             Ok(res) => res,
             Err(err) => panic!("{err}"),
         };
@@ -427,9 +462,8 @@ mod tests {
         assert!(state.rules.is_empty());
         assert_eq!(effects.len(), 1);
 
-        let effect: Effect = effects.pop().unwrap();
+        let effect: Effect<&'static str, &'static str> = effects.pop().unwrap();
         assert_eq!(effect.trigger, EffectTrigger::End);
-        assert_eq!(effect.interpretation.len(), 0);
     }
 
     #[test]
@@ -444,7 +478,7 @@ mod tests {
                 +{ foo }.
             }.
         };
-        let (state, mut effects): (State, Vec<Effect>) = match def.run() {
+        let (state, mut effects): (State<&'static str, &'static str>, Vec<Effect<&'static str, &'static str>>) = match def.run() {
             Ok(res) => res,
             Err(err) => panic!("{err}"),
         };
@@ -460,9 +494,8 @@ mod tests {
         assert!(state.rules.is_empty());
         assert_eq!(effects.len(), 1);
 
-        let effect: Effect = effects.pop().unwrap();
+        let effect: Effect<&'static str, &'static str> = effects.pop().unwrap();
         assert_eq!(effect.trigger, EffectTrigger::End);
-        assert_eq!(effect.interpretation.len(), 0);
     }
 
     #[test]
@@ -478,7 +511,7 @@ mod tests {
                 ~{ bar } :- baz(quz).
             }.
         };
-        let (state, mut effects): (State, Vec<Effect>) = match def.run() {
+        let (state, mut effects): (State<&'static str, &'static str>, Vec<Effect<&'static str, &'static str>>) = match def.run() {
             Ok(res) => res,
             Err(err) => panic!("{err}"),
         };
@@ -497,9 +530,8 @@ mod tests {
         assert!(state.rules.is_empty());
         assert_eq!(effects.len(), 1);
 
-        let effect: Effect = effects.pop().unwrap();
+        let effect: Effect<&'static str, &'static str> = effects.pop().unwrap();
         assert_eq!(effect.trigger, EffectTrigger::End);
-        assert_eq!(effect.interpretation.len(), 0);
     }
 
     #[test]
@@ -513,21 +545,21 @@ mod tests {
             foo :- bar.
             +{ bar }.
         };
-        let (_, mut effects): (State, Vec<Effect>) = match def.run() {
+        let (_, mut effects): (State<&'static str, &'static str>, Vec<Effect<&'static str, &'static str>>) = match def.run() {
             Ok(res) => res,
             Err(err) => panic!("{err}"),
         };
         assert_eq!(effects.len(), 2);
 
-        let effect2: Effect = effects.pop().unwrap();
+        let effect2: Effect<&'static str, &'static str> = effects.pop().unwrap();
         assert_eq!(effect2.trigger, EffectTrigger::End);
-        assert_eq!(effect2.interpretation.closed_world_truth(&make_atom("foo", None)), Some(true));
-        assert_eq!(effect2.interpretation.closed_world_truth(&make_atom("bar", None)), Some(true));
+        assert_eq!(effect2.kb.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
+        assert_eq!(effect2.kb.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(true));
 
-        let effect1: Effect = effects.pop().unwrap();
+        let effect1: Effect<&'static str, &'static str> = effects.pop().unwrap();
         assert_eq!(effect1.trigger, EffectTrigger::Postulation(make_postulation(true, [make_atom("bar", None)], None)));
-        assert_eq!(effect1.interpretation.closed_world_truth(&make_atom("foo", None)), Some(true));
-        assert_eq!(effect1.interpretation.closed_world_truth(&make_atom("bar", None)), Some(true));
+        assert_eq!(effect1.kb.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
+        assert_eq!(effect1.kb.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(true));
     }
 
     #[test]
@@ -541,23 +573,23 @@ mod tests {
             +{ foo }.
             ~{ foo }.
         };
-        let (_, mut effects): (State, Vec<Effect>) = match def.run() {
+        let (_, mut effects): (State<&'static str, &'static str>, Vec<Effect<&'static str, &'static str>>) = match def.run() {
             Ok(res) => res,
             Err(err) => panic!("{err}"),
         };
         assert_eq!(effects.len(), 3);
 
-        let effect3: Effect = effects.pop().unwrap();
+        let effect3: Effect<&'static str, &'static str> = effects.pop().unwrap();
         assert_eq!(effect3.trigger, EffectTrigger::End);
-        assert_eq!(effect3.interpretation.closed_world_truth(&make_atom("foo", None)), Some(false));
+        assert_eq!(effect3.kb.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(false));
 
-        let effect2: Effect = effects.pop().unwrap();
+        let effect2: Effect<&'static str, &'static str> = effects.pop().unwrap();
         assert_eq!(effect2.trigger, EffectTrigger::Postulation(make_postulation(false, [make_atom("foo", None)], None)));
-        assert_eq!(effect2.interpretation.closed_world_truth(&make_atom("foo", None)), Some(false));
+        assert_eq!(effect2.kb.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(false));
 
-        let effect1: Effect = effects.pop().unwrap();
+        let effect1: Effect<&'static str, &'static str> = effects.pop().unwrap();
         assert_eq!(effect1.trigger, EffectTrigger::Postulation(make_postulation(true, [make_atom("foo", None)], None)));
-        assert_eq!(effect1.interpretation.closed_world_truth(&make_atom("foo", None)), Some(true));
+        assert_eq!(effect1.kb.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
     }
 
     // #[test]
