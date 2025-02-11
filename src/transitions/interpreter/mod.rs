@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 16:26:50
 //  Last edited:
-//    11 Feb 2025, 18:20:41
+//    11 Feb 2025, 18:23:39
 //  Auto updated?
 //    Yes
 //
@@ -161,7 +161,6 @@ impl<F, S> From<()> for EffectTrigger<F, S> {
 impl<F, S> TransitionSpec<F, S>
 where
     S: SpannableDisplay,
-    for<'a> S::Slice<'a>: Ord,
     Span<F, S>: Clone + Eq + std::hash::Hash,
 {
     /// Computes the denotation of the specification after every transition.

@@ -4,7 +4,7 @@
 //  Created:
 //    03 Feb 2025, 17:11:26
 //  Last edited:
-//    11 Feb 2025, 16:02:20
+//    11 Feb 2025, 18:24:56
 //  Auto updated?
 //    Yes
 //
@@ -16,12 +16,11 @@
 //!   Actually, scratch that. Now uses Chris' safety property!
 //
 
-use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use ast_toolkit::span::{Spannable, SpannableDisplay};
+use ast_toolkit::span::SpannableDisplay;
 use better_derive::{Clone, Debug};
 use indexmap::IndexSet;
 
@@ -268,43 +267,21 @@ impl<F, S> KnowledgeBase<F, S> {
 // Formatting
 impl<F, S> Display for KnowledgeBase<F, S>
 where
-    S: Spannable + SpannableDisplay,
-    for<'s> S::Slice<'s>: Ord,
+    S: SpannableDisplay,
 {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        /// Sorts two ground atoms, first by identifier, then arity, and finally argument order
-        fn atom_sort<F, S>(lhs: &&GroundAtom<F, S>, rhs: &&GroundAtom<F, S>) -> Ordering
-        where
-            S: Spannable,
-            for<'s> S::Slice<'s>: Ord,
-        {
-            lhs.ident.value.value().cmp(&rhs.ident.value.value()).then_with(|| lhs.args.len().cmp(&rhs.args.len())).then_with(|| {
-                lhs.args
-                    .iter()
-                    .zip(rhs.args.iter())
-                    .find_map(|(lhs, rhs)| {
-                        let ord = atom_sort(&lhs, &rhs);
-                        if !ord.is_eq() { Some(ord) } else { None }
-                    })
-                    .unwrap_or(Ordering::Equal)
-            })
-        }
-
         // Create three sorted lists of atoms
-        let mut pos_truths: Vec<&GroundAtom<F, S>> =
+        let pos_truths: Vec<&GroundAtom<F, S>> =
             self.universe.iter().enumerate().filter_map(|(i, a)| if self.pos_truths.contains(&i) { Some(a) } else { None }).collect();
-        let mut neg_truths: Vec<&GroundAtom<F, S>> =
+        let neg_truths: Vec<&GroundAtom<F, S>> =
             self.universe.iter().enumerate().filter_map(|(i, a)| if self.neg_truths.contains(&i) { Some(a) } else { None }).collect();
-        let mut unkwns: Vec<&GroundAtom<F, S>> = self
+        let unkwns: Vec<&GroundAtom<F, S>> = self
             .universe
             .iter()
             .enumerate()
             .filter_map(|(i, a)| if !self.pos_truths.contains(&i) && !self.neg_truths.contains(&i) { Some(a) } else { None })
             .collect();
-        pos_truths.sort_by(atom_sort::<F, S>);
-        neg_truths.sort_by(atom_sort::<F, S>);
-        unkwns.sort_by(atom_sort::<F, S>);
 
         // Write 'em
         writeln!(f, "Knowledge base {{")?;

@@ -4,7 +4,7 @@
 //  Created:
 //    26 Mar 2024, 19:36:31
 //  Last edited:
-//    11 Feb 2025, 17:47:49
+//    11 Feb 2025, 18:24:16
 //  Auto updated?
 //    Yes
 //
@@ -120,7 +120,6 @@ where
     I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
     I::IntoIter: Clone,
     S: SpannableDisplay,
-    for<'a> S::Slice<'a>: Ord,
     Span<F, S>: 's + Clone + Eq + Hash,
 {
     let mut int: KnowledgeBase<F, S> = KnowledgeBase::new();
@@ -148,7 +147,6 @@ where
     I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
     I::IntoIter: Clone,
     S: SpannableDisplay,
-    for<'a> S::Slice<'a>: Ord,
     Span<F, S>: 's + Clone + Eq + Hash,
 {
     let rules = rules.into_iter();
@@ -223,7 +221,6 @@ where
 impl<F, S> Spec<Atom<F, S>>
 where
     S: SpannableDisplay,
-    for<'a> S::Slice<'a>: Ord,
     Span<F, S>: Clone + Eq + Hash,
 {
     /// Performs a proper derivation using the full well-founded semantics.

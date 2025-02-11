@@ -1,0 +1,3 @@
+
+a.
+foo(X) :- X, not foo(foo(foo(foo(foo(X))))).

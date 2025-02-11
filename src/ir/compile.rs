@@ -4,7 +4,7 @@
 //  Created:
 //    10 Feb 2025, 15:13:54
 //  Last edited:
-//    10 Feb 2025, 16:12:01
+//    11 Feb 2025, 18:29:55
 //  Auto updated?
 //    Yes
 //
@@ -129,18 +129,14 @@ where
     #[inline]
     pub fn unbound_vars<'s>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>> {
         // Collect all the bound variables first
-        let bound: HashSet<&ast::Ident<F, S>> = self
-            .tail
-            .iter()
-            .flat_map(|t| t.antecedents.values().filter(|l| l.is_positive()))
-            .filter_map(|l| if let ast::Atom::Var(v) = l.atom() { Some(v) } else { None })
-            .collect();
+        let bound: HashSet<&ast::Ident<F, S>> =
+            self.tail.iter().flat_map(|t| t.antecedents.values().filter(|l| l.is_positive())).flat_map(|l| l.atom().vars()).collect();
 
         // Then we're going to filter the others
         self.consequents
             .values()
             .chain(self.tail.iter().flat_map(|t| t.antecedents.values().filter(|l| !l.is_positive())).map(ast::Literal::atom))
-            .filter_map(|a| if let ast::Atom::Var(v) = a { Some(v) } else { None })
+            .flat_map(ast::Atom::vars)
             .filter(move |v| !bound.contains(v))
     }
 
@@ -152,7 +148,7 @@ where
     /// # Returns
     /// True if the rule is satisfied, or false otherwise.
     #[inline]
-    pub fn is_safe(&self) -> bool { self.unbound_vars().next().is_some() }
+    pub fn is_safe(&self) -> bool { self.unbound_vars().next().is_none() }
 }
 impl<F, S> ast::Rule<F, S>
 where
