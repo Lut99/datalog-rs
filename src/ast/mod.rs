@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    10 Feb 2025, 16:08:15
+//    11 Feb 2025, 18:36:15
 //  Auto updated?
 //    Yes
 //
@@ -616,7 +616,7 @@ impl<F, S> ToNode for FactArgs<F, S> {
     fn railroad() -> Self::Node {
         rr::Sequence::new(vec![
             Box::new(Parens::<F, S>::railroad_open()),
-            Box::new(rr::Repeat::new(Fact::<F, S>::railroad(), Comma::<F, S>::railroad())),
+            Box::new(rr::Repeat::new(rr::NonTerminal::new("Fact".into()), Comma::<F, S>::railroad())),
             Box::new(Parens::<F, S>::railroad_close()),
         ])
     }
