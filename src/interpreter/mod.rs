@@ -4,7 +4,7 @@
 //  Created:
 //    26 Mar 2024, 19:36:31
 //  Last edited:
-//    11 Feb 2025, 18:24:16
+//    12 Feb 2025, 15:58:49
 //  Auto updated?
 //    Yes
 //
@@ -156,11 +156,6 @@ where
         rules.clone().map(|r| format!("   {r}\n")).collect::<String>(),
         (0..80).map(|_| '-').collect::<String>()
     );
-
-    // First, go through the rule once to add its constants to the knowledge base's universe
-    for rule in rules.clone() {
-        kb.extend_universe_with_rule(rule);
-    }
 
     // We alternate
     let mut prev_hashes: [u64; 3] = [0; 3];
@@ -322,7 +317,7 @@ mod tests {
             foo. bar. baz.
         }
         .compile()
-        .unwrap();
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
         let res: KnowledgeBase<_, _> = consts.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(true));
@@ -340,7 +335,7 @@ mod tests {
             foo(bar). bar(baz). baz(quz).
         }
         .compile()
-        .unwrap();
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
         let res: KnowledgeBase<_, _> = funcs.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", Some("bar"))), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", Some("baz"))), Some(true));
@@ -358,7 +353,7 @@ mod tests {
             foo. bar(foo) :- foo.
         }
         .compile()
-        .unwrap();
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
         let res: KnowledgeBase<_, _> = rules.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", Some("foo"))), Some(true));
@@ -375,7 +370,7 @@ mod tests {
             foo. bar(foo) :- foo. bar(bar) :- not bar.
         }
         .compile()
-        .unwrap();
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
         let res: KnowledgeBase<_, _> = neg_rules.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(false));
@@ -383,55 +378,55 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", Some("bar"))), Some(true));
     }
 
-    // #[test]
-    // fn test_alternating_fixpoint_rules_vars() {
-    //     #[cfg(feature = "log")]
-    //     crate::tests::setup_logger();
+    #[test]
+    fn test_alternating_fixpoint_rules_vars() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
-    //     // Now some cool rules with variables
-    //     let var_rules: Spec<_> = datalog! {
-    //         #![crate]
-    //         foo. bar. baz(foo). quz(X) :- baz(X). qux(X) :- not baz(X).
-    //     }
-    //     .compile()
-    //     .unwrap();
-    //     let res: KnowledgeBase<_, _> = var_rules.alternating_fixpoint();
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", Some("foo"))), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", Some("bar"))), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", Some("foo"))), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", Some("bar"))), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", Some("foo"))), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", Some("bar"))), Some(true));
-    // }
+        // Now some cool rules with variables
+        let var_rules: Spec<_> = datalog! {
+            #![crate]
+            foo. bar. baz(foo). quz(X) :- baz(X). qux(X) :- quz(X), not baz(foo).
+        }
+        .compile()
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
+        let res: KnowledgeBase<_, _> = var_rules.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", Some("foo"))), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", Some("bar"))), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", Some("foo"))), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", Some("bar"))), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", Some("foo"))), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", Some("bar"))), Some(false));
+    }
 
-    // #[test]
-    // fn test_alternating_fixpoint_rules_many_arity() {
-    //     #[cfg(feature = "log")]
-    //     crate::tests::setup_logger();
+    #[test]
+    fn test_alternating_fixpoint_rules_many_arity() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
-    //     // Arity > 1
-    //     let big_rules: Spec<_> = datalog! {
-    //         #![crate]
-    //         foo. bar. baz(foo). quz(X, foo) :- baz(X), foo. qux(X, Y) :- not quz(X, Y).
-    //     }
-    //     .compile()
-    //     .unwrap();
-    //     let res: KnowledgeBase<_, _> = big_rules.alternating_fixpoint();
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", [])), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", [])), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", ["foo"])), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", ["bar"])), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", ["foo", "foo"])), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", ["foo", "bar"])), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", ["bar", "foo"])), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", ["bar", "bar"])), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", ["foo", "foo"])), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", ["foo", "bar"])), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", ["bar", "foo"])), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", ["bar", "bar"])), Some(true));
-    // }
+        // Arity > 1
+        let big_rules: Spec<_> = datalog! {
+            #![crate]
+            foo. bar. baz(foo). quz(X, foo) :- baz(X), foo. qux(X, Y) :- quz(X, Y), not baz(Y).
+        }
+        .compile()
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
+        let res: KnowledgeBase<_, _> = big_rules.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", [])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", [])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", ["foo"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", ["bar"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", ["foo", "foo"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", ["foo", "bar"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", ["bar", "foo"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", ["bar", "bar"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", ["foo", "foo"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", ["foo", "bar"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", ["bar", "foo"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", ["bar", "bar"])), Some(false));
+    }
 
     #[test]
     fn test_alternating_fixpoint_rules_unknown() {
@@ -444,7 +439,7 @@ mod tests {
             foo :- not foo.
         }
         .compile()
-        .unwrap();
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
         let res: KnowledgeBase<_, _> = con_rules.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", [])), None);
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bingo", ["boingo"])), Some(false));
@@ -470,7 +465,7 @@ mod tests {
             r :- not c.
         }
         .compile()
-        .unwrap();
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
         let res: KnowledgeBase<_, _> = five_one.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("a", [])), None);
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("b", [])), None);
@@ -482,86 +477,86 @@ mod tests {
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("t", [])), Some(false));
     }
 
-    // #[test]
-    // fn test_alternating_fixpoint_paper_5_2a() {
-    //     #[cfg(feature = "log")]
-    //     crate::tests::setup_logger();
+    #[test]
+    fn test_alternating_fixpoint_paper_5_2a() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
-    //     // Example 5.2 (a)
-    //     // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
-    //     let five_two_a: Spec<_> = datalog! {
-    //         #![crate]
-    //         wins(X) :- mov(X, Y), not wins(Y).
+        // Example 5.2 (a)
+        // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
+        let five_two_a: Spec<_> = datalog! {
+            #![crate]
+            wins(X) :- mov(X, Y), not wins(Y).
 
-    //         a. b. c. d. e. f. g. h. i.
+            a. b. c. d. e. f. g. h. i.
 
-    //         mov(a, b). mov(a, e).
-    //         mov(b, c). mov(b, d). mov(e, f). mov(e, g).
-    //         mov(g, h). mov(g, i).
-    //     }
-    //     .compile()
-    //     .unwrap();
-    //     let res: KnowledgeBase<_, _> = five_two_a.alternating_fixpoint();
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["a"])), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["b"])), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["c"])), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["d"])), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["e"])), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["f"])), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["g"])), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["h"])), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["i"])), Some(false));
-    // }
+            mov(a, b). mov(a, e).
+            mov(b, c). mov(b, d). mov(e, f). mov(e, g).
+            mov(g, h). mov(g, i).
+        }
+        .compile()
+        .unwrap();
+        let res: KnowledgeBase<_, _> = five_two_a.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["a"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["b"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["c"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["d"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["e"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["f"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["g"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["h"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["i"])), Some(false));
+    }
 
-    // #[test]
-    // fn test_alternating_fixpoint_paper_5_2b() {
-    //     #[cfg(feature = "log")]
-    //     crate::tests::setup_logger();
+    #[test]
+    fn test_alternating_fixpoint_paper_5_2b() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
-    //     // Example 5.2 (b)
-    //     // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
-    //     let five_two_b: Spec<_> = datalog! {
-    //         #![crate]
-    //         wins(X) :- mov(X, Y), not wins(Y).
+        // Example 5.2 (b)
+        // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
+        let five_two_b: Spec<_> = datalog! {
+            #![crate]
+            wins(X) :- mov(X, Y), not wins(Y).
 
-    //         a. b. c. d.
+            a. b. c. d.
 
-    //         mov(a, b).
-    //         mov(b, a).
-    //         mov(b, c).
-    //         mov(c, d).
-    //     }
-    //     .compile()
-    //     .unwrap();
-    //     let res: KnowledgeBase<_, _> = five_two_b.alternating_fixpoint();
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["a"])), None);
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["b"])), None);
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["c"])), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["d"])), Some(false));
-    // }
+            mov(a, b).
+            mov(b, a).
+            mov(b, c).
+            mov(c, d).
+        }
+        .compile()
+        .unwrap();
+        let res: KnowledgeBase<_, _> = five_two_b.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["a"])), None);
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["b"])), None);
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["c"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["d"])), Some(false));
+    }
 
-    // #[test]
-    // fn test_alternating_fixpoint_paper_5_2c() {
-    //     #[cfg(feature = "log")]
-    //     crate::tests::setup_logger();
+    #[test]
+    fn test_alternating_fixpoint_paper_5_2c() {
+        #[cfg(feature = "log")]
+        crate::tests::setup_logger();
 
-    //     // Example 5.2 (c)
-    //     // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
-    //     let five_two_c: Spec<_> = datalog! {
-    //         #![crate]
-    //         wins(X) :- mov(X, Y), not wins(Y).
+        // Example 5.2 (c)
+        // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
+        let five_two_c: Spec<_> = datalog! {
+            #![crate]
+            wins(X) :- mov(X, Y), not wins(Y).
 
-    //         a. b. c.
+            a. b. c.
 
-    //         mov(a, b).
-    //         mov(b, a).
-    //         mov(b, c).
-    //     }
-    //     .compile()
-    //     .unwrap();
-    //     let res: KnowledgeBase<_, _> = five_two_c.alternating_fixpoint();
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["a"])), Some(false));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["b"])), Some(true));
-    //     assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["c"])), Some(false));
-    // }
+            mov(a, b).
+            mov(b, a).
+            mov(b, c).
+        }
+        .compile()
+        .unwrap();
+        let res: KnowledgeBase<_, _> = five_two_c.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["a"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["b"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["c"])), Some(false));
+    }
 }

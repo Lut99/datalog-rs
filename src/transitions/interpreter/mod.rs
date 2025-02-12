@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 16:26:50
 //  Last edited:
-//    11 Feb 2025, 18:23:39
+//    12 Feb 2025, 14:55:58
 //  Auto updated?
 //    Yes
 //
@@ -262,7 +262,7 @@ where
 
                     // Now we run an interpretation FOR REAL
                     debug!("Running REAL inference step");
-                    effect.kb.clear();
+                    effect.kb.reset();
                     state_to_spec(rules.iter(), posts.iter()).alternating_fixpoint_mut(&mut effect.kb);
 
                     // OK!
@@ -331,7 +331,7 @@ where
 
                     // Now we run an interpretation FOR REAL
                     debug!("Running REAL inference step");
-                    effect.kb.clear();
+                    effect.kb.reset();
                     state_to_spec(rules.iter(), posts.iter()).alternating_fixpoint_mut(&mut effect.kb);
 
                     // OK!
@@ -342,7 +342,7 @@ where
 
         // Run a final postulation
         let mut effect: Effect<F, S> = Effect::new(EffectTrigger::End);
-        effect.kb.clear();
+        effect.kb.reset();
         state_to_spec(rules.iter(), posts.iter()).alternating_fixpoint_mut(&mut effect.kb);
         effects.push(effect);
 

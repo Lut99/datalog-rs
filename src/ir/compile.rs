@@ -4,7 +4,7 @@
 //  Created:
 //    10 Feb 2025, 15:13:54
 //  Last edited:
-//    11 Feb 2025, 18:29:55
+//    12 Feb 2025, 15:38:53
 //  Auto updated?
 //    Yes
 //
@@ -13,10 +13,10 @@
 //!   [Datalog IR](super).
 //
 
-use std::collections::HashSet;
-use std::error;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::hash::Hash;
+use std::{error, iter};
 
 use ast_toolkit::span::SpannableDisplay;
 use better_derive::Debug;
@@ -82,6 +82,7 @@ impl<'a, T: Display> Display for FancyList<'a, T> {
 /***** LIBRARY *****/
 impl<F, S> ast::Spec<F, S>
 where
+    S: SpannableDisplay,
     Span<F, S>: Clone + Eq + Hash,
 {
     /// Checks if all the rules in this spec match the _safety property:_
@@ -117,6 +118,7 @@ where
 
 impl<F, S> ast::Rule<F, S>
 where
+    S: SpannableDisplay,
     Span<F, S>: Eq + Hash,
 {
     /// Returns an iterator over all unbound variables.
@@ -129,15 +131,22 @@ where
     #[inline]
     pub fn unbound_vars<'s>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>> {
         // Collect all the bound variables first
-        let bound: HashSet<&ast::Ident<F, S>> =
-            self.tail.iter().flat_map(|t| t.antecedents.values().filter(|l| l.is_positive())).flat_map(|l| l.atom().vars()).collect();
-
-        // Then we're going to filter the others
-        self.consequents
+        let mut all: HashMap<&ast::Ident<F, S>, bool> = HashMap::new();
+        for (var, binding) in self
+            .consequents
             .values()
-            .chain(self.tail.iter().flat_map(|t| t.antecedents.values().filter(|l| !l.is_positive())).map(ast::Literal::atom))
-            .flat_map(ast::Atom::vars)
-            .filter(move |v| !bound.contains(v))
+            .flat_map(|a| a.vars().zip(iter::repeat(false)))
+            .chain(self.tail.iter().flat_map(|t| t.antecedents.values().flat_map(|l| l.atom().vars().zip(iter::repeat(l.is_positive())))))
+        {
+            if let Some(bound) = all.get_mut(&var) {
+                *bound |= binding;
+            } else {
+                all.insert(var, binding);
+            }
+        }
+
+        // Now we have all unique variables, yield only those unbound
+        all.into_iter().filter_map(|(a, b)| if !b { Some(a) } else { None })
     }
 
     /// Checks if this rule satisfies the _safety property_.
@@ -152,6 +161,7 @@ where
 }
 impl<F, S> ast::Rule<F, S>
 where
+    S: SpannableDisplay,
     Span<F, S>: Clone + Eq + Hash,
 {
     /// Compiles this relatively-close-to-the-syntax rule to an intermediate representation (IR)
