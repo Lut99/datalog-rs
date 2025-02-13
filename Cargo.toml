@@ -20,7 +20,6 @@ required-features = ["railroad"]
 
 [dependencies]
 indexmap = "2.7"
-itertools = "0.14"
 log = { version = "0.4", optional = true }
 paste = "1.0"
 
