@@ -4,7 +4,7 @@
 //  Created:
 //    07 May 2024, 16:38:16
 //  Last edited:
-//    04 Dec 2024, 18:01:31
+//    07 Feb 2025, 17:19:28
 //  Auto updated?
 //    Yes
 //
@@ -137,8 +137,8 @@ where
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
 /// use datalog::ast::{
-///     Arrow, Atom, AtomArg, AtomArgs, Dot, Comma, Ident, Literal, NegAtom, Not, Parens, Rule,
-///     RuleAntecedents,
+///     Arrow, Atom, Fact, FactArgs, Dot, Comma, Ident, Literal, NegAtom, Not, Parens, Rule,
+///     RuleBody,
 /// };
 /// use datalog::parser::rules::{rule, ParseError};
 ///
@@ -151,51 +151,54 @@ where
 /// let mut comb = rule();
 /// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(11..), Rule {
 ///     consequents: punct![
-///         v => Atom {
+///         v => Atom::Fact(Fact {
 ///             ident: Ident { value: span1.slice(..3) },
 ///             args: None,
-///         }
+///         })
 ///     ],
-///     tail: Some(RuleAntecedents {
+///     tail: Some(RuleBody {
 ///         arrow_token: Arrow { span: span1.slice(4..6) },
-///         antecedents: punct![v => Literal::Atom(Atom { ident: Ident { value: span1.slice(7..10) }, args: None })],
+///         antecedents: punct![v => Literal::Atom(Atom::Fact(Fact { ident: Ident { value: span1.slice(7..10) }, args: None }))],
 ///     }),
 ///     dot: Dot { span: span1.slice(10..11) },
 /// }));
 /// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(9..), Rule {
 ///     consequents: punct![
-///         v => Atom {
+///         v => Atom::Fact(Fact {
 ///             ident: Ident { value: span2.slice(..3) },
 ///             args: None,
-///         },
+///         }),
 ///         p => Comma { span: span2.slice(3..4) },
-///         v => Atom {
+///         v => Atom::Fact(Fact {
 ///             ident: Ident { value: span2.slice(5..8) },
 ///             args: None,
-///         }
+///         })
 ///     ],
 ///     tail: None,
 ///     dot: Dot { span: span2.slice(8..9) },
 /// }));
 /// assert_eq!(comb.parse(span3).unwrap(), (span3.slice(21..), Rule {
 ///     consequents: punct![
-///         v => Atom {
+///         v => Atom::Fact(Fact {
 ///             ident: Ident { value: span3.slice(..3) },
-///             args: Some(AtomArgs {
+///             args: Some(FactArgs {
 ///                 paren_tokens: Parens { open: span3.slice(3..4), close: span3.slice(7..8) },
-///                 args: punct![v => AtomArg::Atom(Ident { value: span3.slice(4..7) })],
+///                 args: punct![v => Atom::Fact(Fact {
+///                     ident: Ident { value: span3.slice(4..7) },
+///                     args: None,
+///                 })],
 ///             }),
-///         }
+///         })
 ///     ],
-///     tail: Some(RuleAntecedents {
+///     tail: Some(RuleBody {
 ///         arrow_token: Arrow { span: span3.slice(9..11) },
-///         antecedents: punct![v => Literal::Atom(Atom {
+///         antecedents: punct![v => Literal::Atom(Atom::Fact(Fact {
 ///             ident: Ident { value: span3.slice(12..15) },
-///             args: Some(AtomArgs {
+///             args: Some(FactArgs {
 ///                 paren_tokens: Parens { open: span3.slice(15..16), close: span3.slice(19..20) },
-///                 args: punct![v => AtomArg::Var(Ident { value: span3.slice(16..19) })],
+///                 args: punct![v => Atom::Var(Ident { value: span3.slice(16..19) })],
 ///             }),
-///         })],
+///         }))],
 ///     }),
 ///     dot: Dot { span: span3.slice(20..21) },
 /// }));
@@ -225,7 +228,7 @@ where
             comb::map_err(tokens::comma(), |err| ParseError::Comma { span: err.into_span() }),
         ),
         error::transmute(whitespaces::whitespace()),
-        comb::opt(rule_antecedents()),
+        comb::opt(rule_body()),
         error::transmute(whitespaces::whitespace()),
         comb::map_err(tokens::dot(), |err| ParseError::Dot { span: err.into_span() }),
     ))
@@ -237,7 +240,7 @@ where
     }
 }
 
-/// Parses the antecedent-part of a rule.
+/// Parses the body-part of a rule.
 ///
 /// # Returns
 /// A combinator that parses `:-`, then a punctuated list of atoms.
@@ -252,46 +255,49 @@ where
 /// use ast_toolkit::snack::{Combinator as _, Result as SResult};
 /// use ast_toolkit::span::Span;
 /// use datalog::ast::{
-///     Arrow, Atom, AtomArg, AtomArgs, Comma, Ident, Literal, NegAtom, Not, Parens, RuleAntecedents,
+///     Arrow, Atom, Fact, FactArgs, Comma, Ident, Literal, NegAtom, Not, Parens, RuleBody,
 /// };
-/// use datalog::parser::rules::{rule_antecedents, ParseError};
+/// use datalog::parser::rules::{rule_body, ParseError};
 ///
 /// let span1 = Span::new("<example>", ":- foo");
 /// let span2 = Span::new("<example>", ":- not foo(), bar(baz)");
 /// let span3 = Span::new("<example>", "foo");
 /// let span4 = Span::new("<example>", ":-");
 ///
-/// let mut comb = rule_antecedents();
+/// let mut comb = rule_body();
 /// assert_eq!(
 ///     comb.parse(span1).unwrap(),
-///     (span1.slice(6..), RuleAntecedents {
+///     (span1.slice(6..), RuleBody {
 ///         arrow_token: Arrow { span: span1.slice(..2) },
-///         antecedents: punct![v => Literal::Atom(Atom { ident: Ident { value: span1.slice(3..6) }, args: None })],
+///         antecedents: punct![v => Literal::Atom(Atom::Fact(Fact { ident: Ident { value: span1.slice(3..6) }, args: None }))],
 ///     }),
 /// );
 /// assert_eq!(
 ///     comb.parse(span2).unwrap(),
-///     (span2.slice(22..), RuleAntecedents {
+///     (span2.slice(22..), RuleBody {
 ///         arrow_token: Arrow { span: span2.slice(..2) },
 ///         antecedents: punct![
 ///             v => Literal::NegAtom(NegAtom {
 ///                 not_token: Not { span: span2.slice(3..6) },
-///                 atom: Atom {
+///                 atom: Atom::Fact(Fact {
 ///                     ident: Ident { value: span2.slice(7..10) },
-///                     args: Some(AtomArgs {
+///                     args: Some(FactArgs {
 ///                         paren_tokens: Parens { open: span2.slice(10..11), close: span2.slice(11..12) },
 ///                         args: punct![],
 ///                     }),
-///                 },
+///                 }),
 ///             }),
 ///             p => Comma { span: span2.slice(12..13) },
-///             v => Literal::Atom(Atom {
+///             v => Literal::Atom(Atom::Fact(Fact {
 ///                 ident: Ident { value: span2.slice(14..17) },
-///                 args: Some(AtomArgs {
+///                 args: Some(FactArgs {
 ///                     paren_tokens: Parens { open: span2.slice(17..18), close: span2.slice(21..22) },
-///                     args: punct![v => AtomArg::Atom(Ident { value: span2.slice(18..21) })],
+///                     args: punct![v => Atom::Fact(Fact {
+///                         ident: Ident { value: span2.slice(18..21) },
+///                         args: None,
+///                     })],
 ///                 }),
-///             })
+///             }))
 ///         ],
 ///     }),
 /// );
@@ -305,8 +311,8 @@ where
 /// ));
 /// ```
 #[inline]
-#[comb(snack = ::ast_toolkit::snack, expected = "an arrow symbol followed by antecedents", Output = ast::RuleAntecedents<F, S>, Error = ParseError<F, S>)]
-pub fn rule_antecedents<F, S>(input: Span<F, S>) -> _
+#[comb(snack = ::ast_toolkit::snack, expected = "an arrow symbol followed by antecedents", Output = ast::RuleBody<F, S>, Error = ParseError<F, S>)]
+pub fn rule_body<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,
     S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + WhileUtf8,
@@ -333,7 +339,7 @@ where
     )
     .parse(input)
     {
-        SResult::Ok(rem, (arrow_token, antecedents)) => SResult::Ok(rem, ast::RuleAntecedents { arrow_token, antecedents }),
+        SResult::Ok(rem, (arrow_token, antecedents)) => SResult::Ok(rem, ast::RuleBody { arrow_token, antecedents }),
         SResult::Fail(fail) => SResult::Fail(fail),
         SResult::Error(err) => SResult::Error(err),
     }

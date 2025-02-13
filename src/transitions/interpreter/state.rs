@@ -4,7 +4,7 @@
 //  Created:
 //    29 Nov 2024, 16:32:11
 //  Last edited:
-//    03 Dec 2024, 16:59:25
+//    11 Feb 2025, 18:14:47
 //  Auto updated?
 //    Yes
 //
@@ -18,26 +18,26 @@ use std::collections::HashMap;
 use indexmap::IndexSet;
 
 use super::super::ast::Transition;
-use crate::ast::{Atom, Ident, Rule};
+use crate::ir::{Atom, GroundAtom, Ident, Rule};
 
 
 /***** LIBRARY *****/
 /// The transition system equivalent of an
 /// [`Interpretation`](crate::interpreter::interpretation::Interpretation).
 #[derive(Clone, Debug)]
-pub struct State<'f, 's> {
+pub struct State<F, S> {
     /// Currently defined transitions.
-    pub trans: HashMap<Ident<&'f str, &'s str>, Transition<&'f str, &'s str>>,
+    pub trans: HashMap<Ident<F, S>, Transition<F, S>>,
     /// Currently defined rules.
-    pub rules: IndexSet<Rule<&'f str, &'s str>>,
+    pub rules: IndexSet<Rule<Atom<F, S>>>,
     /// Any facts that are currently postulated (somehow).
-    pub posts: IndexSet<Atom<&'f str, &'s str>>,
+    pub posts: IndexSet<GroundAtom<F, S>>,
 }
-impl<'f, 's> Default for State<'f, 's> {
+impl<F, S> Default for State<F, S> {
     #[inline]
     fn default() -> Self { Self::new() }
 }
-impl<'f, 's> State<'f, 's> {
+impl<F, S> State<F, S> {
     /// Constructor for the State that initializes it to an empty one.
     ///
     /// # Returns

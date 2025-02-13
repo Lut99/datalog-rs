@@ -4,7 +4,7 @@
 //  Created:
 //    03 Dec 2024, 10:47:06
 //  Last edited:
-//    03 Dec 2024, 16:17:18
+//    12 Feb 2025, 15:49:00
 //  Auto updated?
 //    Yes
 //
@@ -215,10 +215,10 @@ impl ToTokens for Rule {
             // Generate all the antecedents
             let antecedents_tokens: TokenStream2 = serialize_punctuated(antecedents.iter());
 
-            // Serialize them to a single RuleAntecedents
+            // Serialize them to a single RuleBody
             quote_spanned! {
                 colon.span =>
-                Some(#crate_path::ast::RuleAntecedents {
+                Some(#crate_path::ast::RuleBody {
                     arrow_token: #crate_path::ast::Arrow { span: #crate_path::ast::Span::new(#from_str, ":-") },
                     antecedents: #antecedents_tokens,
                 })
@@ -249,29 +249,18 @@ pub struct Literal {
 impl Parse for Literal {
     #[inline]
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        // Parse 'not' first
-        let ident: Ident = input.parse()?;
-        let (not, name): (Option<Ident>, Ident) = if ident == "not" {
-            // Parse a second ident and swap 'em
-            let not: Ident = ident;
-            let name: Ident = input.parse()?;
-            (Some(not), name)
+        // Parse an atom first
+        let atom: Atom = input.parse()?;
+
+        // If that atom happens to be an argumentless fact called 'not', then try again
+        let (not, atom): (Option<Ident>, Atom) = if let Atom::Fact { ident, args } = atom {
+            if ident == "not" && args.is_none() { (Some(ident), input.parse()?) } else { (None, Atom::Fact { ident, args }) }
         } else {
-            // No not found
-            (None, ident)
+            (None, atom)
         };
 
-        // Parse the parenthesis optionally
-        let args: Option<(Paren, Punctuated<Ident, Comma>)> = |input: ParseStream| -> Result<(Paren, Punctuated<Ident, Comma>), Error> {
-            let content;
-            let paren: Paren = parenthesized!(content in input);
-            let args: Punctuated<Ident, Comma> = content.parse_terminated(Ident::parse, Token![,])?;
-            Ok((paren, args))
-        }(input)
-        .ok();
-
         // OK
-        Ok(Self { not, atom: Atom { ident: name, args } })
+        Ok(Self { not, atom })
     }
 }
 impl ToTokens for Literal {
@@ -279,15 +268,9 @@ impl ToTokens for Literal {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let (crate_path, from_str): (CratePath, FromStr) = Default::default();
 
-        // Get some input from the atom
-        let atom: &Atom = &self.atom;
-        let span: Span = if let Some((paren, _)) = &atom.args {
-            atom.ident.span().join(paren.span.join()).unwrap_or_else(|| atom.ident.span())
-        } else {
-            atom.ident.span()
-        };
-
         // Generate the consequent atom
+        let span: Span = self.atom.span();
+        let atom: &Atom = &self.atom;
         if self.not.is_some() {
             tokens.extend(quote_spanned! {
                 span =>
@@ -306,11 +289,11 @@ impl ToTokens for Literal {
 }
 
 /// Defines the macro's representation of an atom (e.g., a consequent).
-pub struct Atom {
-    /// The identifier of the atom.
-    pub ident: Ident,
-    /// The arguments of the atom, if any.
-    pub args:  Option<(Paren, Punctuated<Ident, Comma>)>,
+pub enum Atom {
+    /// A Fact
+    Fact { ident: Ident, args: Option<(Paren, Punctuated<Atom, Comma>)> },
+    /// A variable
+    Var { ident: Ident },
 }
 impl Parse for Atom {
     #[inline]
@@ -318,68 +301,76 @@ impl Parse for Atom {
         // Parse the first identifier
         let ident: Ident = input.parse()?;
 
-        // Parse the parenthesis optionally
-        let args: Option<(Paren, Punctuated<Ident, Comma>)> = |input: ParseStream| -> Result<(Paren, Punctuated<Ident, Comma>), Error> {
-            let content;
-            let paren: Paren = parenthesized!(content in input);
-            let args: Punctuated<Ident, Comma> = content.parse_terminated(Ident::parse, Token![,])?;
-            Ok((paren, args))
-        }(input)
-        .ok();
+        // Check if it's capitalized or not
+        if !ident.to_string().chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+            // Parse the parenthesis, optionally
+            let args: Option<(Paren, Punctuated<Atom, Comma>)> = |input: ParseStream| -> Result<(Paren, Punctuated<Atom, Comma>), Error> {
+                let content;
+                let paren: Paren = parenthesized!(content in input);
+                let args: Punctuated<Atom, Comma> = content.parse_terminated(Atom::parse, Token![,])?;
+                Ok((paren, args))
+            }(input)
+            .ok();
 
-        // OK
-        Ok(Self { ident, args })
+            // OK
+            Ok(Self::Fact { ident, args })
+        } else {
+            Ok(Self::Var { ident })
+        }
     }
 }
 impl ToTokens for Atom {
     #[inline]
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let (crate_path, from_str): (CratePath, FromStr) = Default::default();
+        match self {
+            Self::Fact { ident, args } => {
+                // Generate the arguments
+                let (paren_span, args_tokens): (Option<Span>, TokenStream2) = if let Some((paren, args)) = args {
+                    // Collect the arguments
+                    let args: Vec<TokenStream2> = args.into_iter().map(Atom::to_token_stream).collect();
 
-        // Generate the arguments
-        let (paren_span, args_tokens): (Option<Span>, TokenStream2) = if let Some((paren, args)) = &self.args {
-            // Collect the arguments
-            let args: Vec<TokenStream2> = args.into_iter().map(|arg| {
-                let sarg: String = arg.to_string();
+                    // Put them in a punctuated list
+                    let mut args_tokens: TokenStream2 = TokenStream2::new();
+                    for (i, arg) in args.into_iter().enumerate() {
+                        if i == 0 {
+                            args_tokens.extend(quote_spanned! { arg.span() => punct.push_first(#arg); });
+                        } else {
+                            args_tokens.extend(quote_spanned! { arg.span() => punct.push(#crate_path::ast::Comma{ span: #crate_path::ast::Span::new(#from_str, ",") }, #arg); });
+                        }
+                    }
+                    let args_tokens: TokenStream2 =
+                        quote_spanned! { Span::call_site() => { let mut punct = #crate_path::ast::Punctuated::new(); #args_tokens punct } };
 
-                // Note it down as a variable if it starts with an uppercase
-                if sarg.chars().next().expect("Got empty consequence argument identifier").is_uppercase() {
-                    quote_spanned! { arg.span() => #crate_path::ast::AtomArg::Var(#crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sarg) }) }
+                    // Serialize it to one set of arguments
+                    (Some(paren.span.join()), quote_spanned! { paren.span.join() => Some(#crate_path::ast::FactArgs {
+                        paren_tokens: #crate_path::ast::Parens { open: #crate_path::ast::Span::new(#from_str, "("), close: #crate_path::ast::Span::new(#from_str, ")") },
+                        args: #args_tokens,
+                    })})
                 } else {
-                    quote_spanned! { arg.span() => #crate_path::ast::AtomArg::Atom(#crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sarg) }) }
-                }
-            }).collect();
+                    (None, quote_spanned! { ident.span() => None })
+                };
 
-            // Put them in a punctuated list
-            let mut args_tokens: TokenStream2 = TokenStream2::new();
-            for (i, arg) in args.into_iter().enumerate() {
-                if i == 0 {
-                    args_tokens.extend(quote_spanned! { arg.span() => punct.push_first(#arg); });
-                } else {
-                    args_tokens.extend(quote_spanned! { arg.span() => punct.push(#crate_path::ast::Comma{ span: #crate_path::ast::Span::new(#from_str, ",") }, #arg); });
-                }
-            }
-            let args_tokens: TokenStream2 =
-                quote_spanned! { Span::call_site() => { let mut punct = #crate_path::ast::Punctuated::new(); #args_tokens punct } };
+                // Generate the consequent atom
+                let sname: String = ident.to_string();
+                tokens.extend(quote_spanned! {
+                    if let Some(paren) = paren_span { ident.span().join(paren).unwrap_or_else(|| ident.span()) } else { ident.span() } =>
+                    #crate_path::ast::Atom::Fact(#crate_path::ast::Fact {
+                        ident: #crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sname) },
+                        args: #args_tokens,
+                    })
+                });
+            },
 
-            // Serialize it to one set of arguments
-            (Some(paren.span.join()), quote_spanned! { paren.span.join() => Some(#crate_path::ast::AtomArgs {
-                paren_tokens: #crate_path::ast::Parens { open: #crate_path::ast::Span::new(#from_str, "("), close: #crate_path::ast::Span::new(#from_str, ")") },
-                args: #args_tokens,
-            })})
-        } else {
-            (None, quote_spanned! { self.ident.span() => None })
-        };
-
-        // Generate the consequent atom
-        let sname: String = self.ident.to_string();
-        tokens.extend(quote_spanned! {
-            if let Some(paren) = paren_span { self.ident.span().join(paren).unwrap_or_else(|| self.ident.span()) } else { self.ident.span() } =>
-            #crate_path::ast::Atom {
-                ident: #crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sname) },
-                args: #args_tokens,
-            }
-        });
+            Self::Var { ident } => {
+                // Generate the consequent atom
+                let sname: String = ident.to_string();
+                tokens.extend(quote_spanned! {
+                    ident.span() =>
+                    #crate_path::ast::Atom::Var(#crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sname) })
+                });
+            },
+        }
     }
 }
 

@@ -4,7 +4,7 @@
 //  Created:
 //    26 Mar 2024, 19:36:31
 //  Last edited:
-//    04 Dec 2024, 15:18:57
+//    13 Feb 2025, 15:45:58
 //  Auto updated?
 //    Yes
 //
@@ -25,19 +25,22 @@
 //!       <https://doi.org/10.1145/73721.73722>
 
 // Nested modules
-pub mod interpretation;
+mod knowledge_base;
 pub mod quantify;
 
 // Imports
-use indexmap::set::IndexSet;
+use std::collections::HashSet;
+use std::hash::Hash;
 
-use self::interpretation::Interpretation;
-use crate::ast::{Ident, Rule, Spec};
+use ast_toolkit::span::SpannableDisplay;
+pub use knowledge_base::KnowledgeBase;
+
+use crate::ir::{Atom, GroundAtom, Rule, Span, Spec};
 use crate::log::{debug, trace};
 
 
 /***** LIBRARY FUNCTIONS *****/
-/// Performs forward derivation of the Spec.
+/// Performs forward derivation of a [`Spec`].
 ///
 /// In the paper, this is called the _immediate consequence operator_. It is simply defined as
 /// the "forward derivation" of all rules, where we note the rule's consequences as derived if we
@@ -48,22 +51,22 @@ use crate::log::{debug, trace};
 ///
 /// # Arguments
 /// - `rules`: A set of rules that are in the spec.
-/// - `int`: Some [`Interpretation`] to derive in. Specifically, will move atoms from unknown to known if they can be derived.
-pub fn immediate_consequence<'f: 'r, 's: 'r, 'r, 'i, I>(rules: I, int: &'i mut Interpretation<'f, 's>)
+/// - `kb`: Some [`KnowledgeBase`] to derive in. Specifically, will move atoms from unknown to
+///   known if they can be derived.
+pub fn immediate_consequence<'s, I, F, S>(rules: I, kb: &mut KnowledgeBase<F, S>)
 where
-    I: IntoIterator<Item = &'r Rule<&'f str, &'s str>>,
+    I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
     I::IntoIter: Clone,
+    S: SpannableDisplay,
+    Span<F, S>: 's + Clone + Hash + Ord,
 {
     let rules = rules.into_iter();
-    debug!("Running immediate consequent transformation");
-
-    // Some buffer referring to all the constants in the interpretation.
-    let consts: IndexSet<Ident<_, _>> = int.find_existing_consts();
 
     // This transformation is saturating, so continue until the database did not change anymore.
     // NOTE: Monotonic because we can never remove truths, inferring the same fact does not count
     //       as a change and we are iterating over a Herbrand instantiation so our search space is
     //       finite (for $Datalog^\neg$, at least).
+    let mut updates: HashSet<GroundAtom<F, S>> = HashSet::new();
     let mut changed: bool = true;
     #[cfg(feature = "log")]
     let mut i: usize = 0;
@@ -75,29 +78,21 @@ where
         }
         trace!("Derivation run {i} starting");
 
-        // Go thru da rules
+        // Go thru da rules to collect updates
         for rule in rules.clone() {
-            'assign: for rule in rule.quantify(consts.iter()) {
-                // Quantify over this rule's instantiations
-                trace!("--> Rule '{rule}'");
-
-                // Do the antecedents for this assignment
-                for ant in rule.tail.iter().flat_map(|t| t.antecedents.values()) {
-                    if !int.knows_about_atom(ant.atom(), ant.polarity()) {
-                        // Not present; cannot derive
-                        trace!("-----> Antecedent '{ant}' not present in interpretation, rule does not apply");
-                        continue 'assign;
-                    }
-                }
-
-                // If here, then derive consequents
-                for con in rule.consequents.values() {
-                    trace!("-----> Deriving consequent '{con}'");
-                    if int.learn(con, true) != Some(true) {
-                        changed = true;
-                    }
+            for rule in rule.concretize_for(kb.truths()) {
+                trace!("--> Considering concretized rule '{rule}'");
+                if rule.is_satisfied(kb) {
+                    trace!("-----> Rule '{rule}' is SATISFIED");
+                    updates.extend(rule.consequents)
                 }
             }
+        }
+
+        // Apply the updates
+        for atom in updates.drain() {
+            trace!("-----> Deriving '{atom}'");
+            changed |= kb.learn(atom);
         }
     }
 
@@ -109,19 +104,25 @@ where
 ///
 /// In the paper, this is given as:
 /// - Apply the immediate consequence operator;
-/// - Apply the [stable transformation](Interpretation::apply_stable_transformation()); and
-/// - Repeat the last two steps until you reach some state you've seen before (it sufficies to just check the last three states).
+/// - Apply the [stable transformation](KnowledgeBase::apply_stable_transformation()); and
+/// - Repeat the last two steps until you reach some state you've seen before (it sufficies to just
+///   check the last three states).
 ///
 /// Then the interpretation you're left with is a well-founded model for the spec.
 ///
+/// # Arguments
+/// - `rules`: An iterator producing the rules to derive with.
+///
 /// # Returns
-/// A new [`Interpretation`] that contains the things we derived about the facts in the [`Spec`].
-pub fn alternating_fixpoint<'f: 'r, 's: 'r, 'r, I>(rules: I) -> Interpretation<'f, 's>
+/// A new [`KnowledgeBase`] that contains the things we derived about the facts in the [`Spec`].
+pub fn alternating_fixpoint<'s, I, F, S>(rules: I) -> KnowledgeBase<F, S>
 where
-    I: IntoIterator<Item = &'r Rule<&'f str, &'s str>>,
+    I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
     I::IntoIter: Clone,
+    S: SpannableDisplay,
+    Span<F, S>: 's + Clone + Eq + Hash + Ord,
 {
-    let mut int: Interpretation = Interpretation::new();
+    let mut int: KnowledgeBase<F, S> = KnowledgeBase::new();
     alternating_fixpoint_mut(rules, &mut int);
     int
 }
@@ -130,17 +131,23 @@ where
 ///
 /// In the paper, this is given as:
 /// - Apply the [immediate consequence operator](Self::immediate_consequence());
-/// - Apply the [stable transformation](Interpretation::apply_stable_transformation()); and
-/// - Repeat the last two steps until you reach some state you've seen before (it sufficies to just check the last three states).
+/// - Apply the [stable transformation](KnowledgeBase::apply_stable_transformation()); and
+/// - Repeat the last two steps until you reach some state you've seen before (it sufficies to just
+///   check the last three states).
 ///
 /// Then the interpretation you're left with is a well-founded model for the spec.
 ///
 /// # Arguments
-/// - `int`: Some existing [`Interpretation`] to [`clear()`](Interpretation::clear()) and then populate again. Might be more efficient than allocating a new one if you already have one lying around.
-pub fn alternating_fixpoint_mut<'f: 'r, 's: 'r, 'r, 'i, I>(rules: I, int: &'i mut Interpretation<'f, 's>)
+/// - `rules`: An iterator producing the rules to derive with.
+/// - `kb`: Some existing [`KnowledgeBase`] to populate. Note that it will _not_ be cleared
+///   for you; call [`KnowledgeBase::clear()`] first if you're only interested in re-using the
+///   memory, not the facts.
+pub fn alternating_fixpoint_mut<'s, I, F, S>(rules: I, kb: &mut KnowledgeBase<F, S>)
 where
-    I: IntoIterator<Item = &'r Rule<&'f str, &'s str>>,
+    I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
     I::IntoIter: Clone,
+    S: SpannableDisplay,
+    Span<F, S>: 's + Clone + Eq + Hash + Ord,
 {
     let rules = rules.into_iter();
     debug!(
@@ -149,26 +156,20 @@ where
         rules.clone().map(|r| format!("   {r}\n")).collect::<String>(),
         (0..80).map(|_| '-').collect::<String>()
     );
-    int.clear();
-
-    // Create the universe of atoms
-    int.extend_universe(rules.clone());
-
-    // Contains the hash of the last three interpretations, to recognize when we found a stable model.
-    let mut prev_hashes: [u64; 3] = [0; 3];
 
     // We alternate
+    let mut prev_hashes: [u64; 3] = [0; 3];
     let mut i: usize = 0;
     loop {
         i += 1;
         debug!("Starting alternating-fixpoint run {i}");
 
         // Do the trick; first the immediate consequence, then the stable transformation
-        immediate_consequence(rules.clone(), int);
-        debug!("Post-operator interpretation\n\n{int}\n");
+        immediate_consequence(rules.clone(), kb);
+        debug!("Post-consequence knowledge base\n\n{kb}\n");
 
         // See if we reached a stable point
-        let hash: u64 = int.hash();
+        let hash: u64 = <KnowledgeBase<F, S>>::hash(kb);
         if i % 2 == 1 && prev_hashes[0] == prev_hashes[2] && prev_hashes[1] == hash {
             // Stable! Merge the stable transformation and the result and we're done
             debug!("Completed alternating-fixpoint transformation (took {i} runs)");
@@ -176,8 +177,8 @@ where
         }
 
         // We didn't stabelize; run the stable transformation
-        int.apply_stable_transformation();
-        debug!("Post-transformation interpretation\n\n{int}\n");
+        kb.apply_stable_transformation();
+        debug!("Post-transformation interpretation\n\n{kb}\n");
 
         // Move the slots one back
         prev_hashes[0] = prev_hashes[1];
@@ -192,7 +193,11 @@ where
 
 /***** LIBRARY *****/
 // Interpreter extensions for the [`Spec`].
-impl<'f, 's> Spec<&'f str, &'s str> {
+impl<F, S> Spec<Atom<F, S>>
+where
+    S: SpannableDisplay,
+    Span<F, S>: Clone + Eq + Hash + Ord,
+{
     /// Performs forward derivation of the Spec.
     ///
     /// In the paper, this is called the _immediate consequence operator_. It is simply defined as
@@ -203,37 +208,89 @@ impl<'f, 's> Spec<&'f str, &'s str> {
     /// i.e., we must observe negative atoms explicitly instead of the absence of positives.
     ///
     /// # Arguments
-    /// - `int`: Some [`Interpretation`] to derive in. Specifically, will move atoms from unknown to known if they can be derived.
+    /// - `kb`: Some [`KnowledgeBase`] to derive in. Specifically, will move atoms from unknown to
+    ///   known if they can be derived.
     #[inline]
-    pub fn immediate_consequence(&self, int: &mut Interpretation<'f, 's>) { immediate_consequence(&self.rules, int) }
-
+    pub fn immediate_consequence(&self, kb: &mut KnowledgeBase<F, S>) { immediate_consequence(&self.rules, kb) }
+}
+impl<F, S> Spec<Atom<F, S>>
+where
+    S: SpannableDisplay,
+    Span<F, S>: Clone + Eq + Hash + Ord,
+{
     /// Performs a proper derivation using the full well-founded semantics.
     ///
     /// In the paper, this is given as:
     /// - Apply the immediate consequence operator;
-    /// - Apply the [stable transformation](Interpretation::apply_stable_transformation()); and
-    /// - Repeat the last two steps until you reach some state you've seen before (it sufficies to just check the last three states).
+    /// - Apply the [stable transformation](KnowledgeBase::apply_stable_transformation()); and
+    /// - Repeat the last two steps until you reach some state you've seen before (it sufficies to
+    ///   just check the last three states).
     ///
-    /// Then the interpretation you're left with is a well-founded model for the spec.
+    /// Then the knowledge base you're left with is a well-founded model for the spec.
     ///
     /// # Returns
-    /// A new [`Interpretation`] that contains the things we derived about the facts in the [`Spec`].
+    /// A new [`KnowledgeBase`] that contains the things we derived about the facts in the [`Spec`].
     #[inline]
-    pub fn alternating_fixpoint(&self) -> Interpretation<'f, 's> { alternating_fixpoint(&self.rules) }
+    pub fn alternating_fixpoint(&self) -> KnowledgeBase<F, S> { alternating_fixpoint(&self.rules) }
 
     /// Performs a proper derivation using the full well-founded semantics.
     ///
     /// In the paper, this is given as:
     /// - Apply the [immediate consequence operator](Self::immediate_consequence());
     /// - Apply the [stable transformation](Interpretation::apply_stable_transformation()); and
-    /// - Repeat the last two steps until you reach some state you've seen before (it sufficies to just check the last three states).
+    /// - Repeat the last two steps until you reach some state you've seen before (it sufficies to
+    ///   just check the last three states).
     ///
     /// Then the interpretation you're left with is a well-founded model for the spec.
     ///
     /// # Arguments
-    /// - `int`: Some existing [`Interpretation`] to [`clear()`](Interpretation::clear()) and then populate again. Might be more efficient than allocating a new one if you already have one lying around.
+    /// - `kb`: Some existing [`KnowledgeBase`] to populate. Note that it will _not_ be cleared
+    ///   for you; call [`KnowledgeBase::clear()`] first if you're only interested in re-using the
+    ///   memory, not the facts.
     #[inline]
-    pub fn alternating_fixpoint_mut(&self, int: &mut Interpretation<'f, 's>) { alternating_fixpoint_mut(&self.rules, int) }
+    pub fn alternating_fixpoint_mut(&self, kb: &mut KnowledgeBase<F, S>) { alternating_fixpoint_mut(&self.rules, kb) }
+}
+
+
+
+// Interepreter extensions for [`Rule`]s.
+impl<F, S> Rule<GroundAtom<F, S>>
+where
+    S: SpannableDisplay,
+    Span<F, S>: Eq + Hash + Ord,
+{
+    /// Checks whether this rule holds in the given knowledge base.
+    ///
+    /// # Arguments
+    /// - `kb`: A knowledge base to check in.
+    ///
+    /// # Returns
+    /// Whether the consequents of this rule can be derived or not.
+    #[inline]
+    pub fn is_satisfied(&self, kb: &KnowledgeBase<F, S>) -> bool {
+        // Check if the rule's positive antecedents exist as true atoms
+        for atom in &self.pos_antecedents {
+            // See if this atom exists in the knowledge base
+            if !kb.holds(true, atom) {
+                trace!("-----> Antecedent '{atom}' is UNSATISFIED");
+                return false;
+            }
+            trace!("-----> Antecedent '{atom}' is SATISFIED");
+        }
+
+        // Then check if the rule's negative antecedents exist as false atoms
+        for atom in &self.neg_antecedents {
+            // See if this atom exists in the knowledge base
+            if !kb.holds(false, atom) {
+                trace!("-----> Antecedent 'not {atom}' is UNSATISFIED");
+                return false;
+            }
+            trace!("-----> Antecedent 'not {atom}' is SATISFIED");
+        }
+
+        // Made it this far; derive!
+        true
+    }
 }
 
 
@@ -246,7 +303,7 @@ mod tests {
     use datalog_macros::datalog;
 
     use super::*;
-    use crate::tests::make_atom;
+    use crate::tests::make_ir_ground_atom;
 
 
     #[test]
@@ -255,15 +312,16 @@ mod tests {
         crate::tests::setup_logger();
 
         // Try some constants
-        let consts: Spec<_, _> = datalog! {
+        let consts: Spec<_> = datalog! {
             #![crate]
             foo. bar. baz.
-        };
-        let res: Interpretation = consts.alternating_fixpoint();
-        assert_eq!(res.len(), 3);
-        assert_eq!(res.closed_world_truth(&make_atom("foo", None)), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("bar", None)), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("baz", None)), Some(true));
+        }
+        .compile()
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
+        let res: KnowledgeBase<_, _> = consts.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", None)), Some(true));
     }
 
     #[test]
@@ -272,15 +330,16 @@ mod tests {
         crate::tests::setup_logger();
 
         // Try some functions
-        let funcs: Spec<_, _> = datalog! {
+        let funcs: Spec<_> = datalog! {
             #![crate]
             foo(bar). bar(baz). baz(quz).
-        };
-        let res: Interpretation = funcs.alternating_fixpoint();
-        assert_eq!(res.len(), 3);
-        assert_eq!(res.closed_world_truth(&make_atom("foo", Some("bar"))), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("bar", Some("baz"))), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("baz", Some("quz"))), Some(true));
+        }
+        .compile()
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
+        let res: KnowledgeBase<_, _> = funcs.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", Some("bar"))), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", Some("baz"))), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", Some("quz"))), Some(true));
     }
 
     #[test]
@@ -289,14 +348,15 @@ mod tests {
         crate::tests::setup_logger();
 
         // Try some rules
-        let rules: Spec<_, _> = datalog! {
+        let rules: Spec<_> = datalog! {
             #![crate]
             foo. bar(foo) :- foo.
-        };
-        let res: Interpretation = rules.alternating_fixpoint();
-        assert_eq!(res.len(), 2);
-        assert_eq!(res.closed_world_truth(&make_atom("foo", None)), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("bar", Some("foo"))), Some(true));
+        }
+        .compile()
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
+        let res: KnowledgeBase<_, _> = rules.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", Some("foo"))), Some(true));
     }
 
     #[test]
@@ -305,16 +365,17 @@ mod tests {
         crate::tests::setup_logger();
 
         // Try some rules with negation!
-        let neg_rules: Spec<_, _> = datalog! {
+        let neg_rules: Spec<_> = datalog! {
             #![crate]
             foo. bar(foo) :- foo. bar(bar) :- not bar.
-        };
-        let res: Interpretation = neg_rules.alternating_fixpoint();
-        assert_eq!(res.len(), 4);
-        assert_eq!(res.closed_world_truth(&make_atom("foo", None)), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("bar", None)), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("bar", Some("foo"))), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("bar", Some("bar"))), Some(true));
+        }
+        .compile()
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
+        let res: KnowledgeBase<_, _> = neg_rules.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", Some("foo"))), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", Some("bar"))), Some(true));
     }
 
     #[test]
@@ -323,20 +384,21 @@ mod tests {
         crate::tests::setup_logger();
 
         // Now some cool rules with variables
-        let var_rules: Spec<_, _> = datalog! {
+        let var_rules: Spec<_> = datalog! {
             #![crate]
-            foo. bar. baz(foo). quz(X) :- baz(X). qux(X) :- not baz(X).
-        };
-        let res: Interpretation = var_rules.alternating_fixpoint();
-        assert_eq!(res.len(), 8);
-        assert_eq!(res.closed_world_truth(&make_atom("foo", None)), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("bar", None)), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("baz", Some("foo"))), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("baz", Some("bar"))), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("quz", Some("foo"))), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("quz", Some("bar"))), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("qux", Some("foo"))), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("qux", Some("bar"))), Some(true));
+            foo. bar. baz(foo). quz(X) :- baz(X). qux(X) :- quz(X), not baz(foo).
+        }
+        .compile()
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
+        let res: KnowledgeBase<_, _> = var_rules.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", Some("foo"))), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", Some("bar"))), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", Some("foo"))), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", Some("bar"))), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", Some("foo"))), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", Some("bar"))), Some(false));
     }
 
     #[test]
@@ -345,24 +407,25 @@ mod tests {
         crate::tests::setup_logger();
 
         // Arity > 1
-        let big_rules: Spec<_, _> = datalog! {
+        let big_rules: Spec<_> = datalog! {
             #![crate]
-            foo. bar. baz(foo). quz(X, foo) :- baz(X), foo. qux(X, Y) :- not quz(X, Y).
-        };
-        let res: Interpretation = big_rules.alternating_fixpoint();
-        assert_eq!(res.len(), 11);
-        assert_eq!(res.closed_world_truth(&make_atom("foo", [])), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("bar", [])), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("baz", ["foo"])), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("baz", ["bar"])), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("quz", ["foo", "foo"])), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("quz", ["foo", "bar"])), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("quz", ["bar", "foo"])), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("quz", ["bar", "bar"])), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("qux", ["foo", "foo"])), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("qux", ["foo", "bar"])), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("qux", ["bar", "foo"])), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("qux", ["bar", "bar"])), Some(true));
+            foo. bar. baz(foo). quz(X, foo) :- baz(X), foo. qux(X, Y) :- quz(X, Y), not baz(Y).
+        }
+        .compile()
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
+        let res: KnowledgeBase<_, _> = big_rules.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", [])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", [])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", ["foo"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", ["bar"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", ["foo", "foo"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", ["foo", "bar"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", ["bar", "foo"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("quz", ["bar", "bar"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", ["foo", "foo"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", ["foo", "bar"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", ["bar", "foo"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("qux", ["bar", "bar"])), Some(false));
     }
 
     #[test]
@@ -371,14 +434,15 @@ mod tests {
         crate::tests::setup_logger();
 
         // Impossible rules
-        let con_rules: Spec<_, _> = datalog! {
+        let con_rules: Spec<_> = datalog! {
             #![crate]
             foo :- not foo.
-        };
-        let res: Interpretation = con_rules.alternating_fixpoint();
-        assert_eq!(res.len(), 1);
-        assert_eq!(res.closed_world_truth(&make_atom("foo", [])), None);
-        assert_eq!(res.closed_world_truth(&make_atom("bingo", ["boingo"])), Some(false));
+        }
+        .compile()
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
+        let res: KnowledgeBase<_, _> = con_rules.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", [])), None);
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bingo", ["boingo"])), Some(false));
     }
 
     #[test]
@@ -387,7 +451,7 @@ mod tests {
         crate::tests::setup_logger();
 
         // Example 5.1
-        let five_one: Spec<_, _> = datalog! {
+        let five_one: Spec<_> = datalog! {
             #![crate]
             a :- c, not b.
             b :- not a.
@@ -399,17 +463,18 @@ mod tests {
             q :- p.
             r :- q.
             r :- not c.
-        };
-        let res: Interpretation = five_one.alternating_fixpoint();
-        assert_eq!(res.len(), 7);
-        assert_eq!(res.closed_world_truth(&make_atom("a", None)), None);
-        assert_eq!(res.closed_world_truth(&make_atom("b", None)), None);
-        assert_eq!(res.closed_world_truth(&make_atom("c", None)), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("p", None)), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("q", None)), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("r", None)), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("s", None)), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("t", None)), Some(false));
+        }
+        .compile()
+        .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
+        let res: KnowledgeBase<_, _> = five_one.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("a", [])), None);
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("b", [])), None);
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("c", [])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("p", [])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("q", [])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("r", [])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("s", [])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("t", [])), Some(false));
     }
 
     #[test]
@@ -419,7 +484,7 @@ mod tests {
 
         // Example 5.2 (a)
         // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
-        let five_two_a: Spec<_, _> = datalog! {
+        let five_two_a: Spec<_> = datalog! {
             #![crate]
             wins(X) :- mov(X, Y), not wins(Y).
 
@@ -428,18 +493,19 @@ mod tests {
             mov(a, b). mov(a, e).
             mov(b, c). mov(b, d). mov(e, f). mov(e, g).
             mov(g, h). mov(g, i).
-        };
-        let res: Interpretation = five_two_a.alternating_fixpoint();
-        assert_eq!(res.len(), 26);
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["a"])), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["b"])), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["c"])), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["d"])), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["e"])), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["f"])), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["g"])), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["h"])), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["i"])), Some(false));
+        }
+        .compile()
+        .unwrap();
+        let res: KnowledgeBase<_, _> = five_two_a.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["a"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["b"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["c"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["d"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["e"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["f"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["g"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["h"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["i"])), Some(false));
     }
 
     #[test]
@@ -449,7 +515,7 @@ mod tests {
 
         // Example 5.2 (b)
         // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
-        let five_two_b: Spec<_, _> = datalog! {
+        let five_two_b: Spec<_> = datalog! {
             #![crate]
             wins(X) :- mov(X, Y), not wins(Y).
 
@@ -459,13 +525,14 @@ mod tests {
             mov(b, a).
             mov(b, c).
             mov(c, d).
-        };
-        let res: Interpretation = five_two_b.alternating_fixpoint();
-        assert_eq!(res.len(), 12);
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["a"])), None);
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["b"])), None);
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["c"])), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["d"])), Some(false));
+        }
+        .compile()
+        .unwrap();
+        let res: KnowledgeBase<_, _> = five_two_b.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["a"])), None);
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["b"])), None);
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["c"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["d"])), Some(false));
     }
 
     #[test]
@@ -475,7 +542,7 @@ mod tests {
 
         // Example 5.2 (c)
         // NOTE: Example uses `mov` instead of `move`, cuz `move` is a Rust keyword :)
-        let five_two_c: Spec<_, _> = datalog! {
+        let five_two_c: Spec<_> = datalog! {
             #![crate]
             wins(X) :- mov(X, Y), not wins(Y).
 
@@ -484,11 +551,12 @@ mod tests {
             mov(a, b).
             mov(b, a).
             mov(b, c).
-        };
-        let res: Interpretation = five_two_c.alternating_fixpoint();
-        assert_eq!(res.len(), 9);
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["a"])), Some(false));
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["b"])), Some(true));
-        assert_eq!(res.closed_world_truth(&make_atom("wins", ["c"])), Some(false));
+        }
+        .compile()
+        .unwrap();
+        let res: KnowledgeBase<_, _> = five_two_c.alternating_fixpoint();
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["a"])), Some(false));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["b"])), Some(true));
+        assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["c"])), Some(false));
     }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    03 May 2024, 14:14:18
 //  Last edited:
-//    04 Dec 2024, 17:41:54
+//    11 Feb 2025, 18:26:44
 //  Auto updated?
 //    Yes
 //
@@ -19,7 +19,7 @@ use clap::Parser;
 #[cfg(feature = "transitions")]
 use datalog::transitions::{ast::TransitionSpec, interpreter::Effect, parser};
 #[cfg(not(feature = "transitions"))]
-use datalog::{ast::Spec, interpreter::interpretation::Interpretation, parser};
+use datalog::{ast::Spec, interpreter::KnowledgeBase, parser};
 use error_trace::trace;
 use humanlog::{DebugMode, HumanLogger};
 use log::{debug, error, info};
@@ -109,10 +109,16 @@ fn main() {
 
         // Alright, now interpret the file
         debug!("Running interpretation of {} rules...", spec.rules.len());
-        let int: Interpretation = spec.alternating_fixpoint();
+        let kb: KnowledgeBase<&str, &str> = match spec.compile() {
+            Ok(spec) => spec.alternating_fixpoint(),
+            Err(err) => {
+                error!("Failed to compile spec: {err}");
+                std::process::exit(1);
+            },
+        };
 
         // If we made it, print it
-        println!("{int}");
+        println!("{kb}");
     }
     #[cfg(feature = "transitions")]
     {
@@ -134,10 +140,10 @@ fn main() {
 
         // Alright, now interpret the file
         debug!("Running interpretation of {} phrases...", spec.phrases.len());
-        let effects: Vec<Effect> = match spec.run() {
+        let effects: Vec<Effect<&str, &str>> = match spec.run() {
             Ok((_, effects)) => effects,
             Err(err) => {
-                error!("{}", trace!(("Failed to run interpretation"), err));
+                error!("Failed to run interpretation: {err}");
                 std::process::exit(1);
             },
         };
@@ -146,7 +152,7 @@ fn main() {
         println!("Program trace:");
         for effect in effects {
             println!("--> {}", effect.trigger);
-            println!("    {}", effect.interpretation.to_string().replace('\n', "\n    "));
+            println!("    {}", effect.kb.to_string().replace('\n', "\n    "));
         }
     }
 }
