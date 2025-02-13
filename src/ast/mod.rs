@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    13 Feb 2025, 15:41:09
+//    13 Feb 2025, 16:54:35
 //  Auto updated?
 //    Yes
 //
@@ -354,8 +354,6 @@ impl<F, S: SpannableDisplay> Display for NegAtom<F, S> {
 /// Bar
 /// ```
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "railroad", derive(ToNode))]
-#[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
 pub enum Atom<F, S> {
     /// It's a Fact.
     ///
@@ -478,6 +476,24 @@ impl<F, S: SpannableDisplay> Display for Atom<F, S> {
             Self::Fact(fa) => fa.fmt(f),
             Self::Var(v) => v.fmt(f),
         }
+    }
+}
+#[cfg(feature = "railroad")]
+impl<F, S> ToNode for Atom<F, S> {
+    type Node = rr::Choice<rr::LabeledBox<Box<dyn rr::Node>, rr::Comment>>;
+
+    #[inline]
+    fn railroad() -> Self::Node {
+        rr::Choice::new(vec![
+            rr::LabeledBox::new(Box::new(Fact::<F, S>::railroad()) as Box<dyn rr::Node>, rr::Comment::new("Atom::Fact".into())),
+            rr::LabeledBox::new(
+                Box::new(rr::Sequence::new(vec![
+                    Box::new(rr::Comment::new("regex".into())) as Box<dyn rr::Node>,
+                    Box::new(rr::Terminal::new("^[A-Z][a-zA-Z_-]*$".into())),
+                ])) as Box<dyn rr::Node>,
+                rr::Comment::new("Atom::Var".into()),
+            ),
+        ])
     }
 }
 
