@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    11 Feb 2025, 18:36:15
+//    13 Feb 2025, 15:41:09
 //  Auto updated?
 //    Yes
 //
@@ -29,7 +29,7 @@ use ast_toolkit::railroad::{ToDelimNode, ToNode, ToNonTerm, railroad as rr};
 use ast_toolkit::span::SpannableDisplay;
 pub use ast_toolkit::span::{Span, Spanning as _};
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
-use better_derive::{Clone, Copy, Debug, Eq, Hash, PartialEq};
+use better_derive::{Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd};
 // Re-export the derive macro
 #[cfg(feature = "macros")]
 pub use datalog_macros::datalog;
@@ -630,7 +630,7 @@ impl<F, S> ToNode for FactArgs<F, S> {
 /// ```plain
 /// foo
 /// ```
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad), regex = "^[a-z_][a-z_-]*$"))]
 pub struct Ident<F, S> {

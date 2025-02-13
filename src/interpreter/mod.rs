@@ -4,7 +4,7 @@
 //  Created:
 //    26 Mar 2024, 19:36:31
 //  Last edited:
-//    12 Feb 2025, 15:58:49
+//    13 Feb 2025, 15:45:58
 //  Auto updated?
 //    Yes
 //
@@ -58,7 +58,7 @@ where
     I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
     I::IntoIter: Clone,
     S: SpannableDisplay,
-    Span<F, S>: 's + Clone + Eq + Hash,
+    Span<F, S>: 's + Clone + Hash + Ord,
 {
     let rules = rules.into_iter();
 
@@ -120,7 +120,7 @@ where
     I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
     I::IntoIter: Clone,
     S: SpannableDisplay,
-    Span<F, S>: 's + Clone + Eq + Hash,
+    Span<F, S>: 's + Clone + Eq + Hash + Ord,
 {
     let mut int: KnowledgeBase<F, S> = KnowledgeBase::new();
     alternating_fixpoint_mut(rules, &mut int);
@@ -147,7 +147,7 @@ where
     I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
     I::IntoIter: Clone,
     S: SpannableDisplay,
-    Span<F, S>: 's + Clone + Eq + Hash,
+    Span<F, S>: 's + Clone + Eq + Hash + Ord,
 {
     let rules = rules.into_iter();
     debug!(
@@ -196,7 +196,7 @@ where
 impl<F, S> Spec<Atom<F, S>>
 where
     S: SpannableDisplay,
-    Span<F, S>: Clone + Eq + Hash,
+    Span<F, S>: Clone + Eq + Hash + Ord,
 {
     /// Performs forward derivation of the Spec.
     ///
@@ -216,7 +216,7 @@ where
 impl<F, S> Spec<Atom<F, S>>
 where
     S: SpannableDisplay,
-    Span<F, S>: Clone + Eq + Hash,
+    Span<F, S>: Clone + Eq + Hash + Ord,
 {
     /// Performs a proper derivation using the full well-founded semantics.
     ///
@@ -257,7 +257,7 @@ where
 impl<F, S> Rule<GroundAtom<F, S>>
 where
     S: SpannableDisplay,
-    Span<F, S>: Eq + Hash,
+    Span<F, S>: Eq + Hash + Ord,
 {
     /// Checks whether this rule holds in the given knowledge base.
     ///

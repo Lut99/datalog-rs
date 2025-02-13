@@ -4,7 +4,7 @@
 //  Created:
 //    03 Feb 2025, 17:11:26
 //  Last edited:
-//    12 Feb 2025, 16:02:10
+//    13 Feb 2025, 15:44:57
 //  Auto updated?
 //    Yes
 //
@@ -217,10 +217,10 @@ where
         hasher.finish()
     }
 }
-impl<F, S> Eq for KnowledgeBase<F, S> where Span<F, S>: Eq + Hash {}
+impl<F, S> Eq for KnowledgeBase<F, S> where Span<F, S>: Hash + Ord {}
 impl<F, S> Hash for KnowledgeBase<F, S>
 where
-    GroundAtom<F, S>: Hash + Ord,
+    Span<F, S>: Hash + Ord,
 {
     #[inline]
     #[track_caller]
@@ -243,7 +243,7 @@ where
 }
 impl<F, S> PartialEq for KnowledgeBase<F, S>
 where
-    Span<F, S>: Eq + Hash,
+    Span<F, S>: Hash + Ord,
 {
     #[inline]
     fn eq(&self, other: &Self) -> bool { self.truths.eq(&other.truths) && self.assumptions.eq(&other.assumptions) }
@@ -252,7 +252,7 @@ where
 // Reasoning
 impl<F, S> KnowledgeBase<F, S>
 where
-    Span<F, S>: Eq + Hash,
+    Span<F, S>: Hash + Ord,
 {
     /// Updates the knowledge base with a new fact to learn.
     ///
@@ -267,7 +267,9 @@ where
     /// derived is false.
     pub fn apply_stable_transformation(&mut self) {
         // With the new complemented set this is actually super-duper easy!
-        self.assumptions.complement(self.truths.drain(..));
+        let mut truths: BTreeSet<GroundAtom<F, S>> = BTreeSet::new();
+        std::mem::swap(&mut truths, &mut self.truths);
+        self.assumptions.complement(truths.into_iter());
     }
 
 
@@ -332,7 +334,7 @@ impl<F, S> KnowledgeBase<F, S> {
 impl<F, S> Display for KnowledgeBase<F, S>
 where
     S: SpannableDisplay,
-    Span<F, S>: Eq + Hash,
+    Span<F, S>: Hash + Ord,
 {
     #[inline]
     #[track_caller]

@@ -1,3 +1,4 @@
 
 a.
-foo(X) :- X, not foo(foo(foo(foo(foo(X))))).
+fifth_foo(X) :- foo(foo(foo(foo(foo(X))))).
+foo(X) :- X, not fifth_foo(X).

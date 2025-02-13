@@ -4,7 +4,7 @@
 //  Created:
 //    05 Feb 2025, 14:24:31
 //  Last edited:
-//    11 Feb 2025, 11:08:22
+//    13 Feb 2025, 15:40:52
 //  Auto updated?
 //    Yes
 //
@@ -32,7 +32,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 
 use ast_toolkit::span::SpannableDisplay;
-use better_derive::{Clone, Debug, Eq, Hash, PartialEq};
+use better_derive::{Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd};
 
 pub use crate::ast::{Ident, Span};
 
@@ -640,7 +640,7 @@ impl<F, S> From<GroundAtom<F, S>> for Fact<F, S> {
 // NOTE: We implement `Clone`, `Debug`, `Eq`, `Hash` and `PartialEq` manually to prevent an endless
 // cycle in deriving that `Punctuated<Atom, Comma>` implements one of those traits (since the
 // question of whether it does depends on `Atom`, which transitively depends on `FactArgs`).
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[better_derive(bound = (Span<F, S>))]
 pub struct GroundAtom<F, S> {
     /// The identifier of the atom.
