@@ -76,7 +76,6 @@ Spec</text>
 Atom::Fact</text>
 <g class="sequence">
 <g class="sequence">
-<g class="sequence">
 <text class="comment" x="166" y="123">
 regex</text>
 <g class="terminal">
@@ -119,25 +118,22 @@ Fact</text>
 <path d=" M 347 118 h 10"/>
 </g>
 </g>
-</g>
 <path d=" M 112 118 a 12 12 0 0 1 12 12 v 49 m 453 0 v -49 a 12 12 0 0 1 12 -12"/>
-<path d=" M 124 179 v 35 a 12 12 0 0 0 12 12 m 219 0 h 210 m -102 0 l -5 -5 m 0 10 l 5 -5 m 102 0 a 12 12 0 0 0 12 -12 v -35"/>
+<path d=" M 124 179 v 35 a 12 12 0 0 0 12 12 m 235 0 h 194 m -94 0 l -5 -5 m 0 10 l 5 -5 m 94 0 a 12 12 0 0 0 12 -12 v -35"/>
 <g class="labeledbox">
-<rect height="66" width="219" x="136" y="179"/>
-<path d=" M 136 226 h 8 m 203 0 h 8"/>
+<rect height="66" width="235" x="136" y="179"/>
+<path d=" M 136 226 h 8 m 219 0 h 8"/>
 <text class="comment" x="180" y="202">
 Atom::Var</text>
-<g class="sequence">
 <g class="sequence">
 <text class="comment" x="166" y="231">
 regex</text>
 <g class="terminal">
-<rect height="22" rx="10" ry="10" width="148" x="199" y="215"/>
-<text x="273" y="231">
-^[a-z_][a-z_-]*$</text>
+<rect height="22" rx="10" ry="10" width="164" x="199" y="215"/>
+<text x="281" y="231">
+^[A-Z][a-zA-Z_-]*$</text>
 </g>
 <path d=" M 189 226 h 10"/>
-</g>
 </g>
 </g>
 </g>
@@ -172,7 +168,6 @@ Literal::Atom</text>
 <path d=" M 749 118 h 8 m 413 0 h 8"/>
 <text class="comment" x="797" y="81">
 Atom::Fact</text>
-<g class="sequence">
 <g class="sequence">
 <g class="sequence">
 <text class="comment" x="779" y="123">
@@ -217,25 +212,22 @@ Fact</text>
 <path d=" M 960 118 h 10"/>
 </g>
 </g>
-</g>
 <path d=" M 725 118 a 12 12 0 0 1 12 12 v 49 m 453 0 v -49 a 12 12 0 0 1 12 -12"/>
-<path d=" M 737 179 v 35 a 12 12 0 0 0 12 12 m 219 0 h 210 m -102 0 l -5 -5 m 0 10 l 5 -5 m 102 0 a 12 12 0 0 0 12 -12 v -35"/>
+<path d=" M 737 179 v 35 a 12 12 0 0 0 12 12 m 235 0 h 194 m -94 0 l -5 -5 m 0 10 l 5 -5 m 94 0 a 12 12 0 0 0 12 -12 v -35"/>
 <g class="labeledbox">
-<rect height="66" width="219" x="749" y="179"/>
-<path d=" M 749 226 h 8 m 203 0 h 8"/>
+<rect height="66" width="235" x="749" y="179"/>
+<path d=" M 749 226 h 8 m 219 0 h 8"/>
 <text class="comment" x="793" y="202">
 Atom::Var</text>
-<g class="sequence">
 <g class="sequence">
 <text class="comment" x="779" y="231">
 regex</text>
 <g class="terminal">
-<rect height="22" rx="10" ry="10" width="148" x="812" y="215"/>
-<text x="886" y="231">
-^[a-z_][a-z_-]*$</text>
+<rect height="22" rx="10" ry="10" width="164" x="812" y="215"/>
+<text x="894" y="231">
+^[A-Z][a-zA-Z_-]*$</text>
 </g>
 <path d=" M 802 226 h 10"/>
-</g>
 </g>
 </g>
 </g>
@@ -262,7 +254,6 @@ not</text>
 <path d=" M 803 359 h 8 m 413 0 h 8"/>
 <text class="comment" x="851" y="322">
 Atom::Fact</text>
-<g class="sequence">
 <g class="sequence">
 <g class="sequence">
 <text class="comment" x="833" y="364">
@@ -307,25 +298,22 @@ Fact</text>
 <path d=" M 1014 359 h 10"/>
 </g>
 </g>
-</g>
 <path d=" M 779 359 a 12 12 0 0 1 12 12 v 49 m 453 0 v -49 a 12 12 0 0 1 12 -12"/>
-<path d=" M 791 420 v 35 a 12 12 0 0 0 12 12 m 219 0 h 210 m -102 0 l -5 -5 m 0 10 l 5 -5 m 102 0 a 12 12 0 0 0 12 -12 v -35"/>
+<path d=" M 791 420 v 35 a 12 12 0 0 0 12 12 m 235 0 h 194 m -94 0 l -5 -5 m 0 10 l 5 -5 m 94 0 a 12 12 0 0 0 12 -12 v -35"/>
 <g class="labeledbox">
-<rect height="66" width="219" x="803" y="420"/>
-<path d=" M 803 467 h 8 m 203 0 h 8"/>
+<rect height="66" width="235" x="803" y="420"/>
+<path d=" M 803 467 h 8 m 219 0 h 8"/>
 <text class="comment" x="847" y="443">
 Atom::Var</text>
-<g class="sequence">
 <g class="sequence">
 <text class="comment" x="833" y="472">
 regex</text>
 <g class="terminal">
-<rect height="22" rx="10" ry="10" width="148" x="866" y="456"/>
-<text x="940" y="472">
-^[a-z_][a-z_-]*$</text>
+<rect height="22" rx="10" ry="10" width="164" x="866" y="456"/>
+<text x="948" y="472">
+^[A-Z][a-zA-Z_-]*$</text>
 </g>
 <path d=" M 856 467 h 10"/>
-</g>
 </g>
 </g>
 </g>
