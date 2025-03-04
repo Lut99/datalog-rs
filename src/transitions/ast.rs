@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    11 Feb 2025, 17:58:09
+//    04 Mar 2025, 13:28:38
 //  Auto updated?
 //    Yes
 //
@@ -21,7 +21,7 @@ use ast_toolkit::span::SpannableDisplay;
 use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
 use better_derive::{Clone, Copy, Debug, Eq, Hash, PartialEq};
 
-use crate::ast::{Atom, Comma, Dot, Ident, Literal, Rule, RuleBody, Span};
+use crate::ast::{Add, Atom, Comma, Dot, Ident, Literal, Rule, RuleBody, Span};
 use crate::ir;
 
 
@@ -333,7 +333,6 @@ impl<F, S> ToNode for Trigger<F, S> {
 
 
 /***** TOKENS *****/
-utf8_token!(Add, "+");
 utf8_token!(Squiggly, "~");
 utf8_token!(Exclaim, "!");
 utf8_delimiter!(Curly, "{", "}");
@@ -346,7 +345,6 @@ mod railroad_impl {
 
     use super::*;
 
-    utf8_token_railroad!(Add, "+");
     utf8_token_railroad!(Squiggly, "~");
     utf8_token_railroad!(Exclaim, "!");
     utf8_delimiter_railroad!(Curly, "{", "}");

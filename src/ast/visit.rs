@@ -4,7 +4,7 @@
 //  Created:
 //    07 Feb 2025, 16:33:29
 //  Last edited:
-//    10 Feb 2025, 14:53:34
+//    04 Mar 2025, 14:40:36
 //  Auto updated?
 //    Yes
 //
@@ -12,7 +12,10 @@
 //!   Defines a visitor pattern interface for the Datalog AST.
 //
 
-use super::{Arrow, Atom, Comma, Dot, Fact, FactArgs, Ident, Literal, NegAtom, Not, Parens, Rule, RuleBody, Span, Spec};
+use super::{
+    Add, Arrow, Atom, BinOp, Comma, Dot, Expr, ExprBinOp, ExprLitInt, ExprParens, ExprUnOp, Fact, FactArgs, Ident, Literal, Minus, NegAtom, Not,
+    Parens, Percent, Rule, RuleBody, Slash, Span, Spec, Star, UnOp,
+};
 
 
 /***** HELPER MACROS *****/
@@ -149,7 +152,8 @@ impl<F, S> Visitable for Atom<F, S> {
     fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
         match self {
             Atom::Fact(f) => visitor.visit_fact(f),
-            Atom::Var(v) => visitor.visit_ident(v),
+            Atom::Expr(e) => visitor.visit_expr(e),
+            Atom::Var(v) => visitor.visit_var(v),
         }
     }
 }
@@ -185,6 +189,79 @@ impl<F, S> Visitable for FactArgs<F, S> {
     }
 }
 
+impl<F, S> Visitable for Expr<F, S> {
+    #[inline]
+    fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
+        match self {
+            Self::LitInt(li) => visitor.visit_expr_lit_int(li),
+            Self::Var(v) => visitor.visit_var(v),
+            Self::UnOp(uo) => visitor.visit_expr_un_op(uo),
+            Self::BinOp(bo) => visitor.visit_expr_bin_op(bo),
+            Self::Parens(p) => visitor.visit_expr_parens(p),
+        }
+    }
+}
+impl<F, S> Visitable for ExprLitInt<F, S> {
+    #[inline]
+    fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
+        let Self { value: _, span } = self;
+
+        // Visit the span
+        visitor.visit_span(span)
+    }
+}
+impl<F, S> Visitable for ExprUnOp<F, S> {
+    #[inline]
+    fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
+        let Self { op, expr } = self;
+
+        // Visit the two things in-order
+        visitor.visit_un_op(op);
+        visitor.visit_expr(expr);
+    }
+}
+impl<F, S> Visitable for ExprBinOp<F, S> {
+    #[inline]
+    fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
+        let Self { op, lhs, rhs } = self;
+
+        // Visit the two things in-order
+        visitor.visit_expr(lhs);
+        visitor.visit_bin_op(op);
+        visitor.visit_expr(rhs);
+    }
+}
+impl<F, S> Visitable for ExprParens<F, S> {
+    #[inline]
+    fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
+        let Self { paren_tokens, expr } = self;
+
+        // Just visit 'em
+        visitor.visit_parens(paren_tokens);
+        visitor.visit_expr(expr);
+    }
+}
+impl<F, S> Visitable for UnOp<F, S> {
+    #[inline]
+    fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
+        match self {
+            Self::Neg(n) => visitor.visit_minus(n),
+        }
+    }
+}
+impl<F, S> Visitable for BinOp<F, S> {
+    #[inline]
+    fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
+        match self {
+            Self::Add(a) => visitor.visit_add(a),
+            Self::Sub(m) => visitor.visit_minus(m),
+            Self::Mul(s) => visitor.visit_star(s),
+            Self::Div(s) => visitor.visit_slash(s),
+            Self::Rem(p) => visitor.visit_percent(p),
+        }
+    }
+}
+
 impl<F, S> Visitable for Ident<F, S> {
     #[inline]
     fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
@@ -195,10 +272,15 @@ impl<F, S> Visitable for Ident<F, S> {
     }
 }
 
+token_visitor_impl!(Add);
 token_visitor_impl!(Arrow);
 token_visitor_impl!(Comma);
 token_visitor_impl!(Dot);
+token_visitor_impl!(Minus);
 token_visitor_impl!(Not);
+token_visitor_impl!(Percent);
+token_visitor_impl!(Slash);
+token_visitor_impl!(Star);
 delim_visitor_impl!(Parens);
 
 impl<F, S> Visitable for Span<F, S> {
@@ -301,6 +383,80 @@ pub trait Visitor<'ast> {
 
 
 
+    /// Visits any expression.
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `expr`: The [`Expr`] that is being visited.
+    #[inline]
+    fn visit_expr<F, S>(&mut self, expr: &'ast Expr<F, S>) { expr.visit(self) }
+
+    /// Visits expression literals (_integer_ literals).
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `expr`: The [`ExprLitInt`] that is being visited.
+    #[inline]
+    fn visit_expr_lit_int<F, S>(&mut self, expr: &'ast ExprLitInt<F, S>) { expr.visit(self) }
+
+    /// Visits unary expressions.
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `expr`: The [`ExprUnOp`] that is being visited.
+    #[inline]
+    fn visit_expr_un_op<F, S>(&mut self, expr: &'ast ExprUnOp<F, S>) { expr.visit(self) }
+
+    /// Visits binary expressions.
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `expr`: The [`ExprBinOp`] that is being visited.
+    #[inline]
+    fn visit_expr_bin_op<F, S>(&mut self, expr: &'ast ExprBinOp<F, S>) { expr.visit(self) }
+
+    /// Visits expressions wrapped in parenthesis.
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `expr`: The [`ExprParens`] that is being visited.
+    #[inline]
+    fn visit_expr_parens<F, S>(&mut self, expr: &'ast ExprParens<F, S>) { expr.visit(self) }
+
+    /// Visits unary expression operators.
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `op`: The [`UnOp`] that is being visited.
+    #[inline]
+    fn visit_un_op<F, S>(&mut self, op: &'ast UnOp<F, S>) { op.visit(self) }
+
+    /// Visits binary expression operators.
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `op`: The [`BinOp`] that is being visited.
+    #[inline]
+    fn visit_bin_op<F, S>(&mut self, op: &'ast BinOp<F, S>) { op.visit(self) }
+
+
+
+    /// Visits an identifier but ONLY in variable position.
+    ///
+    /// By default, this function redirects to the [`Visitor::visit_ident()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `var`: The [`Ident`] that is being visited.
+    #[inline]
+    fn visit_var<F, S>(&mut self, var: &'ast Ident<F, S>) { self.visit_ident(var) }
+
     /// Visits a good ol' identifier and/or variable name.
     ///
     /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
@@ -311,6 +467,15 @@ pub trait Visitor<'ast> {
     fn visit_ident<F, S>(&mut self, ident: &'ast Ident<F, S>) { ident.visit(self) }
 
 
+
+    /// Visits a plus terminal.
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `add`: The [`Add`] that is being visited.
+    #[inline]
+    fn visit_add<F, S>(&mut self, add: &'ast Add<F, S>) { add.visit(self) }
 
     /// Visits an arrow.
     ///
@@ -339,6 +504,15 @@ pub trait Visitor<'ast> {
     #[inline]
     fn visit_dot<F, S>(&mut self, dot: &'ast Dot<F, S>) { dot.visit(self) }
 
+    /// Visits a minus.
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `minus`: The [`Minus`] that is being visited.
+    #[inline]
+    fn visit_minus<F, S>(&mut self, minus: &'ast Minus<F, S>) { minus.visit(self) }
+
     /// Visits a not.
     ///
     /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
@@ -347,6 +521,33 @@ pub trait Visitor<'ast> {
     /// - `not`: The [`Not`] that is being visited.
     #[inline]
     fn visit_not<F, S>(&mut self, not: &'ast Not<F, S>) { not.visit(self) }
+
+    /// Visits a percent.
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `percent`: The [`Percent`] that is being visited.
+    #[inline]
+    fn visit_percent<F, S>(&mut self, percent: &'ast Percent<F, S>) { percent.visit(self) }
+
+    /// Visits a slash.
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `slash`: The [`Slash`] that is being visited.
+    #[inline]
+    fn visit_slash<F, S>(&mut self, slash: &'ast Slash<F, S>) { slash.visit(self) }
+
+    /// Visits a star.
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `star`: The [`Star`] that is being visited.
+    #[inline]
+    fn visit_star<F, S>(&mut self, star: &'ast Star<F, S>) { star.visit(self) }
 
     /// Visits a parens.
     ///
