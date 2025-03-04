@@ -4,7 +4,7 @@
 //  Created:
 //    03 May 2024, 13:42:38
 //  Last edited:
-//    06 Feb 2025, 10:19:55
+//    04 Mar 2025, 15:59:51
 //  Auto updated?
 //    Yes
 //
@@ -15,6 +15,7 @@
 
 // Declare appropriate submodules
 pub mod atoms;
+pub mod exprs;
 pub mod literals;
 pub mod rules;
 pub mod specs;

@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    04 Mar 2025, 14:17:06
+//    04 Mar 2025, 16:13:59
 //  Auto updated?
 //    Yes
 //
@@ -1072,6 +1072,28 @@ pub enum UnOp<F, S> {
     /// ```
     Neg(Minus<F, S>),
 }
+impl<F, S> UnOp<F, S> {
+    /// Returns the binding power of this operator.
+    ///
+    /// The binding power is used by a [pratt parser](crate::parser::exprs::expr()) to decide
+    /// operator precedence- and associativity. Therefore, unary operators have one power
+    /// associated with the direction they work in (for us, always to the **right**).
+    ///
+    /// The rule is:
+    /// - The operator with the higher power on the side facing the other operator, has higher
+    ///   precedence (i.e., we parse until we find a weaker operator).
+    ///
+    /// Arithmetic negation (the only unary operator) binds stronger than any other.
+    ///
+    /// # Returns
+    /// The _right_ binding power of the operator.
+    #[inline]
+    pub fn binding_power(&self) -> u32 {
+        match self {
+            Self::Neg(_) => 5,
+        }
+    }
+}
 impl<F, S: SpannableDisplay> Display for UnOp<F, S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
@@ -1121,6 +1143,37 @@ pub enum BinOp<F, S> {
     /// %
     /// ```
     Rem(Percent<F, S>),
+}
+impl<F, S> BinOp<F, S> {
+    /// Returns the binding power of this operator.
+    ///
+    /// The binding power is used by a [pratt parser](crate::parser::exprs::expr()) to decide
+    /// operator precedence- and associativity. Therefore, binary operators have two powers
+    /// associated with them: a left and a right.
+    ///
+    /// The rule is:
+    /// - Operators are _left_ associative if their left binding is lower (i.e., they yield to an
+    ///   identical operator that binds higher to the right);
+    /// - Operators are _right_ associative if their right binding is lower; and
+    /// - The operator with the higher power on the side facing the other operator, has higher
+    ///   precedence (i.e., we parse until we find a weaker operator).
+    ///
+    /// Furthermore, associativity and precedence works as you'd expect (multiplication, dividsion
+    /// and remainder have higher precedence than addition and subtraction; all are left-
+    /// associative).
+    ///
+    /// # Returns
+    /// A tuple with the _left_ binding power and the _right_ binding power, respectively.
+    #[inline]
+    pub fn binding_power(&self) -> (u32, u32) {
+        match self {
+            Self::Add(_) => (1, 2),
+            Self::Sub(_) => (1, 2),
+            Self::Mul(_) => (3, 4),
+            Self::Div(_) => (3, 4),
+            Self::Rem(_) => (3, 4),
+        }
+    }
 }
 impl<F, S: SpannableDisplay> Display for BinOp<F, S> {
     #[inline]
