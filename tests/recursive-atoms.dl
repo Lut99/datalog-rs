@@ -1,0 +1,7 @@
+
+amy.
+bob.
+person(amy).
+person(bob).
+friendship(person(amy), person(bob)).
+friendship(person(X), person(Y)) :- friendship(person(Y), person(X)).

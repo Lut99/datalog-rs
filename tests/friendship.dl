@@ -2,5 +2,8 @@
 // Test!
 amy.
 bob.
+dan.
 friends(amy, bob).
+friends(bob, dan).
 friends(X, Y) :- friends(Y, X).
+friends(X, Y) :- friends(X, Z), friends(Z, Y).
