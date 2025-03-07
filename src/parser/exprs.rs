@@ -4,7 +4,7 @@
 //  Created:
 //    04 Mar 2025, 15:56:43
 //  Last edited:
-//    04 Mar 2025, 16:23:49
+//    07 Mar 2025, 11:51:46
 //  Auto updated?
 //    Yes
 //
@@ -12,13 +12,12 @@
 //!   Defines parsers for the new integer expressions.
 //
 
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 
 use ast_toolkit::snack::error::{Common, Failure};
 use ast_toolkit::snack::span::MatchBytes;
 use ast_toolkit::snack::{Combinator as _, Result as SResult, comb};
 use ast_toolkit::span::Spanning;
-use better_derive::Debug;
 
 use super::tokens;
 use crate::ast::{self, Span};
@@ -27,30 +26,32 @@ use crate::ast::{self, Span};
 /***** ERRORS *****/
 /// Errors returned when parsing atoms and related.
 #[derive(Debug)]
-pub enum ParseError<F, S> {
+pub enum ParseError<'a, F, S> {
     /// Failed to parse a parenthesis-wrapped expression.
-    ExprParens { err: Common<F, S> },
+    ExprParens { err: Common<'a, F, S, ast_toolkit::tokens::snack::complete::ParseError<'a, F, S, Box<Self>>> },
+    /// The parens()-combinator did not just fail, it failed unrecoverably.
+    Parens { err: ast_toolkit::tokens::snack::complete::ParseError<'a, F, S, Box<Self>> },
 }
-impl<F, S> Display for ParseError<F, S> {
+impl<'a, F, S> Display for ParseError<'a, F, S> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use ParseError::*;
         match self {
-            FactArgs { .. } => write!(f, "{}", FactArgsExpectsFormatter),
+            Self::ExprParens { .. } => write!(f, "{ExprParensExpectsFormatter}"),
+            Self::Parens { err } => err.fmt(f),
         }
     }
 }
-impl<F, S> std::error::Error for ParseError<F, S> {}
-impl<F, S> Spanning<F, S> for ParseError<F, S>
+impl<'a, F: Debug, S: Debug> std::error::Error for ParseError<'a, F, S> {}
+impl<'a, F, S> Spanning<F, S> for ParseError<'a, F, S>
 where
     F: Clone,
     S: Clone,
 {
     #[inline]
     fn span(&self) -> Span<F, S> {
-        use ParseError::*;
         match self {
-            FactArgs { span } => span.clone(),
+            Self::ExprParens { err } => err.span(),
+            Self::Parens { err } => err.span(),
         }
     }
 
@@ -59,9 +60,9 @@ where
     where
         Self: Sized,
     {
-        use ParseError::*;
         match self {
-            FactArgs { span } => span,
+            Self::ExprParens { err } => err.into_span(),
+            Self::Parens { err } => err.into_span(),
         }
     }
 }
@@ -82,7 +83,7 @@ where
 ///
 /// # Fails
 /// The given combinator fails if the head of the input is not a valid expression.
-#[comb(snack = ::ast_toolkit::snack, expected = "an integer expression", Output = ast::Expr<F, S>, Error = ParseError<F, S>)]
+#[comb(snack = ::ast_toolkit::snack, expected = "an integer expression", Output = ast::Expr<F, S>, Error = ParseError<'static, F, S>)]
 pub fn expr<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,
@@ -103,7 +104,7 @@ where
 
 
 /// Parses an integer expression wrapped in parenthesis.
-#[comb(snack = ::ast_toolkit::snack, expected = "an integer expression wrapped in parenthesis", Output = ast::ExprParens<F, S>, Error = ParseError<F, S>)]
+#[comb(snack = ::ast_toolkit::snack, expected = "an integer expression wrapped in parenthesis", Output = ast::ExprParens<F, S>, Error = ParseError<'static, F, S>)]
 pub fn expr_parens<F, S>(input: Span<F, S>) -> _
 where
     F: Clone,
@@ -111,7 +112,10 @@ where
 {
     match tokens::parens(expr()).parse(input) {
         SResult::Ok(rem, (expr, paren_tokens)) => SResult::Ok(rem, ast::ExprParens { paren_tokens, expr: Box::new(expr) }),
-        SResult::Fail(fail) => SResult::Fail(Failure::Common(Common::Custom(ParseError::ExprParens { err: fail }))),
-        SResult::Error(err) => SResult::Error(err),
+        SResult::Fail(Failure::Common(fail)) => {
+            SResult::Fail(Failure::Common(Common::Custom(ParseError::ExprParens { err: fail.map_custom(&mut |err| Box::new(err)) })))
+        },
+        SResult::Fail(Failure::NotEnough { needed, span }) => SResult::Fail(Failure::NotEnough { needed, span }),
+        SResult::Error(err) => SResult::Error(err.map_custom(|err| ParseError::Parens { err })),
     }
 }
