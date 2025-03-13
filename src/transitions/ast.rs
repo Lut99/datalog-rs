@@ -4,7 +4,7 @@
 //  Created:
 //    28 Nov 2024, 10:50:29
 //  Last edited:
-//    04 Mar 2025, 13:28:38
+//    13 Mar 2025, 22:11:52
 //  Auto updated?
 //    Yes
 //
@@ -18,7 +18,7 @@ use ast_toolkit::punctuated::Punctuated;
 #[cfg(feature = "railroad")]
 use ast_toolkit::railroad::{ToDelimNode, ToNode, ToNonTerm, railroad as rr};
 use ast_toolkit::span::SpannableDisplay;
-use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
+use ast_toolkit::tokens::{utf8_delim, utf8_token};
 use better_derive::{Clone, Copy, Debug, Eq, Hash, PartialEq};
 
 use crate::ast::{Add, Atom, Comma, Dot, Ident, Literal, Rule, RuleBody, Span};
@@ -335,17 +335,29 @@ impl<F, S> ToNode for Trigger<F, S> {
 /***** TOKENS *****/
 utf8_token!(Squiggly, "~");
 utf8_token!(Exclaim, "!");
-utf8_delimiter!(Curly, "{", "}");
+utf8_delim!(Curly, "{", "}");
+
+// Implement their parser shortcuts
+#[doc(hidden)]
+mod snack_impl {
+    use ast_toolkit::tokens::{utf8_delim_snack, utf8_token_snack};
+
+    use super::*;
+
+    utf8_token_snack!(Squiggly);
+    utf8_token_snack!(Exclaim);
+    utf8_delim_snack!(Curly);
+}
 
 // Implement their railroads
 #[doc(hidden)]
 #[cfg(feature = "railroad")]
 mod railroad_impl {
-    use ast_toolkit::tokens::{utf8_delimiter_railroad, utf8_token_railroad};
+    use ast_toolkit::tokens::{utf8_delim_railroad, utf8_token_railroad};
 
     use super::*;
 
     utf8_token_railroad!(Squiggly, "~");
     utf8_token_railroad!(Exclaim, "!");
-    utf8_delimiter_railroad!(Curly, "{", "}");
+    utf8_delim_railroad!(Curly, "{", "}");
 }

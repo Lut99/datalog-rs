@@ -4,7 +4,7 @@
 //  Created:
 //    13 Mar 2024, 16:43:37
 //  Last edited:
-//    04 Mar 2025, 16:13:59
+//    13 Mar 2025, 22:10:54
 //  Auto updated?
 //    Yes
 //
@@ -28,7 +28,7 @@ pub use ast_toolkit::punctuated::punct;
 use ast_toolkit::railroad::{ToDelimNode, ToNode, ToNonTerm, railroad as rr};
 use ast_toolkit::span::SpannableDisplay;
 pub use ast_toolkit::span::{Span, Spanning as _};
-use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
+use ast_toolkit::tokens::{utf8_delim, utf8_token};
 use better_derive::{Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd};
 // Re-export the derive macro
 #[cfg(feature = "macros")]
@@ -1220,13 +1220,32 @@ utf8_token!(Not, "not");
 utf8_token!(Percent, "%");
 utf8_token!(Slash, "/");
 utf8_token!(Star, "*");
-utf8_delimiter!(Parens, "(", ")");
+utf8_delim!(Parens, "(", ")");
+
+// Implement their parsers
+#[doc(hidden)]
+mod parser_impl {
+    use ast_toolkit::tokens::{utf8_delim_snack, utf8_token_snack};
+
+    use super::*;
+
+    utf8_token_snack!(Add);
+    utf8_token_snack!(Arrow);
+    utf8_token_snack!(Comma);
+    utf8_token_snack!(Dot);
+    utf8_token_snack!(Minus);
+    utf8_token_snack!(Not);
+    utf8_token_snack!(Percent);
+    utf8_token_snack!(Slash);
+    utf8_token_snack!(Star);
+    utf8_delim_snack!(Parens);
+}
 
 // Implement their railroads
 #[doc(hidden)]
 #[cfg(feature = "railroad")]
 mod railroad_impl {
-    use ast_toolkit::tokens::{utf8_delimiter_railroad, utf8_token_railroad};
+    use ast_toolkit::tokens::{utf8_delim_railroad, utf8_token_railroad};
 
     use super::*;
 
@@ -1239,5 +1258,5 @@ mod railroad_impl {
     utf8_token_railroad!(Percent, "%");
     utf8_token_railroad!(Slash, "/");
     utf8_token_railroad!(Star, "*");
-    utf8_delimiter_railroad!(Parens, "(", ")");
+    utf8_delim_railroad!(Parens, "(", ")");
 }
