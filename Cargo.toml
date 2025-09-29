@@ -23,7 +23,7 @@ indexmap = "2.7"
 log = { version = "0.4", optional = true }
 paste = "1.0"
 
-ast-toolkit = { git = "https://github.com/Lut99/ast-toolkit-rs", features = ["derive", "punctuated", "span", "tokens"] }
+ast-toolkit = { git = "https://github.com/Lut99/ast-toolkit-rs", features = ["derive", "punctuated", "span", "tokens"], rev = "20895ab7c61c5c887e85b3ca975aacddc4095d9f" }
 enum-debug = { git = "https://github.com/Lut99/enum-debug", tag = "v1.1.0", features = ["derive"] }
 better-derive = { git = "https://github.com/Lut99/better-derive-rs", tag = "v1.4.0" }
 # stackvec = { git = "https://github.com/Lut99/stackvec-rs", optional = true }
