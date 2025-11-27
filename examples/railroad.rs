@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use console::style;
 use datalog::ast::diagram_to_path;
-use error_trace::trace;
+use error_trace::toplevel;
 use humanlog::{DebugMode, HumanLogger};
 use log::error;
 
@@ -47,7 +47,7 @@ fn main() {
 
     // Attempt to write the diagram
     if let Err(err) = diagram_to_path(&args.path) {
-        error!("{}", trace!(("Failed to generate railroad diagram for the eFLINT AST"), err));
+        error!("{}", toplevel!(("Failed to generate railroad diagram for the eFLINT AST"), err));
         std::process::exit(1);
     }
 

@@ -15,24 +15,23 @@
 
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result as FResult};
-use std::hash::Hash;
 use std::{error, iter};
 
-use ast_toolkit::span::SpannableDisplay;
+use ast_toolkit::span::SpannableBytes;
 use better_derive::Debug;
 
-use crate::ast::{Ident, Span};
+use crate::ast::Ident;
 use crate::{ast, ir};
 
 
 /***** ERRORS *****/
 /// Defines errors possibly occurring during [compilation](ast::Spec::compile()).
 #[derive(Debug)]
-pub enum Error<F, S> {
+pub enum Error<S> {
     /// The given rule failed to satisfy the safety property.
-    VarsNotEnumerable { vars: Vec<Ident<F, S>> },
+    VarsNotEnumerable { vars: Vec<Ident<S>> },
 }
-impl<F, S: SpannableDisplay> Display for Error<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for Error<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter) -> FResult {
         match self {
@@ -48,7 +47,7 @@ impl<F, S: SpannableDisplay> Display for Error<F, S> {
         }
     }
 }
-impl<F, S: SpannableDisplay> error::Error for Error<F, S> {}
+impl<'s, S: SpannableBytes<'s>> error::Error for Error<S> {}
 
 
 
@@ -80,10 +79,9 @@ impl<'a, T: Display> Display for FancyList<'a, T> {
 
 
 /***** LIBRARY *****/
-impl<F, S> ast::Spec<F, S>
+impl<'s, S> ast::Spec<S>
 where
-    S: SpannableDisplay,
-    Span<F, S>: Clone + Eq + Hash,
+    S: 's + Clone + SpannableBytes<'s>,
 {
     /// Checks if all the rules in this spec match the _safety property:_
     /// 1. All variables occurring in a rule, must occur as/in a positive antecedent.
@@ -109,17 +107,16 @@ where
     /// # Errors
     /// This function may error if any rule did not satisfy the safety property.
     #[inline]
-    pub fn compile(&self) -> Result<ir::Spec<ir::Atom<F, S>>, Error<F, S>> {
+    pub fn compile(&self) -> Result<ir::Spec<ir::Atom<S>>, Error<S>> {
         Ok(ir::Spec { rules: self.rules.iter().map(ast::Rule::compile).collect::<Result<_, _>>()? })
     }
 }
 
 
 
-impl<F, S> ast::Rule<F, S>
+impl<'s, S> ast::Rule<S>
 where
-    S: SpannableDisplay,
-    Span<F, S>: Eq + Hash,
+    S: SpannableBytes<'s>,
 {
     /// Returns an iterator over all unbound variables.
     ///
@@ -129,9 +126,9 @@ where
     /// # Returns
     /// Some [`Iterator`] over [`Ident`]ifiers of variables.
     #[inline]
-    pub fn unbound_vars<'s>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>> {
+    pub fn unbound_vars<'r>(&'r self) -> impl 'r + Iterator<Item = &'r Ident<S>> {
         // Collect all the bound variables first
-        let mut all: HashMap<&ast::Ident<F, S>, bool> = HashMap::new();
+        let mut all: HashMap<&ast::Ident<S>, bool> = HashMap::new();
         for (var, binding) in self
             .consequents
             .values()
@@ -159,10 +156,9 @@ where
     #[inline]
     pub fn is_safe(&self) -> bool { self.unbound_vars().next().is_none() }
 }
-impl<F, S> ast::Rule<F, S>
+impl<'s, S> ast::Rule<S>
 where
-    S: SpannableDisplay,
-    Span<F, S>: Clone + Eq + Hash,
+    S: 's + Clone + SpannableBytes<'s>,
 {
     /// Compiles this relatively-close-to-the-syntax rule to an intermediate representation (IR)
     /// rule that is suitable for interpretation.
@@ -175,16 +171,16 @@ where
     ///
     /// # Errors
     /// This function may error if any rule did not satisfy the safety property.
-    pub fn compile(&self) -> Result<ir::Rule<ir::Atom<F, S>>, Error<F, S>> {
+    pub fn compile(&self) -> Result<ir::Rule<ir::Atom<S>>, Error<S>> {
         // Crash if we fail the safety property check
-        let unbound_vars: Vec<&Ident<F, S>> = self.unbound_vars().collect();
+        let unbound_vars: Vec<&Ident<S>> = self.unbound_vars().collect();
         if !unbound_vars.is_empty() {
             return Err(Error::VarsNotEnumerable { vars: unbound_vars.into_iter().cloned().collect() });
         }
 
         // If we do, then compile
         let n_pos_atoms: usize = self.antecedents().filter(|l| l.is_positive()).count();
-        let mut rule: ir::Rule<ir::Atom<F, S>> = ir::Rule {
+        let mut rule: ir::Rule<ir::Atom<S>> = ir::Rule {
             consequents:     Vec::with_capacity(self.consequents.len()),
             pos_antecedents: Vec::with_capacity(n_pos_atoms),
             neg_antecedents: Vec::with_capacity(self.tail.as_ref().map(|t| t.antecedents.len()).unwrap_or(0) - n_pos_atoms),
@@ -193,7 +189,7 @@ where
             rule.consequents.push(atom.compile());
         }
         for lit in self.antecedents() {
-            let atom: ir::Atom<F, S> = lit.atom().compile();
+            let atom: ir::Atom<S> = lit.atom().compile();
             if lit.is_positive() {
                 rule.pos_antecedents.push(atom);
             } else {
@@ -208,9 +204,9 @@ where
 
 
 
-impl<F, S> ast::Atom<F, S>
+impl<S> ast::Atom<S>
 where
-    Span<F, S>: Clone,
+    S: Clone,
 {
     /// Compiles this relatively-close-to-the-syntax atom to an intermediate representation (IR)
     /// atom that is suitable for interpretation.
@@ -218,13 +214,28 @@ where
     /// # Returns
     /// A Datalog IR [`Atom`](ir::Atom) that is the compiled version.
     #[inline]
-    pub fn compile(&self) -> ir::Atom<F, S> {
+    pub fn compile(&self) -> ir::Atom<S> {
         match self {
             Self::Fact(f) => ir::Atom::Fact(ir::Fact {
-                ident: f.ident.clone(),
+                ident: f.ident.compile(),
                 args:  f.args.iter().flat_map(|t| t.args.values().map(ast::Atom::compile)).collect(),
             }),
-            Self::Var(v) => ir::Atom::Var(v.clone()),
+            Self::Var(v) => ir::Atom::Var(v.compile()),
         }
     }
+}
+
+
+
+impl<S> ast::Ident<S>
+where
+    S: Clone,
+{
+    /// Compiles this relatively-close-to-the-syntax identifier to an intermediate representation
+    /// (IR) identifier that is suitable for interpretation.
+    ///
+    /// # Returns
+    /// A Datalog IR [`Ident`](ir::Ident) that is the compiled version.
+    #[inline]
+    pub fn compile(&self) -> ir::Ident<S> { ir::Ident::new(self.value.clone(), self.span.clone()) }
 }

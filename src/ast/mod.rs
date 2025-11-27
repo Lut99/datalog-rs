@@ -26,10 +26,10 @@ pub use ast_toolkit::punctuated::Punctuated;
 pub use ast_toolkit::punctuated::punct;
 #[cfg(feature = "railroad")]
 use ast_toolkit::railroad::{ToDelimNode, ToNode, ToNonTerm, railroad as rr};
-use ast_toolkit::span::SpannableDisplay;
+use ast_toolkit::span::SpannableBytes;
 pub use ast_toolkit::span::{Span, Spanning as _};
-use ast_toolkit::tokens::{utf8_delimiter, utf8_token};
-use better_derive::{Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd};
+use ast_toolkit::tokens::{utf8_delim, utf8_token};
+use better_derive::{Debug, Eq, Hash, Ord, PartialEq, PartialOrd};
 // Re-export the derive macro
 #[cfg(feature = "macros")]
 pub use datalog_macros::datalog;
@@ -47,7 +47,7 @@ use enum_debug::EnumDebug;
 #[inline]
 pub fn diagram() -> rr::Diagram<rr::VerticalGrid<Box<dyn rr::Node>>> {
     ast_toolkit::railroad::diagram!(
-        Spec::<(), ()> as "Spec",
+        Spec::<()> as "Spec",
     )
 }
 
@@ -86,11 +86,11 @@ pub fn diagram_to_path(path: impl AsRef<std::path::Path>) -> Result<(), std::io:
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "railroad", derive(ToNonTerm))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
-pub struct Spec<F, S> {
+pub struct Spec<S> {
     /// The list of rules in this program.
-    pub rules: Vec<Rule<F, S>>,
+    pub rules: Vec<Rule<S>>,
 }
-impl<F, S: SpannableDisplay> Display for Spec<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for Spec<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         for rule in &self.rules {
@@ -111,21 +111,21 @@ impl<F, S: SpannableDisplay> Display for Spec<F, S> {
 /// foo.
 /// ```
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Rule<F, S> {
+pub struct Rule<S> {
     /// A list of consequents (i.e., instances produced by this rule).
-    pub consequents: Punctuated<Atom<F, S>, Comma<F, S>>,
+    pub consequents: Punctuated<Atom<S>, Comma<S>>,
     /// An optional second part that describes the antecedents.
-    pub tail: Option<RuleBody<F, S>>,
+    pub tail: Option<RuleBody<S>>,
     /// The closing dot after each rule.
-    pub dot: Dot<F, S>,
+    pub dot: Dot<S>,
 }
-impl<F, S> Rule<F, S> {
+impl<S> Rule<S> {
     /// Returns an iterator over the atoms in the rule's consequents and antecedents, if any.
     ///
     /// # Returns
     /// An [`Iterator`] yielding zero or more atoms.
     #[inline]
-    pub fn atoms<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<F, S>> {
+    pub fn atoms<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<S>> {
         self.consequents.values().chain(self.tail.iter().flat_map(RuleBody::atoms))
     }
 
@@ -134,7 +134,7 @@ impl<F, S> Rule<F, S> {
     /// # Returns
     /// An [`Iterator`] yielding zero or more mutable references to atoms.
     #[inline]
-    pub fn atoms_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> {
+    pub fn atoms_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<S>> {
         self.consequents.values_mut().chain(self.tail.iter_mut().flat_map(RuleBody::atoms_mut))
     }
 
@@ -143,18 +143,18 @@ impl<F, S> Rule<F, S> {
     /// # Returns
     /// An [`Iterator`] yielding zero or more antecedents.
     #[inline]
-    pub fn antecedents<'s>(&'s self) -> impl 's + Iterator<Item = &'s Literal<F, S>> { self.tail.iter().flat_map(|t| t.antecedents.values()) }
+    pub fn antecedents<'s>(&'s self) -> impl 's + Iterator<Item = &'s Literal<S>> { self.tail.iter().flat_map(|t| t.antecedents.values()) }
 
     /// Returns an iterator over the atoms in the rule's antecedents, if any.
     ///
     /// # Returns
     /// An [`Iterator`] yielding zero or more mutable references to antecedents.
     #[inline]
-    pub fn antecedents_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Literal<F, S>> {
+    pub fn antecedents_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Literal<S>> {
         self.tail.iter_mut().flat_map(|t| t.antecedents.values_mut())
     }
 }
-impl<F, S: SpannableDisplay> Display for Rule<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for Rule<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         for (i, atom) in self.consequents.values().enumerate() {
@@ -173,15 +173,15 @@ impl<F, S: SpannableDisplay> Display for Rule<F, S> {
     }
 }
 #[cfg(feature = "railroad")]
-impl<F, S> ToNode for Rule<F, S> {
+impl<S> ToNode for Rule<S> {
     type Node = rr::Sequence<Box<dyn rr::Node>>;
 
     #[inline]
     fn railroad() -> Self::Node {
         rr::Sequence::new(vec![
-            Box::new(rr::Repeat::new(Atom::<F, S>::railroad(), Comma::<F, S>::railroad())),
-            Box::new(rr::Optional::new(RuleBody::<F, S>::railroad())),
-            Box::new(Dot::<F, S>::railroad()),
+            Box::new(rr::Repeat::new(Atom::<S>::railroad(), Comma::<S>::railroad())),
+            Box::new(rr::Optional::new(RuleBody::<S>::railroad())),
+            Box::new(Dot::<S>::railroad()),
         ])
     }
 }
@@ -193,28 +193,28 @@ impl<F, S> ToNode for Rule<F, S> {
 /// :- foo, bar(baz)
 /// ```
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct RuleBody<F, S> {
+pub struct RuleBody<S> {
     /// The arrow token.
-    pub arrow_token: Arrow<F, S>,
+    pub arrow_token: Arrow<S>,
     /// The list of antecedents.
-    pub antecedents: Punctuated<Literal<F, S>, Comma<F, S>>,
+    pub antecedents: Punctuated<Literal<S>, Comma<S>>,
 }
-impl<F, S> RuleBody<F, S> {
+impl<S> RuleBody<S> {
     /// Returns an iterator over the atoms in the rule's antecedents, if any.
     ///
     /// # Returns
     /// An [`Iterator`] yielding zero or more antecedents.
     #[inline]
-    pub fn atoms<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<F, S>> { self.antecedents.values().map(Literal::atom) }
+    pub fn atoms<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<S>> { self.antecedents.values().map(Literal::atom) }
 
     /// Returns an iterator over the atoms in the rule's antecedents, if any.
     ///
     /// # Returns
     /// An [`Iterator`] yielding zero or more mutable references to antecedents.
     #[inline]
-    pub fn atoms_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> { self.antecedents.values_mut().map(Literal::atom_mut) }
+    pub fn atoms_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<S>> { self.antecedents.values_mut().map(Literal::atom_mut) }
 }
-impl<F, S: SpannableDisplay> Display for RuleBody<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for RuleBody<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, " :- ")?;
@@ -231,15 +231,12 @@ impl<F, S: SpannableDisplay> Display for RuleBody<F, S> {
     }
 }
 #[cfg(feature = "railroad")]
-impl<F, S> ToNode for RuleBody<F, S> {
+impl<S> ToNode for RuleBody<S> {
     type Node = rr::Sequence<Box<dyn rr::Node>>;
 
     #[inline]
     fn railroad() -> Self::Node {
-        rr::Sequence::new(vec![
-            Box::new(Arrow::<F, S>::railroad()),
-            Box::new(rr::Repeat::new(Literal::<F, S>::railroad(), Comma::<F, S>::railroad())),
-        ])
+        rr::Sequence::new(vec![Box::new(Arrow::<S>::railroad()), Box::new(rr::Repeat::new(Literal::<S>::railroad(), Comma::<S>::railroad()))])
     }
 }
 
@@ -256,7 +253,7 @@ impl<F, S> ToNode for RuleBody<F, S> {
 #[derive(Clone, Debug, EnumDebug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
-pub enum Literal<F, S> {
+pub enum Literal<S> {
     /// Non-negated atom.
     ///
     /// # Syntax
@@ -264,16 +261,16 @@ pub enum Literal<F, S> {
     /// foo
     /// foo(bar)
     /// ```
-    Atom(Atom<F, S>),
+    Atom(Atom<S>),
     /// Negated atom.
     ///
     /// # Syntax
     /// ```plain
     /// not foo
     /// ```
-    NegAtom(NegAtom<F, S>),
+    NegAtom(NegAtom<S>),
 }
-impl<F, S> Literal<F, S> {
+impl<S> Literal<S> {
     /// Returns the polarity of the literal.
     ///
     /// # Returns
@@ -284,7 +281,7 @@ impl<F, S> Literal<F, S> {
     ///
     /// # Returns
     /// A reference to the [`Atom`] contained within.
-    pub fn atom(&self) -> &Atom<F, S> {
+    pub fn atom(&self) -> &Atom<S> {
         match self {
             Self::Atom(a) => a,
             Self::NegAtom(na) => &na.atom,
@@ -295,7 +292,7 @@ impl<F, S> Literal<F, S> {
     ///
     /// # Returns
     /// A mutable reference to the [`Atom`] contained within.
-    pub fn atom_mut(&mut self) -> &mut Atom<F, S> {
+    pub fn atom_mut(&mut self) -> &mut Atom<S> {
         match self {
             Self::Atom(a) => a,
             Self::NegAtom(na) => &mut na.atom,
@@ -309,7 +306,7 @@ impl<F, S> Literal<F, S> {
     #[inline]
     pub fn is_grounded(&self) -> bool { self.atom().is_grounded() }
 }
-impl<F, S: SpannableDisplay> Display for Literal<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for Literal<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -329,13 +326,13 @@ impl<F, S: SpannableDisplay> Display for Literal<F, S> {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
-pub struct NegAtom<F, S> {
+pub struct NegAtom<S> {
     /// The not-token.
-    pub not_token: Not<F, S>,
+    pub not_token: Not<S>,
     /// The atom that was negated.
-    pub atom:      Atom<F, S>,
+    pub atom:      Atom<S>,
 }
-impl<F, S: SpannableDisplay> Display for NegAtom<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for NegAtom<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "not ")?;
@@ -354,7 +351,7 @@ impl<F, S: SpannableDisplay> Display for NegAtom<F, S> {
 /// Bar
 /// ```
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Atom<F, S> {
+pub enum Atom<S> {
     /// It's a Fact.
     ///
     /// # Syntax
@@ -362,16 +359,16 @@ pub enum Atom<F, S> {
     /// foo
     /// foo(bar, Baz)
     /// ```
-    Fact(Fact<F, S>),
+    Fact(Fact<S>),
     /// It's a variable.
     ///
     /// # Syntax
     /// ```plain
     /// Bar
     /// ```
-    Var(Ident<F, S>),
+    Var(Ident<S>),
 }
-impl<F, S> Atom<F, S> {
+impl<S> Atom<S> {
     /// Returns whether this atom has any arguments.
     ///
     /// If true, implies [`Atom::is_grounded`] will also return true.
@@ -442,13 +439,13 @@ impl<F, S> Atom<F, S> {
     /// # Returns
     /// Some [`Iterator`] over [`Ident`] (references).
     #[inline]
-    pub fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>>
+    pub fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<S>>
     where
         'i: 's,
-        Ident<F, S>: 'i,
+        Ident<S>: 'i,
     {
         match self {
-            Self::Fact(f) => Box::new(f.vars()) as Box<dyn 's + Iterator<Item = &'s Ident<F, S>>>,
+            Self::Fact(f) => Box::new(f.vars()) as Box<dyn 's + Iterator<Item = &'s Ident<S>>>,
             Self::Var(v) => Box::new(Some(v).into_iter()),
         }
     }
@@ -458,18 +455,18 @@ impl<F, S> Atom<F, S> {
     /// # Returns
     /// Some [`Iterator`] over [`Ident`] (mutable references).
     #[inline]
-    pub fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>>
+    pub fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<S>>
     where
         'i: 's,
-        Ident<F, S>: 'i,
+        Ident<S>: 'i,
     {
         match self {
-            Self::Fact(f) => Box::new(f.vars_mut()) as Box<dyn 's + Iterator<Item = &'s mut Ident<F, S>>>,
+            Self::Fact(f) => Box::new(f.vars_mut()) as Box<dyn 's + Iterator<Item = &'s mut Ident<S>>>,
             Self::Var(v) => Box::new(Some(v).into_iter()),
         }
     }
 }
-impl<F, S: SpannableDisplay> Display for Atom<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for Atom<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -479,13 +476,13 @@ impl<F, S: SpannableDisplay> Display for Atom<F, S> {
     }
 }
 #[cfg(feature = "railroad")]
-impl<F, S> ToNode for Atom<F, S> {
+impl<S> ToNode for Atom<S> {
     type Node = rr::Choice<rr::LabeledBox<Box<dyn rr::Node>, rr::Comment>>;
 
     #[inline]
     fn railroad() -> Self::Node {
         rr::Choice::new(vec![
-            rr::LabeledBox::new(Box::new(Fact::<F, S>::railroad()) as Box<dyn rr::Node>, rr::Comment::new("Atom::Fact".into())),
+            rr::LabeledBox::new(Box::new(Fact::<S>::railroad()) as Box<dyn rr::Node>, rr::Comment::new("Atom::Fact".into())),
             rr::LabeledBox::new(
                 Box::new(rr::Sequence::new(vec![
                     Box::new(rr::Comment::new("regex".into())) as Box<dyn rr::Node>,
@@ -509,13 +506,13 @@ impl<F, S> ToNode for Atom<F, S> {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad)))]
-pub struct Fact<F, S> {
+pub struct Fact<S> {
     /// The identifier itself.
-    pub ident: Ident<F, S>,
+    pub ident: Ident<S>,
     /// Any arguments.
-    pub args:  Option<FactArgs<F, S>>,
+    pub args:  Option<FactArgs<S>>,
 }
-impl<F, S> Fact<F, S> {
+impl<S> Fact<S> {
     /// Returns whether this atom has any arguments.
     ///
     /// If true, implies [`Fact::is_grounded`] will also return true.
@@ -530,7 +527,7 @@ impl<F, S> Fact<F, S> {
     /// # Returns
     /// An [`Iterator`] yielding zero or more [`Atom`]s representing each argument.
     #[inline]
-    pub fn args<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<F, S>> { self.args.iter().flat_map(|t| t.args.values()).into_iter() }
+    pub fn args<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<S>> { self.args.iter().flat_map(|t| t.args.values()).into_iter() }
 
     /// Returns an iterator over the arguments in this fact, if any.
     ///
@@ -538,7 +535,7 @@ impl<F, S> Fact<F, S> {
     /// An [`Iterator`] yielding zero or more mutable references to [`Atom`]s representing each
     /// argument.
     #[inline]
-    pub fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> {
+    pub fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<S>> {
         self.args.iter_mut().flat_map(|t| t.args.values_mut()).into_iter()
     }
 
@@ -559,10 +556,10 @@ impl<F, S> Fact<F, S> {
     /// # Returns
     /// Some [`Iterator`] over [`Ident`] (references).
     #[inline]
-    pub fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>>
+    pub fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<S>>
     where
         'i: 's,
-        Ident<F, S>: 'i,
+        Ident<S>: 'i,
     {
         self.args.iter().flat_map(|args| args.args.values().flat_map(Atom::vars))
     }
@@ -572,15 +569,15 @@ impl<F, S> Fact<F, S> {
     /// # Returns
     /// Some [`Iterator`] over [`Ident`] (mutable references).
     #[inline]
-    pub fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>>
+    pub fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<S>>
     where
         'i: 's,
-        Ident<F, S>: 'i,
+        Ident<S>: 'i,
     {
         self.args.iter_mut().flat_map(|args| args.args.values_mut().flat_map(Atom::vars_mut))
     }
 }
-impl<F, S: SpannableDisplay> Display for Fact<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for Fact<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter) -> FResult {
         self.ident.fmt(f)?;
@@ -601,14 +598,14 @@ impl<F, S: SpannableDisplay> Display for Fact<F, S> {
 // cycle in deriving that `Punctuated<Atom, Comma>` implements one of those traits (since the
 // question of whether it does depends on `Atom`, which transitively depends on `FactArgs`).
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[better_derive(bound = (Span<F, S>))]
-pub struct FactArgs<F, S> {
+#[better_derive(impl_gen = <'s, S>, bound = (S: SpannableBytes<'s>))]
+pub struct FactArgs<S> {
     /// The parenthesis wrapping the arguments.
-    pub paren_tokens: Parens<F, S>,
+    pub paren_tokens: Parens<S>,
     /// The arguments contained within.
-    pub args: Punctuated<Atom<F, S>, Comma<F, S>>,
+    pub args: Punctuated<Atom<S>, Comma<S>>,
 }
-impl<F, S: SpannableDisplay> Display for FactArgs<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for FactArgs<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "(")?;
@@ -625,15 +622,15 @@ impl<F, S: SpannableDisplay> Display for FactArgs<F, S> {
     }
 }
 #[cfg(feature = "railroad")]
-impl<F, S> ToNode for FactArgs<F, S> {
+impl<S> ToNode for FactArgs<S> {
     type Node = rr::Sequence<Box<dyn rr::Node>>;
 
     #[inline]
     fn railroad() -> Self::Node {
         rr::Sequence::new(vec![
-            Box::new(Parens::<F, S>::railroad_open()),
-            Box::new(rr::Repeat::new(rr::NonTerminal::new("Fact".into()), Comma::<F, S>::railroad())),
-            Box::new(Parens::<F, S>::railroad_close()),
+            Box::new(Parens::<S>::railroad_open()),
+            Box::new(rr::Repeat::new(rr::NonTerminal::new("Fact".into()), Comma::<S>::railroad())),
+            Box::new(Parens::<S>::railroad_close()),
         ])
     }
 }
@@ -646,14 +643,27 @@ impl<F, S> ToNode for FactArgs<F, S> {
 /// ```plain
 /// foo
 /// ```
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "railroad", derive(ToNode))]
 #[cfg_attr(feature = "railroad", railroad(prefix(::ast_toolkit::railroad), regex = "^[a-z_][a-z_-]*$"))]
-pub struct Ident<F, S> {
+pub struct Ident<S> {
     /// The value of the identifier itself.
-    pub value: Span<F, S>,
+    pub value: String,
+    /// Where we found it.
+    pub span:  Option<Span<S>>,
 }
-impl<F, S: SpannableDisplay> Display for Ident<F, S> {
+impl<S> Ident<S> {
+    /// Creates a new identifier that's not attached to any source.
+    ///
+    /// # Arguments
+    /// - `value`: The value of the identifier.
+    ///
+    /// # Returns
+    /// A new Ident with  [`Ident::span`] set to [`None`].
+    #[inline]
+    pub const fn new(value: String) -> Self { Self { value, span: None } }
+}
+impl<'s, S: SpannableBytes<'s>> Display for Ident<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", self.value) }
 }
@@ -665,13 +675,13 @@ utf8_token!(Arrow, ":-");
 utf8_token!(Comma, ",");
 utf8_token!(Dot, ".");
 utf8_token!(Not, "not");
-utf8_delimiter!(Parens, "(", ")");
+utf8_delim!(Parens, "(", ")");
 
 // Implement their railroads
 #[doc(hidden)]
 #[cfg(feature = "railroad")]
 mod railroad_impl {
-    use ast_toolkit::tokens::{utf8_delimiter_railroad, utf8_token_railroad};
+    use ast_toolkit::tokens::{utf8_delim_railroad, utf8_token_railroad};
 
     use super::*;
 
@@ -679,5 +689,5 @@ mod railroad_impl {
     utf8_token_railroad!(Comma, ",");
     utf8_token_railroad!(Dot, ".");
     utf8_token_railroad!(Not, "not");
-    utf8_delimiter_railroad!(Parens, "(", ")");
+    utf8_delim_railroad!(Parens, "(", ")");
 }

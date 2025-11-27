@@ -16,11 +16,11 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use better_derive::{Clone, Copy, Debug};
+use ast_toolkit::span::Spannable;
+use better_derive::Debug;
 use indexmap::IndexSet;
 
-use crate::ast::{Ident, Span};
-use crate::ir::{Atom, Atomlike, GroundAtom, Rule};
+use crate::ir::{Atom, Atomlike, GroundAtom, Ident, Rule, Span};
 
 
 /***** LIBRARY *****/
@@ -40,7 +40,7 @@ use crate::ir::{Atom, Atomlike, GroundAtom, Rule};
 /// 3 -> 123123123123123123123123123 (inner: 1, outer: 9)
 /// ```
 #[derive(Clone, Copy, Debug)]
-#[better_derive(bounds = (I, I::Item))]
+#[better_derive(bounds = (I: r#trait + Iterator, I::Item: r#trait))]
 pub struct CycleRepeat<I>
 where
     I: Iterator,
@@ -135,7 +135,8 @@ where
 }
 
 /// An iterator that produces a powerset of N elements over a set.
-#[derive(Clone, Debug)]
+#[derive(better_derive::Clone, Debug)]
+#[better_derive(bounds = (I: r#trait + Iterator, I::Item: r#trait))]
 pub struct PowerSet<I>
 where
     I: Iterator,
@@ -245,23 +246,25 @@ where
 
 
 /// Quantifies over an atom's variables to produce a grounded one.
-#[derive(Clone, Debug)]
-pub struct AtomQuantifier<'a, F, S, I>
+#[derive(better_derive::Clone, Debug)]
+#[better_derive(bounds = (I: r#trait + Iterator, I::Item: r#trait, S: Spannable<'a>))]
+#[clone(bounds = (I: r#trait + Iterator, I::Item: r#trait, S: Clone))]
+pub struct AtomQuantifier<'a, S, I>
 where
     I: Iterator,
 {
     /// The rule to quantify.
-    atom: Option<&'a Atom<F, S>>,
+    atom: Option<&'a Atom<S>>,
     /// The names of the variables. Corresponds one-to-one with the values produced by the power-
     /// set.
-    vars: IndexSet<Ident<F, S>>,
+    vars: IndexSet<Ident<S>>,
     /// Defines an iterator over the powerset of the given constants.
     iter: PowerSet<I>,
 }
-impl<'a, F, S, I> AtomQuantifier<'a, F, S, I>
+impl<'a, 's, S, I> AtomQuantifier<'a, S, I>
 where
+    S: Clone + Spannable<'s>,
     I: Clone + ExactSizeIterator + Iterator,
-    Ident<F, S>: Clone + Eq + Hash,
 {
     /// Constructor for the AtomQuantifier.
     ///
@@ -272,23 +275,24 @@ where
     ///
     /// # Returns
     /// A new AtomQuantifier, ready to quantify.
-    pub fn new(atom: &'a Atom<F, S>, consts: impl IntoIterator<IntoIter = I>) -> Self {
+    pub fn new(atom: &'a Atom<S>, consts: impl IntoIterator<IntoIter = I>) -> Self {
         // Count the number of unique variables in the atom
-        let vars: IndexSet<Ident<F, S>> = atom.vars().cloned().collect();
+        let vars: IndexSet<Ident<S>> = atom.vars().cloned().collect();
 
         // OK, create the powerset based on that
         let n_vars: usize = vars.len();
         Self { atom: Some(atom), vars, iter: PowerSet::new(consts, n_vars) }
     }
 }
-impl<'i, 'a, F, S, I> Iterator for AtomQuantifier<'a, F, S, I>
+impl<'i, 'a, S, I> Iterator for AtomQuantifier<'a, S, I>
 where
-    I: Clone + Iterator<Item = &'i GroundAtom<F, S>>,
-    Ident<F, S>: Eq + Hash,
-    Atom<F, S>: 'i,
-    Span<F, S>: Clone,
+    S: Clone,
+    I: Clone + Iterator<Item = &'i GroundAtom<S>>,
+    Ident<S>: Eq + Hash,
+    Atom<S>: 'i,
+    Span<S>: Clone,
 {
-    type Item = GroundAtom<F, S>;
+    type Item = GroundAtom<S>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -297,11 +301,11 @@ where
             // SAFETY: No variables, so no risk of us not being able to turn it into a grounded rule
             return self.atom.take().map(|r| r.to_ground_atom().unwrap());
         }
-        let atom: &Atom<F, S> = self.atom?;
+        let atom: &Atom<S> = self.atom?;
 
         // Get a next concretization of all the variables in the rule
-        let values: Vec<&'i GroundAtom<F, S>> = self.iter.next()?;
-        let assign: HashMap<Ident<F, S>, GroundAtom<F, S>> = self.vars.iter().cloned().zip(values.into_iter().cloned()).collect();
+        let values: Vec<&'i GroundAtom<S>> = self.iter.next()?;
+        let assign: HashMap<Ident<S>, GroundAtom<S>> = self.vars.iter().cloned().zip(values.into_iter().cloned()).collect();
 
         // Concretize the rule with that assignment (going through the internal map of index to name)
         Some(atom.concretize(&assign).unwrap_or_else(|_| panic!("Unknown variable after already analysing variables; this should never happen!")))
@@ -310,35 +314,38 @@ where
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
 }
-impl<'i, 'a, F, S, I> ExactSizeIterator for AtomQuantifier<'a, F, S, I>
+impl<'i, 'a, S, I> ExactSizeIterator for AtomQuantifier<'a, S, I>
 where
-    I: Clone + Iterator<Item = &'i GroundAtom<F, S>>,
-    Ident<F, S>: Eq + Hash,
-    Atom<F, S>: 'i,
-    Span<F, S>: Clone,
+    S: Clone,
+    I: Clone + Iterator<Item = &'i GroundAtom<S>>,
+    Ident<S>: Eq + Hash,
+    Atom<S>: 'i,
+    Span<S>: Clone,
 {
     #[inline]
     fn len(&self) -> usize { self.iter.len() }
 }
 
 /// Quantifies over a rule's variables to produce a grounded rule.
-#[derive(Clone, Debug)]
-pub struct RuleQuantifier<'r, F, S, I>
+#[derive(better_derive::Clone, Debug)]
+#[better_derive(bounds = (I: r#trait + Iterator, I::Item: r#trait, S: Spannable<'r>))]
+#[clone(bounds = (I: r#trait + Iterator, I::Item: r#trait, S: Clone))]
+pub struct RuleQuantifier<'r, S, I>
 where
     I: Iterator,
 {
     /// The rule to quantify.
-    rule: Option<&'r Rule<Atom<F, S>>>,
+    rule: Option<&'r Rule<Atom<S>>>,
     /// The names of the variables. Corresponds one-to-one with the values produced by the power-
     /// set.
-    vars: IndexSet<Ident<F, S>>,
+    vars: IndexSet<Ident<S>>,
     /// Defines an iterator over the powerset of the given constants.
     iter: PowerSet<I>,
 }
-impl<'r, F, S, I> RuleQuantifier<'r, F, S, I>
+impl<'r, S, I> RuleQuantifier<'r, S, I>
 where
     I: Clone + ExactSizeIterator + Iterator,
-    Ident<F, S>: Clone + Eq + Hash,
+    Ident<S>: Clone + Eq + Hash,
 {
     /// Constructor for the RuleQuantifier.
     ///
@@ -349,23 +356,24 @@ where
     ///
     /// # Returns
     /// A new RuleQuantifier, ready to quantify.
-    pub fn new(rule: &'r Rule<Atom<F, S>>, consts: impl IntoIterator<IntoIter = I>) -> Self {
+    pub fn new(rule: &'r Rule<Atom<S>>, consts: impl IntoIterator<IntoIter = I>) -> Self {
         // Count the number of unique variables in the rule
-        let vars: IndexSet<Ident<F, S>> = rule.atoms().flat_map(Atomlike::vars).cloned().collect();
+        let vars: IndexSet<Ident<S>> = rule.atoms().flat_map(Atomlike::vars).cloned().collect();
 
         // OK, create the powerset based on that
         let n_vars: usize = vars.len();
         Self { rule: Some(rule), vars, iter: PowerSet::new(consts, n_vars) }
     }
 }
-impl<'i, 'r, F, S, I> Iterator for RuleQuantifier<'r, F, S, I>
+impl<'i, 'r, S, I> Iterator for RuleQuantifier<'r, S, I>
 where
-    I: Clone + Iterator<Item = &'i GroundAtom<F, S>>,
-    Ident<F, S>: Eq + Hash,
-    Rule<Atom<F, S>>: 'i,
-    Span<F, S>: Clone,
+    S: Clone,
+    I: Clone + Iterator<Item = &'i GroundAtom<S>>,
+    Ident<S>: Eq + Hash,
+    Rule<Atom<S>>: 'i,
+    Span<S>: Clone,
 {
-    type Item = Rule<GroundAtom<F, S>>;
+    type Item = Rule<GroundAtom<S>>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -374,11 +382,11 @@ where
             // SAFETY: No variables, so no risk of us not being able to turn it into a grounded rule
             return self.rule.take().map(|r| r.to_grounded_rule().unwrap());
         }
-        let rule: &Rule<Atom<F, S>> = self.rule?;
+        let rule: &Rule<Atom<S>> = self.rule?;
 
         // Get a next concretization of all the variables in the rule
-        let values: Vec<&'i GroundAtom<F, S>> = self.iter.next()?;
-        let assign: HashMap<Ident<F, S>, GroundAtom<F, S>> = self.vars.iter().cloned().zip(values.into_iter().cloned()).collect();
+        let values: Vec<&'i GroundAtom<S>> = self.iter.next()?;
+        let assign: HashMap<Ident<S>, GroundAtom<S>> = self.vars.iter().cloned().zip(values.into_iter().cloned()).collect();
 
         // Concretize the rule with that assignment (going through the internal map of index to name)
         Some(rule.concretize(&assign).unwrap_or_else(|_| panic!("Unknown variable after already analysing variables; this should never happen!")))
@@ -387,12 +395,13 @@ where
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
 }
-impl<'i, 'r, F, S, I> ExactSizeIterator for RuleQuantifier<'r, F, S, I>
+impl<'i, 'r, S, I> ExactSizeIterator for RuleQuantifier<'r, S, I>
 where
-    I: Clone + Iterator<Item = &'i GroundAtom<F, S>>,
-    Ident<F, S>: Eq + Hash,
-    Rule<Atom<F, S>>: 'i,
-    Span<F, S>: Clone,
+    S: Clone,
+    I: Clone + Iterator<Item = &'i GroundAtom<S>>,
+    Ident<S>: Eq + Hash,
+    Rule<Atom<S>>: 'i,
+    Span<S>: Clone,
 {
     #[inline]
     fn len(&self) -> usize { self.iter.len() }
@@ -403,7 +412,7 @@ where
 
 
 /***** IMPLEMENTATIONS *****/
-impl<F, S> Rule<Atom<F, S>> {
+impl<S> Rule<Atom<S>> {
     /// Convenient way to instantiate a rule for a powerset of the given atoms.
     ///
     /// # Arguments
@@ -412,16 +421,16 @@ impl<F, S> Rule<Atom<F, S>> {
     /// # Returns
     /// A [`RuleQuantifier`] that will produce concrete rules without variables in them.
     #[inline]
-    pub fn concretize_for<'r, I>(&'r self, domain: impl IntoIterator<IntoIter = I>) -> RuleQuantifier<'r, F, S, I>
+    pub fn concretize_for<'r, I>(&'r self, domain: impl IntoIterator<IntoIter = I>) -> RuleQuantifier<'r, S, I>
     where
         I: Clone + ExactSizeIterator + Iterator,
-        Ident<F, S>: Clone + Eq + Hash,
+        Ident<S>: Clone + Eq + Hash,
     {
         RuleQuantifier::new(self, domain)
     }
 }
 
-impl<F, S> Atom<F, S> {
+impl<'s, S: Clone + Spannable<'s>> Atom<S> {
     /// Convenient way to instantiate an atom for a powerset of the given atoms.
     ///
     /// # Arguments
@@ -430,10 +439,9 @@ impl<F, S> Atom<F, S> {
     /// # Returns
     /// An [`AtomQuantifier`] that will produce concrete atoms without variables in them.
     #[inline]
-    pub fn concretize_for<'r, I>(&'r self, domain: impl IntoIterator<IntoIter = I>) -> AtomQuantifier<'r, F, S, I>
+    pub fn concretize_for<I>(&self, domain: impl IntoIterator<IntoIter = I>) -> AtomQuantifier<'_, S, I>
     where
         I: Clone + ExactSizeIterator + Iterator,
-        Ident<F, S>: Clone + Eq + Hash,
     {
         AtomQuantifier::new(self, domain)
     }
@@ -624,9 +632,9 @@ mod tests {
         #[cfg(feature = "log")]
         crate::tests::setup_logger();
 
-        let consts: Vec<GroundAtom<&str, &str>> =
+        let consts: Vec<GroundAtom<(&str, &str)>> =
             vec![make_ir_ground_atom("foo", []), make_ir_ground_atom("bar", []), make_ir_ground_atom("baz", [])];
-        let inst: Vec<Rule<GroundAtom<&str, &str>>> = make_ir_rule([make_ir_atom("atom", [])], [], []).concretize_for(&consts).collect();
+        let inst: Vec<Rule<GroundAtom<(&str, &str)>>> = make_ir_rule([make_ir_atom("atom", [])], [], []).concretize_for(&consts).collect();
         assert_eq!(inst, vec![make_ir_rule([make_ir_ground_atom("atom", [])], [], [])]);
     }
 
@@ -635,10 +643,10 @@ mod tests {
         #[cfg(feature = "log")]
         crate::tests::setup_logger();
 
-        let consts: Vec<GroundAtom<&str, &str>> =
+        let consts: Vec<GroundAtom<(&str, &str)>> =
             vec![make_ir_ground_atom("foo", []), make_ir_ground_atom("bar", []), make_ir_ground_atom("baz", [])];
-        let inst1: Vec<Rule<GroundAtom<&str, &str>>> = make_ir_rule([make_ir_atom("atom1", ["foo"])], [], []).concretize_for(&consts).collect();
-        let inst2: Vec<Rule<GroundAtom<&str, &str>>> =
+        let inst1: Vec<Rule<GroundAtom<(&str, &str)>>> = make_ir_rule([make_ir_atom("atom1", ["foo"])], [], []).concretize_for(&consts).collect();
+        let inst2: Vec<Rule<GroundAtom<(&str, &str)>>> =
             make_ir_rule([make_ir_atom("atom2", [])], [make_ir_atom("atom1", [])], []).concretize_for(&consts).collect();
         assert_eq!(inst1, vec![make_ir_rule([make_ir_ground_atom("atom1", ["foo"])], [], [])]);
         assert_eq!(inst2, vec![make_ir_rule([make_ir_ground_atom("atom2", [])], [make_ir_ground_atom("atom1", [])], [])]);
@@ -649,12 +657,12 @@ mod tests {
         #[cfg(feature = "log")]
         crate::tests::setup_logger();
 
-        let consts: Vec<GroundAtom<&str, &str>> =
+        let consts: Vec<GroundAtom<(&str, &str)>> =
             vec![make_ir_ground_atom("foo", []), make_ir_ground_atom("bar", []), make_ir_ground_atom("baz", [])];
-        let inst1: Vec<Rule<GroundAtom<&str, &str>>> = make_ir_rule([make_ir_atom("atom1", ["X"])], [], []).concretize_for(&consts).collect();
-        let inst2: Vec<Rule<GroundAtom<&str, &str>>> =
+        let inst1: Vec<Rule<GroundAtom<(&str, &str)>>> = make_ir_rule([make_ir_atom("atom1", ["X"])], [], []).concretize_for(&consts).collect();
+        let inst2: Vec<Rule<GroundAtom<(&str, &str)>>> =
             make_ir_rule([make_ir_atom("atom2", [])], [make_ir_atom("atom1", ["Y"])], []).concretize_for(&consts).collect();
-        let inst3: Vec<Rule<GroundAtom<&str, &str>>> =
+        let inst3: Vec<Rule<GroundAtom<(&str, &str)>>> =
             make_ir_rule([make_ir_atom("atom3", ["Z"])], [make_ir_atom("atom1", ["Z"])], []).concretize_for(&consts).collect();
         assert_eq!(inst1, vec![
             make_ir_rule([make_ir_ground_atom("atom1", ["foo"])], [], []),
@@ -678,12 +686,12 @@ mod tests {
         #[cfg(feature = "log")]
         crate::tests::setup_logger();
 
-        let consts: Vec<GroundAtom<&str, &str>> =
+        let consts: Vec<GroundAtom<(&str, &str)>> =
             vec![make_ir_ground_atom("foo", []), make_ir_ground_atom("bar", []), make_ir_ground_atom("baz", [])];
-        let inst1: Vec<Rule<GroundAtom<&str, &str>>> = make_ir_rule([make_ir_atom("atom1", ["X", "Y"])], [], []).concretize_for(&consts).collect();
-        let inst2: Vec<Rule<GroundAtom<&str, &str>>> =
+        let inst1: Vec<Rule<GroundAtom<(&str, &str)>>> = make_ir_rule([make_ir_atom("atom1", ["X", "Y"])], [], []).concretize_for(&consts).collect();
+        let inst2: Vec<Rule<GroundAtom<(&str, &str)>>> =
             make_ir_rule([make_ir_atom("atom2", ["X"])], [make_ir_atom("atom1", ["Y"])], []).concretize_for(&consts).collect();
-        let inst3: Vec<Rule<GroundAtom<&str, &str>>> =
+        let inst3: Vec<Rule<GroundAtom<(&str, &str)>>> =
             make_ir_rule([make_ir_atom("atom3", ["X", "Y"])], [make_ir_atom("atom1", ["Y", "X"])], []).concretize_for(&consts).collect();
         assert_eq!(inst1, vec![
             make_ir_rule([make_ir_ground_atom("atom1", ["foo", "foo"])], [], []),

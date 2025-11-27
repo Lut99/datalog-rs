@@ -30,12 +30,11 @@ pub mod quantify;
 
 // Imports
 use std::collections::HashSet;
-use std::hash::Hash;
 
-use ast_toolkit::span::SpannableDisplay;
+use ast_toolkit::span::SpannableBytes;
 pub use knowledge_base::KnowledgeBase;
 
-use crate::ir::{Atom, GroundAtom, Rule, Span, Spec};
+use crate::ir::{Atom, GroundAtom, Rule, Spec};
 use crate::log::{debug, trace};
 
 
@@ -53,12 +52,11 @@ use crate::log::{debug, trace};
 /// - `rules`: A set of rules that are in the spec.
 /// - `kb`: Some [`KnowledgeBase`] to derive in. Specifically, will move atoms from unknown to
 ///   known if they can be derived.
-pub fn immediate_consequence<'s, I, F, S>(rules: I, kb: &mut KnowledgeBase<F, S>)
+pub fn immediate_consequence<'i, 's, I, S>(rules: I, kb: &mut KnowledgeBase<S>)
 where
-    I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
+    I: IntoIterator<Item = &'i Rule<Atom<S>>>,
     I::IntoIter: Clone,
-    S: SpannableDisplay,
-    Span<F, S>: 's + Clone + Hash + Ord,
+    S: 'i + Clone + SpannableBytes<'s>,
 {
     let rules = rules.into_iter();
 
@@ -66,7 +64,7 @@ where
     // NOTE: Monotonic because we can never remove truths, inferring the same fact does not count
     //       as a change and we are iterating over a Herbrand instantiation so our search space is
     //       finite (for $Datalog^\neg$, at least).
-    let mut updates: HashSet<GroundAtom<F, S>> = HashSet::new();
+    let mut updates: HashSet<GroundAtom<S>> = HashSet::new();
     let mut changed: bool = true;
     #[cfg(feature = "log")]
     let mut i: usize = 0;
@@ -115,14 +113,13 @@ where
 ///
 /// # Returns
 /// A new [`KnowledgeBase`] that contains the things we derived about the facts in the [`Spec`].
-pub fn alternating_fixpoint<'s, I, F, S>(rules: I) -> KnowledgeBase<F, S>
+pub fn alternating_fixpoint<'i, 's, I, S>(rules: I) -> KnowledgeBase<S>
 where
-    I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
+    I: IntoIterator<Item = &'i Rule<Atom<S>>>,
     I::IntoIter: Clone,
-    S: SpannableDisplay,
-    Span<F, S>: 's + Clone + Eq + Hash + Ord,
+    S: 'i + Clone + SpannableBytes<'s>,
 {
-    let mut int: KnowledgeBase<F, S> = KnowledgeBase::new();
+    let mut int: KnowledgeBase<S> = KnowledgeBase::new();
     alternating_fixpoint_mut(rules, &mut int);
     int
 }
@@ -142,12 +139,11 @@ where
 /// - `kb`: Some existing [`KnowledgeBase`] to populate. Note that it will _not_ be cleared
 ///   for you; call [`KnowledgeBase::clear()`] first if you're only interested in re-using the
 ///   memory, not the facts.
-pub fn alternating_fixpoint_mut<'s, I, F, S>(rules: I, kb: &mut KnowledgeBase<F, S>)
+pub fn alternating_fixpoint_mut<'i, 's, I, S>(rules: I, kb: &mut KnowledgeBase<S>)
 where
-    I: IntoIterator<Item = &'s Rule<Atom<F, S>>>,
+    I: IntoIterator<Item = &'i Rule<Atom<S>>>,
     I::IntoIter: Clone,
-    S: SpannableDisplay,
-    Span<F, S>: 's + Clone + Eq + Hash + Ord,
+    S: 'i + Clone + SpannableBytes<'s>,
 {
     let rules = rules.into_iter();
     debug!(
@@ -169,7 +165,7 @@ where
         debug!("Post-consequence knowledge base\n\n{kb}\n");
 
         // See if we reached a stable point
-        let hash: u64 = <KnowledgeBase<F, S>>::hash(kb);
+        let hash: u64 = <KnowledgeBase<S>>::hash(kb);
         if i % 2 == 1 && prev_hashes[0] == prev_hashes[2] && prev_hashes[1] == hash {
             // Stable! Merge the stable transformation and the result and we're done
             debug!("Completed alternating-fixpoint transformation (took {i} runs)");
@@ -193,10 +189,9 @@ where
 
 /***** LIBRARY *****/
 // Interpreter extensions for the [`Spec`].
-impl<F, S> Spec<Atom<F, S>>
+impl<'s, S> Spec<Atom<S>>
 where
-    S: SpannableDisplay,
-    Span<F, S>: Clone + Eq + Hash + Ord,
+    S: Clone + SpannableBytes<'s>,
 {
     /// Performs forward derivation of the Spec.
     ///
@@ -211,12 +206,11 @@ where
     /// - `kb`: Some [`KnowledgeBase`] to derive in. Specifically, will move atoms from unknown to
     ///   known if they can be derived.
     #[inline]
-    pub fn immediate_consequence(&self, kb: &mut KnowledgeBase<F, S>) { immediate_consequence(&self.rules, kb) }
+    pub fn immediate_consequence(&'s self, kb: &mut KnowledgeBase<S>) { immediate_consequence(&self.rules, kb) }
 }
-impl<F, S> Spec<Atom<F, S>>
+impl<'s, S> Spec<Atom<S>>
 where
-    S: SpannableDisplay,
-    Span<F, S>: Clone + Eq + Hash + Ord,
+    S: Clone + SpannableBytes<'s>,
 {
     /// Performs a proper derivation using the full well-founded semantics.
     ///
@@ -231,7 +225,7 @@ where
     /// # Returns
     /// A new [`KnowledgeBase`] that contains the things we derived about the facts in the [`Spec`].
     #[inline]
-    pub fn alternating_fixpoint(&self) -> KnowledgeBase<F, S> { alternating_fixpoint(&self.rules) }
+    pub fn alternating_fixpoint(&self) -> KnowledgeBase<S> { alternating_fixpoint(&self.rules) }
 
     /// Performs a proper derivation using the full well-founded semantics.
     ///
@@ -248,16 +242,15 @@ where
     ///   for you; call [`KnowledgeBase::clear()`] first if you're only interested in re-using the
     ///   memory, not the facts.
     #[inline]
-    pub fn alternating_fixpoint_mut(&self, kb: &mut KnowledgeBase<F, S>) { alternating_fixpoint_mut(&self.rules, kb) }
+    pub fn alternating_fixpoint_mut(&self, kb: &mut KnowledgeBase<S>) { alternating_fixpoint_mut(&self.rules, kb) }
 }
 
 
 
 // Interepreter extensions for [`Rule`]s.
-impl<F, S> Rule<GroundAtom<F, S>>
+impl<'s, S> Rule<GroundAtom<S>>
 where
-    S: SpannableDisplay,
-    Span<F, S>: Eq + Hash + Ord,
+    S: SpannableBytes<'s>,
 {
     /// Checks whether this rule holds in the given knowledge base.
     ///
@@ -267,7 +260,7 @@ where
     /// # Returns
     /// Whether the consequents of this rule can be derived or not.
     #[inline]
-    pub fn is_satisfied(&self, kb: &KnowledgeBase<F, S>) -> bool {
+    pub fn is_satisfied(&self, kb: &KnowledgeBase<S>) -> bool {
         // Check if the rule's positive antecedents exist as true atoms
         for atom in &self.pos_antecedents {
             // See if this atom exists in the knowledge base
@@ -318,7 +311,7 @@ mod tests {
         }
         .compile()
         .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
-        let res: KnowledgeBase<_, _> = consts.alternating_fixpoint();
+        let res: KnowledgeBase<_> = consts.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", None)), Some(true));
@@ -336,7 +329,7 @@ mod tests {
         }
         .compile()
         .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
-        let res: KnowledgeBase<_, _> = funcs.alternating_fixpoint();
+        let res: KnowledgeBase<_> = funcs.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", Some("bar"))), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", Some("baz"))), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", Some("quz"))), Some(true));
@@ -354,7 +347,7 @@ mod tests {
         }
         .compile()
         .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
-        let res: KnowledgeBase<_, _> = rules.alternating_fixpoint();
+        let res: KnowledgeBase<_> = rules.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", Some("foo"))), Some(true));
     }
@@ -371,7 +364,7 @@ mod tests {
         }
         .compile()
         .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
-        let res: KnowledgeBase<_, _> = neg_rules.alternating_fixpoint();
+        let res: KnowledgeBase<_> = neg_rules.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(false));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", Some("foo"))), Some(true));
@@ -390,7 +383,7 @@ mod tests {
         }
         .compile()
         .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
-        let res: KnowledgeBase<_, _> = var_rules.alternating_fixpoint();
+        let res: KnowledgeBase<_> = var_rules.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", Some("foo"))), Some(true));
@@ -413,7 +406,7 @@ mod tests {
         }
         .compile()
         .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
-        let res: KnowledgeBase<_, _> = big_rules.alternating_fixpoint();
+        let res: KnowledgeBase<_> = big_rules.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", [])), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bar", [])), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("baz", ["foo"])), Some(true));
@@ -440,7 +433,7 @@ mod tests {
         }
         .compile()
         .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
-        let res: KnowledgeBase<_, _> = con_rules.alternating_fixpoint();
+        let res: KnowledgeBase<_> = con_rules.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("foo", [])), None);
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("bingo", ["boingo"])), Some(false));
     }
@@ -466,7 +459,7 @@ mod tests {
         }
         .compile()
         .unwrap_or_else(|err| panic!("Failed to derive spec: {err}"));
-        let res: KnowledgeBase<_, _> = five_one.alternating_fixpoint();
+        let res: KnowledgeBase<_> = five_one.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("a", [])), None);
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("b", [])), None);
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("c", [])), Some(true));
@@ -496,7 +489,7 @@ mod tests {
         }
         .compile()
         .unwrap();
-        let res: KnowledgeBase<_, _> = five_two_a.alternating_fixpoint();
+        let res: KnowledgeBase<_> = five_two_a.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["a"])), Some(false));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["b"])), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["c"])), Some(false));
@@ -528,7 +521,7 @@ mod tests {
         }
         .compile()
         .unwrap();
-        let res: KnowledgeBase<_, _> = five_two_b.alternating_fixpoint();
+        let res: KnowledgeBase<_> = five_two_b.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["a"])), None);
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["b"])), None);
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["c"])), Some(true));
@@ -554,7 +547,7 @@ mod tests {
         }
         .compile()
         .unwrap();
-        let res: KnowledgeBase<_, _> = five_two_c.alternating_fixpoint();
+        let res: KnowledgeBase<_> = five_two_c.alternating_fixpoint();
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["a"])), Some(false));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["b"])), Some(true));
         assert_eq!(res.closed_world_truth(&make_ir_ground_atom("wins", ["c"])), Some(false));

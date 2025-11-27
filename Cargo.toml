@@ -19,24 +19,26 @@ required-features = ["railroad"]
 
 
 [dependencies]
-indexmap = "2.7"
-log = { version = "0.4", optional = true }
-paste = "1.0"
+fxhash = "0.2.0"
+hashbrown = "0.16.0"
+indexmap = "2.7.0"
+log = { version = "0.4.0", optional = true }
+parking_lot = "0.12.0"
+paste = "1.0.0"
 
-ast-toolkit = { git = "https://github.com/Lut99/ast-toolkit-rs", features = ["derive", "punctuated", "span", "tokens"], rev = "20895ab7c61c5c887e85b3ca975aacddc4095d9f" }
+ast-toolkit = { git = "https://github.com/Lut99/ast-toolkit-rs", features = ["derive", "punctuated", "span", "tokens"], rev = "e242399db68b00fe3097d20de956f1dd22553ca0" }
 enum-debug = { git = "https://github.com/Lut99/enum-debug", tag = "v1.1.0", features = ["derive"] }
-better-derive = { git = "https://github.com/Lut99/better-derive-rs", tag = "v1.4.0" }
-# stackvec = { git = "https://github.com/Lut99/stackvec-rs", optional = true }
+better-derive = { git = "https://github.com/Lut99/better-derive-rs", tag = "v3.0.1" }
 
 datalog-macros = { path = "./macros", optional = true }
 
 
 [dev-dependencies]
-clap = { version = "4.5", features = ["derive"] }
-console = "0.15"
-log = "0.4"
+clap = { version = "4.5.0", features = ["derive"] }
+console = "0.15.0"
+log = "0.4.0"
 
-error-trace = { git = "https://github.com/Lut99/error-trace-rs" }
+error-trace = "4.0.0"
 humanlog = { git = "https://github.com/Lut99/humanlog-rs" }
 
 

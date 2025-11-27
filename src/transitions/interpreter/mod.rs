@@ -20,50 +20,39 @@ pub mod state;
 use std::error;
 use std::fmt::{Display, Formatter, Result as FResult};
 
-use ast_toolkit::span::SpannableDisplay;
+use ast_toolkit::span::SpannableBytes;
 use better_derive::{Clone, Debug, Eq, Hash, PartialEq};
 use log::{debug, trace};
 use state::State;
 
 use super::ast::{Phrase, Postulation, TransitionSpec, Trigger};
 use crate::interpreter::KnowledgeBase;
-use crate::ir::{Atom, GroundAtom, Ident, Rule, Span, Spec};
+use crate::ir::{Atom, GroundAtom, Ident, Rule, Spec};
 use crate::transitions::ast::{PostulationOp, Transition};
 
 
 /***** ERRORS *****/
 /// Defines errors occurring when computing transitions.
 #[derive(Debug)]
-pub enum Error<F, S> {
+pub enum Error<S> {
     /// Failed to compile an input rule.
-    RuleCompile { err: crate::ir::compile::Error<F, S> },
+    RuleCompile { err: crate::ir::compile::Error<S> },
     /// A given transition is undefined.
-    UndefinedTransition { ident: Ident<F, S> },
+    UndefinedTransition { ident: Ident<S> },
 }
-impl<F, S: SpannableDisplay> Display for Error<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for Error<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
-            Self::RuleCompile { .. } => write!(f, "Failed to compile rule"),
+            Self::RuleCompile { err } => write!(f, "Failed to compile rule: {err}"),
             Self::UndefinedTransition { ident } => write!(f, "Undefined transition \"{ident}\""),
         }
     }
 }
-impl<F, S: SpannableDisplay> error::Error for Error<F, S>
-where
-    Span<F, S>: 'static,
-{
+impl<'s, S: SpannableBytes<'s>> error::Error for Error<S> {}
+impl<S> From<crate::ir::compile::Error<S>> for Error<S> {
     #[inline]
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            Self::RuleCompile { err } => Some(err),
-            Self::UndefinedTransition { .. } => None,
-        }
-    }
-}
-impl<F, S> From<crate::ir::compile::Error<F, S>> for Error<F, S> {
-    #[inline]
-    fn from(value: crate::ir::compile::Error<F, S>) -> Self { Self::RuleCompile { err: value } }
+    fn from(value: crate::ir::compile::Error<S>) -> Self { Self::RuleCompile { err: value } }
 }
 
 
@@ -72,13 +61,10 @@ impl<F, S> From<crate::ir::compile::Error<F, S>> for Error<F, S> {
 
 /***** HELPER FUNCTIONS ****/
 /// Computes a [`Spec`] from the given [`State`].
-fn state_to_spec<'a, F, S>(
-    rules: impl IntoIterator<Item = &'a Rule<Atom<F, S>>>,
-    posts: impl IntoIterator<Item = &'a GroundAtom<F, S>>,
-) -> Spec<Atom<F, S>>
-where
-    Span<F, S>: 'a + Clone,
-{
+fn state_to_spec<'s, S: 's + Clone>(
+    rules: impl IntoIterator<Item = &'s Rule<Atom<S>>>,
+    posts: impl IntoIterator<Item = &'s GroundAtom<S>>,
+) -> Spec<Atom<S>> {
     Spec {
         rules: rules
             .into_iter()
@@ -99,13 +85,13 @@ where
 /***** AUXILLARY *****/
 /// Keeps track of effects as they occur during transitions.
 #[derive(Clone, Debug)]
-pub struct Effect<F, S> {
+pub struct Effect<S> {
     /// The phrase that triggered this effect.
-    pub trigger: EffectTrigger<F, S>,
+    pub trigger: EffectTrigger<S>,
     /// The denotation after the step.
-    pub kb:      KnowledgeBase<F, S>,
+    pub kb:      KnowledgeBase<S>,
 }
-impl<F, S> Effect<F, S> {
+impl<S> Effect<S> {
     /// Constructor for the Effect that initializes it to an empty one.
     ///
     /// # Arguments
@@ -114,23 +100,20 @@ impl<F, S> Effect<F, S> {
     /// # Returns
     /// A new Effect that has yet to be populated.
     #[inline]
-    pub fn new(trigger: impl Into<EffectTrigger<F, S>>) -> Self { Self { trigger: trigger.into(), kb: KnowledgeBase::new() } }
+    pub fn new(trigger: impl Into<EffectTrigger<S>>) -> Self { Self { trigger: trigger.into(), kb: KnowledgeBase::new() } }
 }
 
 /// The reason that triggered an [`Effect`].
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum EffectTrigger<F, S> {
+pub enum EffectTrigger<S> {
     /// A raw postulation.
-    Postulation(Postulation<F, S>),
+    Postulation(Postulation<S>),
     /// A trigger.
-    Trigger(Trigger<F, S>),
+    Trigger(Trigger<S>),
     /// The end of the spec.
     End,
 }
-impl<F, S> Display for EffectTrigger<F, S>
-where
-    S: SpannableDisplay,
-{
+impl<'s, S: SpannableBytes<'s>> Display for EffectTrigger<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -140,15 +123,15 @@ where
         }
     }
 }
-impl<F, S> From<Postulation<F, S>> for EffectTrigger<F, S> {
+impl<S> From<Postulation<S>> for EffectTrigger<S> {
     #[inline]
-    fn from(value: Postulation<F, S>) -> Self { Self::Postulation(value) }
+    fn from(value: Postulation<S>) -> Self { Self::Postulation(value) }
 }
-impl<F, S> From<Trigger<F, S>> for EffectTrigger<F, S> {
+impl<S> From<Trigger<S>> for EffectTrigger<S> {
     #[inline]
-    fn from(value: Trigger<F, S>) -> Self { Self::Trigger(value) }
+    fn from(value: Trigger<S>) -> Self { Self::Trigger(value) }
 }
-impl<F, S> From<()> for EffectTrigger<F, S> {
+impl<S> From<()> for EffectTrigger<S> {
     #[inline]
     fn from(_value: ()) -> Self { Self::End }
 }
@@ -158,11 +141,7 @@ impl<F, S> From<()> for EffectTrigger<F, S> {
 
 
 /***** LIBRARY *****/
-impl<F, S> TransitionSpec<F, S>
-where
-    S: SpannableDisplay,
-    Span<F, S>: Clone + Eq + std::hash::Hash + Ord,
-{
+impl<'s, S: 's + Clone + SpannableBytes<'s>> TransitionSpec<S> {
     /// Computes the denotation of the specification after every transition.
     ///
     /// # Returns
@@ -173,11 +152,11 @@ where
     /// This function can error if the total number of arguments in a rule exceeds
     /// [`STACK_VEC_LEN`](crate::interpreter::interpretation::STACK_VEC_LEN).
     #[inline]
-    pub fn run(&self) -> Result<(State<F, S>, Vec<Effect<F, S>>), Error<F, S>> {
+    pub fn run(&self) -> Result<(State<S>, Vec<Effect<S>>), Error<S>> {
         let mut state = State::new();
 
         // Leave the rest to the mutable interface
-        let effects: Vec<Effect<F, S>> = self.run_mut(&mut state)?;
+        let effects: Vec<Effect<S>> = self.run_mut(&mut state)?;
         Ok((state, effects))
     }
 
@@ -197,7 +176,7 @@ where
     /// This function can error if the total number of arguments in a rule exceeds
     /// [`STACK_VEC_LEN`](crate::interpreter::interpretation::STACK_VEC_LEN).
     #[inline]
-    pub fn run_mut(&self, state: &mut State<F, S>) -> Result<Vec<Effect<F, S>>, Error<F, S>> {
+    pub fn run_mut(&self, state: &mut State<S>) -> Result<Vec<Effect<S>>, Error<S>> {
         let State { trans: transitions, rules, posts } = state;
         debug!(
             "Running transitions\n\nTransitionSpec:\n{}\n{}{}\n",
@@ -207,7 +186,7 @@ where
         );
 
         // Go through everything in the spec!
-        let mut effects: Vec<Effect<F, S>> = Vec::new();
+        let mut effects: Vec<Effect<S>> = Vec::new();
         for phrase in &self.phrases {
             match phrase {
                 // We collect rules & definitions as we find them.
@@ -217,7 +196,7 @@ where
                 },
                 Phrase::Transition(trans) => {
                     trace!("--> Transition '{trans}'");
-                    if transitions.insert(trans.ident.clone(), trans.clone()).is_some() {
+                    if transitions.insert(trans.ident.compile(), trans.clone()).is_some() {
                         // TODO: Already exists. Warning of some kind.
                     }
                 },
@@ -225,14 +204,14 @@ where
                 // Postulations and triggers will trigger inferences
                 Phrase::Postulation(post) => {
                     trace!("--> Postulation '{post}'");
-                    let mut effect: Effect<F, S> = Effect::new(post.clone());
+                    let mut effect: Effect<S> = Effect::new(post.clone());
 
                     // First, with the current KB, do an inference run to find out which postconditions are derived
-                    let mut spec: Spec<Atom<F, S>> = state_to_spec(rules.iter(), posts.iter());
+                    let mut spec: Spec<Atom<S>> = state_to_spec(rules.iter(), posts.iter());
                     spec.rules.push(post.to_rule());
                     // NOTE: This function clears the interpretation for us
                     debug!("Running post-condition inference step");
-                    let kb: KnowledgeBase<F, S> = spec.alternating_fixpoint();
+                    let kb: KnowledgeBase<S> = spec.alternating_fixpoint();
 
                     // Update the state according to the current knowledge base
                     match post.op {
@@ -270,26 +249,27 @@ where
                 },
                 Phrase::Trigger(trigger) => {
                     trace!("--> Trigger '{trigger}'");
-                    let mut effect: Effect<F, S> = Effect::new(trigger.clone());
+                    let mut effect: Effect<S> = Effect::new(trigger.clone());
 
                     // Process all the rules postulation by all referred transitions
-                    let mut creations: Vec<GroundAtom<F, S>> = Vec::new();
-                    let mut obfuscations: Vec<GroundAtom<F, S>> = Vec::new();
+                    let mut creations: Vec<GroundAtom<S>> = Vec::new();
+                    let mut obfuscations: Vec<GroundAtom<S>> = Vec::new();
                     for ident in &trigger.idents {
                         // Find the transition in the state
-                        let trans: &Transition<F, S> = match transitions.get(ident) {
+                        let irident = ident.compile();
+                        let trans: &Transition<S> = match transitions.get(&irident) {
                             Some(trans) => trans,
-                            None => return Err(Error::UndefinedTransition { ident: ident.clone() }),
+                            None => return Err(Error::UndefinedTransition { ident: irident }),
                         };
 
                         // Handle its postulations
                         for post in &trans.postulations {
                             // First, with the current KB, do an inference run to find out which postconditions are derived
-                            let mut spec: Spec<Atom<F, S>> = state_to_spec(rules.iter(), posts.iter());
+                            let mut spec: Spec<Atom<S>> = state_to_spec(rules.iter(), posts.iter());
                             spec.rules.push(post.to_rule());
                             // NOTE: This function clears the interpretation for us
                             debug!("Running post-condition inference step");
-                            let kb: KnowledgeBase<F, S> = spec.alternating_fixpoint();
+                            let kb: KnowledgeBase<S> = spec.alternating_fixpoint();
 
                             // Update the state according to the current knowledge base
                             match post.op {
@@ -341,7 +321,7 @@ where
         }
 
         // Run a final postulation
-        let mut effect: Effect<F, S> = Effect::new(EffectTrigger::End);
+        let mut effect: Effect<S> = Effect::new(EffectTrigger::End);
         effect.kb.reset();
         state_to_spec(rules.iter(), posts.iter()).alternating_fixpoint_mut(&mut effect.kb);
         effects.push(effect);
@@ -361,40 +341,43 @@ mod tests {
     use std::collections::HashMap;
 
     use ast_toolkit::punctuated::Punctuated;
-    use ast_toolkit::span::Span;
     use datalog_macros::datalog_trans;
 
     use super::*;
     use crate::ast::{Arrow, Atom, Comma, Dot, Literal, RuleBody};
-    use crate::tests::{make_atom, make_curly, make_ident, make_ir_ground_atom};
+    use crate::tests::{make_atom, make_curly, make_ident, make_ir_ground_atom, make_ir_ident};
     use crate::transitions::ast::{Add, Squiggly};
 
 
     /// Makes a [`Postulation`] conveniently.
     fn make_postulation(
         create: bool,
-        consequents: impl IntoIterator<Item = Atom<&'static str, &'static str>>,
-        antecedents: impl IntoIterator<Item = Literal<&'static str, &'static str>>,
-    ) -> Postulation<&'static str, &'static str> {
+        cons: impl IntoIterator<Item = Atom<(&'static str, &'static str)>>,
+        ants: impl IntoIterator<Item = Literal<(&'static str, &'static str)>>,
+    ) -> Postulation<(&'static str, &'static str)> {
         // Convert the consequents and antecedents first
-        let consequents: Punctuated<Atom<&'static str, &'static str>, Comma<&'static str, &'static str>> = consequents.into_iter().collect();
-        let antecedents: Punctuated<Literal<&'static str, &'static str>, Comma<&'static str, &'static str>> = antecedents.into_iter().collect();
+        let mut consequents: Punctuated<Atom<(&'static str, &'static str)>, Comma<(&'static str, &'static str)>> = Punctuated::new();
+        for (i, con) in cons.into_iter().enumerate() {
+            if i > 0 {
+                consequents.push_punct(Comma { span: None });
+            }
+            consequents.push_value(con);
+        }
+        let mut antecedents: Punctuated<Literal<(&'static str, &'static str)>, Comma<(&'static str, &'static str)>> = Punctuated::new();
+        for (i, ant) in ants.into_iter().enumerate() {
+            if i > 0 {
+                antecedents.push_punct(Comma { span: None });
+            }
+            antecedents.push_value(ant);
+        }
 
         // Now build the rule
         Postulation {
-            op: if create {
-                PostulationOp::Create(Add { span: Span::new("make_postulation::op::create", "+") })
-            } else {
-                PostulationOp::Obfuscate(Squiggly { span: Span::new("make_postulation::op::obfuscate", "~") })
-            },
+            op: if create { PostulationOp::Create(Add { span: None }) } else { PostulationOp::Obfuscate(Squiggly { span: None }) },
             curly_tokens: make_curly(),
             consequents,
-            tail: if !antecedents.is_empty() {
-                Some(RuleBody { arrow_token: Arrow { span: Span::new("make_postulation::arrow", ":-") }, antecedents })
-            } else {
-                None
-            },
-            dot: Dot { span: Span::new("make_postulation::dot", ".") },
+            tail: if !antecedents.is_empty() { Some(RuleBody { arrow_token: Arrow { span: None }, antecedents }) } else { None },
+            dot: Dot { span: None },
         }
     }
 
@@ -405,7 +388,7 @@ mod tests {
         crate::tests::setup_logger();
 
         // Example 5.1 (to assert the original behaviour is preserved)
-        let five_one: TransitionSpec<_, _> = datalog_trans! {
+        let five_one: TransitionSpec<_> = datalog_trans! {
             #![crate]
             a :- c, not b.
             b :- not a.
@@ -418,13 +401,13 @@ mod tests {
             r :- q.
             r :- not c.
         };
-        let mut effects: Vec<Effect<&'static str, &'static str>> = match five_one.run() {
+        let mut effects: Vec<Effect<(&'static str, &'static str)>> = match five_one.run() {
             Ok((_, effects)) => effects,
             Err(err) => panic!("{err}"),
         };
         assert_eq!(effects.len(), 1);
 
-        let effect: Effect<&'static str, &'static str> = effects.pop().unwrap();
+        let effect: Effect<(&'static str, &'static str)> = effects.pop().unwrap();
         assert_eq!(effect.kb.closed_world_truth(&make_ir_ground_atom("a", None)), None);
         assert_eq!(effect.kb.closed_world_truth(&make_ir_ground_atom("b", None)), None);
         assert_eq!(effect.kb.closed_world_truth(&make_ir_ground_atom("c", None)), Some(true));
@@ -441,27 +424,27 @@ mod tests {
         crate::tests::setup_logger();
 
         // Just give the definition of a transition
-        let def: TransitionSpec<_, _> = datalog_trans! {
+        let def: TransitionSpec<_> = datalog_trans! {
             #![crate]
             #foo {}.
         };
-        let (state, mut effects): (State<&'static str, &'static str>, Vec<Effect<&'static str, &'static str>>) = match def.run() {
+        let (state, mut effects): (State<(&'static str, &'static str)>, Vec<Effect<(&'static str, &'static str)>>) = match def.run() {
             Ok(res) => res,
             Err(err) => panic!("{err}"),
         };
         assert_eq!(
             state.trans,
-            HashMap::from([(make_ident("#foo"), Transition {
+            HashMap::from([(make_ir_ident("#foo"), Transition {
                 ident: make_ident("#foo"),
                 curly_tokens: make_curly(),
                 postulations: vec![],
-                dot: Dot { span: Span::new("<example>", ".") },
+                dot: Dot { span: None },
             })])
         );
         assert!(state.rules.is_empty());
         assert_eq!(effects.len(), 1);
 
-        let effect: Effect<&'static str, &'static str> = effects.pop().unwrap();
+        let effect: Effect<(&'static str, &'static str)> = effects.pop().unwrap();
         assert_eq!(effect.trigger, EffectTrigger::End);
     }
 
@@ -471,29 +454,29 @@ mod tests {
         crate::tests::setup_logger();
 
         // Just give the definition of a transition
-        let def: TransitionSpec<_, _> = datalog_trans! {
+        let def: TransitionSpec<_> = datalog_trans! {
             #![crate]
             #bar {
                 +{ foo }.
             }.
         };
-        let (state, mut effects): (State<&'static str, &'static str>, Vec<Effect<&'static str, &'static str>>) = match def.run() {
+        let (state, mut effects): (State<(&'static str, &'static str)>, Vec<Effect<(&'static str, &'static str)>>) = match def.run() {
             Ok(res) => res,
             Err(err) => panic!("{err}"),
         };
         assert_eq!(
             state.trans,
-            HashMap::from([(make_ident("#bar"), Transition {
+            HashMap::from([(make_ir_ident("#bar"), Transition {
                 ident: make_ident("#bar"),
                 curly_tokens: make_curly(),
                 postulations: vec![make_postulation(true, [make_atom("foo", None)], None)],
-                dot: Dot { span: Span::new("<example>", ".") },
+                dot: Dot { span: None },
             })])
         );
         assert!(state.rules.is_empty());
         assert_eq!(effects.len(), 1);
 
-        let effect: Effect<&'static str, &'static str> = effects.pop().unwrap();
+        let effect: Effect<(&'static str, &'static str)> = effects.pop().unwrap();
         assert_eq!(effect.trigger, EffectTrigger::End);
     }
 
@@ -503,33 +486,33 @@ mod tests {
         crate::tests::setup_logger();
 
         // Just give the definition of a transition
-        let def: TransitionSpec<_, _> = datalog_trans! {
+        let def: TransitionSpec<_> = datalog_trans! {
             #![crate]
             #baz {
                 +{ foo }.
                 ~{ bar } :- baz(quz).
             }.
         };
-        let (state, mut effects): (State<&'static str, &'static str>, Vec<Effect<&'static str, &'static str>>) = match def.run() {
+        let (state, mut effects): (State<(&'static str, &'static str)>, Vec<Effect<(&'static str, &'static str)>>) = match def.run() {
             Ok(res) => res,
             Err(err) => panic!("{err}"),
         };
         assert_eq!(
             state.trans,
-            HashMap::from([(make_ident("#baz"), Transition {
+            HashMap::from([(make_ir_ident("#baz"), Transition {
                 ident: make_ident("#baz"),
                 curly_tokens: make_curly(),
                 postulations: vec![
                     make_postulation(true, [make_atom("foo", None)], None),
                     make_postulation(false, [make_atom("bar", None)], [Literal::Atom(make_atom("baz", ["quz"]))])
                 ],
-                dot: Dot { span: Span::new("<example>", ".") },
+                dot: Dot { span: None },
             })])
         );
         assert!(state.rules.is_empty());
         assert_eq!(effects.len(), 1);
 
-        let effect: Effect<&'static str, &'static str> = effects.pop().unwrap();
+        let effect: Effect<(&'static str, &'static str)> = effects.pop().unwrap();
         assert_eq!(effect.trigger, EffectTrigger::End);
     }
 
@@ -539,23 +522,23 @@ mod tests {
         crate::tests::setup_logger();
 
         // Run two postulations
-        let def: TransitionSpec<_, _> = datalog_trans! {
+        let def: TransitionSpec<_> = datalog_trans! {
             #![crate]
             foo :- bar.
             +{ bar }.
         };
-        let (_, mut effects): (State<&'static str, &'static str>, Vec<Effect<&'static str, &'static str>>) = match def.run() {
+        let (_, mut effects): (State<(&'static str, &'static str)>, Vec<Effect<(&'static str, &'static str)>>) = match def.run() {
             Ok(res) => res,
             Err(err) => panic!("{err}"),
         };
         assert_eq!(effects.len(), 2);
 
-        let effect2: Effect<&'static str, &'static str> = effects.pop().unwrap();
+        let effect2: Effect<(&'static str, &'static str)> = effects.pop().unwrap();
         assert_eq!(effect2.trigger, EffectTrigger::End);
         assert_eq!(effect2.kb.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
         assert_eq!(effect2.kb.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(true));
 
-        let effect1: Effect<&'static str, &'static str> = effects.pop().unwrap();
+        let effect1: Effect<(&'static str, &'static str)> = effects.pop().unwrap();
         assert_eq!(effect1.trigger, EffectTrigger::Postulation(make_postulation(true, [make_atom("bar", None)], None)));
         assert_eq!(effect1.kb.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
         assert_eq!(effect1.kb.closed_world_truth(&make_ir_ground_atom("bar", None)), Some(true));
@@ -567,26 +550,26 @@ mod tests {
         crate::tests::setup_logger();
 
         // Run a postulation, then revert it
-        let def: TransitionSpec<_, _> = datalog_trans! {
+        let def: TransitionSpec<_> = datalog_trans! {
             #![crate]
             +{ foo }.
             ~{ foo }.
         };
-        let (_, mut effects): (State<&'static str, &'static str>, Vec<Effect<&'static str, &'static str>>) = match def.run() {
+        let (_, mut effects): (State<(&'static str, &'static str)>, Vec<Effect<(&'static str, &'static str)>>) = match def.run() {
             Ok(res) => res,
             Err(err) => panic!("{err}"),
         };
         assert_eq!(effects.len(), 3);
 
-        let effect3: Effect<&'static str, &'static str> = effects.pop().unwrap();
+        let effect3: Effect<(&'static str, &'static str)> = effects.pop().unwrap();
         assert_eq!(effect3.trigger, EffectTrigger::End);
         assert_eq!(effect3.kb.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(false));
 
-        let effect2: Effect<&'static str, &'static str> = effects.pop().unwrap();
+        let effect2: Effect<(&'static str, &'static str)> = effects.pop().unwrap();
         assert_eq!(effect2.trigger, EffectTrigger::Postulation(make_postulation(false, [make_atom("foo", None)], None)));
         assert_eq!(effect2.kb.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(false));
 
-        let effect1: Effect<&'static str, &'static str> = effects.pop().unwrap();
+        let effect1: Effect<(&'static str, &'static str)> = effects.pop().unwrap();
         assert_eq!(effect1.trigger, EffectTrigger::Postulation(make_postulation(true, [make_atom("foo", None)], None)));
         assert_eq!(effect1.kb.closed_world_truth(&make_ir_ground_atom("foo", None)), Some(true));
     }

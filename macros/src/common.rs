@@ -75,10 +75,10 @@ pub fn serialize_punctuated<T: ToTokens>(items: impl IntoIterator<Item = T>) -> 
     let mut tokens_punct: TokenStream2 = TokenStream2::new();
     for (i, items) in items.enumerate() {
         if i == 0 {
-            tokens_punct.extend(quote_spanned! { items.span() => punct.push_first(#items); });
+            tokens_punct.extend(quote_spanned! { items.span() => punct.push_value(#items); });
         } else {
             tokens_punct.extend(
-                quote_spanned! { items.span() => punct.push(#crate_path::ast::Comma{ span: #crate_path::ast::Span::new(#from_str, ",") }, #items); },
+                quote_spanned! { items.span() => punct.push_punct(#crate_path::ast::Comma{ span: ::std::option::Option::Some(#crate_path::ast::Span::new((#from_str, ","))) }); punct.push_value(#items); },
             );
         }
     }
@@ -219,7 +219,7 @@ impl ToTokens for Rule {
             quote_spanned! {
                 colon.span =>
                 Some(#crate_path::ast::RuleBody {
-                    arrow_token: #crate_path::ast::Arrow { span: #crate_path::ast::Span::new(#from_str, ":-") },
+                    arrow_token: #crate_path::ast::Arrow { span: ::std::option::Option::Some(#crate_path::ast::Span::new((#from_str, ":-"))) },
                     antecedents: #antecedents_tokens,
                 })
             }
@@ -233,7 +233,7 @@ impl ToTokens for Rule {
             #crate_path::ast::Rule {
                 consequents: #consequents_tokens,
                 tail: #antecedents_tokens,
-                dot: #crate_path::ast::Dot { span: #crate_path::ast::Span::new(#from_str, ".") },
+                dot: #crate_path::ast::Dot { span: ::std::option::Option::Some(#crate_path::ast::Span::new((#from_str, "."))) },
             }
         });
     }
@@ -275,7 +275,7 @@ impl ToTokens for Literal {
             tokens.extend(quote_spanned! {
                 span =>
                 #crate_path::ast::Literal::NegAtom(#crate_path::ast::NegAtom {
-                    not_token: #crate_path::ast::Not { span: #crate_path::ast::Span::new(#from_str, "not") },
+                    not_token: #crate_path::ast::Not { span: ::std::option::Option::Some(#crate_path::ast::Span::new((#from_str, "not"))) },
                     atom: #atom,
                 })
             });
@@ -334,9 +334,9 @@ impl ToTokens for Atom {
                     let mut args_tokens: TokenStream2 = TokenStream2::new();
                     for (i, arg) in args.into_iter().enumerate() {
                         if i == 0 {
-                            args_tokens.extend(quote_spanned! { arg.span() => punct.push_first(#arg); });
+                            args_tokens.extend(quote_spanned! { arg.span() => punct.push_value(#arg); });
                         } else {
-                            args_tokens.extend(quote_spanned! { arg.span() => punct.push(#crate_path::ast::Comma{ span: #crate_path::ast::Span::new(#from_str, ",") }, #arg); });
+                            args_tokens.extend(quote_spanned! { arg.span() => punct.push_punct(#crate_path::ast::Comma{ span: ::std::option::Option::Some(#crate_path::ast::Span::new((#from_str, ","))) }); punct.push_value(#arg); });
                         }
                     }
                     let args_tokens: TokenStream2 =
@@ -344,7 +344,7 @@ impl ToTokens for Atom {
 
                     // Serialize it to one set of arguments
                     (Some(paren.span.join()), quote_spanned! { paren.span.join() => Some(#crate_path::ast::FactArgs {
-                        paren_tokens: #crate_path::ast::Parens { open: #crate_path::ast::Span::new(#from_str, "("), close: #crate_path::ast::Span::new(#from_str, ")") },
+                        paren_tokens: #crate_path::ast::Parens { open: #crate_path::ast::Span::new((#from_str, "(")).into(), close: #crate_path::ast::Span::new((#from_str, ")")).into() },
                         args: #args_tokens,
                     })})
                 } else {
@@ -356,7 +356,7 @@ impl ToTokens for Atom {
                 tokens.extend(quote_spanned! {
                     if let Some(paren) = paren_span { ident.span().join(paren).unwrap_or_else(|| ident.span()) } else { ident.span() } =>
                     #crate_path::ast::Atom::Fact(#crate_path::ast::Fact {
-                        ident: #crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sname) },
+                        ident: #crate_path::ast::Ident { value: ::std::string::String::from(#sname), span: ::std::option::Option::None },
                         args: #args_tokens,
                     })
                 });
@@ -367,7 +367,7 @@ impl ToTokens for Atom {
                 let sname: String = ident.to_string();
                 tokens.extend(quote_spanned! {
                     ident.span() =>
-                    #crate_path::ast::Atom::Var(#crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #sname) })
+                    #crate_path::ast::Atom::Var(#crate_path::ast::Ident { value: ::std::string::String::from(#sname), span: ::std::option::Option::None })
                 });
             },
         }

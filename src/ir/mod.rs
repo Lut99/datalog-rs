@@ -21,6 +21,7 @@
 
 // Define the visiting modules
 pub mod compile;
+pub mod idents;
 #[cfg(feature = "visit")]
 pub mod visit;
 #[cfg(feature = "visit-mut")]
@@ -31,10 +32,14 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 
-use ast_toolkit::span::SpannableDisplay;
-use better_derive::{Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd};
+use ast_toolkit::span::SpannableBytes;
+use better_derive::{Debug, Eq, Hash, Ord, PartialEq, PartialOrd};
+pub use idents::Ident;
 
-pub use crate::ast::{Ident, Span};
+pub use crate::ast::Span;
+
+
+
 
 
 /***** ERRORS *****/
@@ -49,15 +54,15 @@ impl Error for ContainsVariablesError {}
 
 /// Represents the case where a variable does not occur in an assignment.
 #[derive(Debug)]
-pub struct UnassignedVariableError<F, S> {
+pub struct UnassignedVariableError<S> {
     /// The name of the variable that was unassigned.
-    pub ident: Ident<F, S>,
+    pub ident: Ident<S>,
 }
-impl<F, S: SpannableDisplay> Display for UnassignedVariableError<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for UnassignedVariableError<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "Variable \"{}\" is not assigned when concretizing it", self.ident) }
 }
-impl<F, S: SpannableDisplay> Error for UnassignedVariableError<F, S> {}
+impl<'s, S: SpannableBytes<'s>> Error for UnassignedVariableError<S> {}
 
 
 
@@ -65,7 +70,7 @@ impl<F, S: SpannableDisplay> Error for UnassignedVariableError<F, S> {}
 
 /***** INTERFACES *****/
 /// Generalizes over different kinds of atoms.
-pub trait Atomlike<F, S> {
+pub trait Atomlike<S> {
     /// Returns whether this atom has any arguments.
     ///
     /// If true, implies [`Atomlike::is_grounded`] will also return true.
@@ -99,19 +104,19 @@ pub trait Atomlike<F, S> {
     ///
     /// # Returns
     /// Some [`Iterator`] over [`Ident`] (references).
-    fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>>
+    fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<S>>
     where
         'i: 's,
-        Ident<F, S>: 'i;
+        Ident<S>: 'i;
 
     /// Returns an iterator over the internal variables.
     ///
     /// # Returns
     /// Some [`Iterator`] over [`Ident`] (mutable references).
-    fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>>
+    fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<S>>
     where
         'i: 's,
-        Ident<F, S>: 'i;
+        Ident<S>: 'i;
 }
 
 
@@ -126,6 +131,18 @@ pub trait Atomlike<F, S> {
 pub struct Spec<A> {
     /// The rules in this specification.
     pub rules: Vec<Rule<A>>,
+}
+impl<A> Default for Spec<A> {
+    #[inline]
+    fn default() -> Self { Self::new() }
+}
+impl<A> Spec<A> {
+    /// Constructor for the Spec.
+    ///
+    /// # Returns
+    /// A Spec without any rules in it yet.
+    #[inline]
+    pub fn new() -> Self { Self { rules: Vec::new() } }
 }
 impl<A: Display> Display for Spec<A> {
     #[inline]
@@ -181,10 +198,9 @@ impl<A> Rule<A> {
         self.consequents.iter_mut().chain(self.pos_antecedents.iter_mut()).chain(self.neg_antecedents.iter_mut())
     }
 }
-impl<F, S> Rule<Atom<F, S>>
+impl<S: Clone> Rule<Atom<S>>
 where
-    Ident<F, S>: std::cmp::Eq + std::hash::Hash,
-    Span<F, S>: Clone,
+    Ident<S>: std::cmp::Eq + std::hash::Hash,
 {
     /// A fool-proof version of [`Rule::to_ground_atom`] where any variables will be instantiated
     /// using the given assignment.
@@ -199,18 +215,15 @@ where
     /// This function will error with an [`UnassignedVariableError`] if one of its variables did
     /// not occur in the given `assign`ment.
     #[inline]
-    pub fn concretize(&self, assign: &HashMap<Ident<F, S>, GroundAtom<F, S>>) -> Result<Rule<GroundAtom<F, S>>, UnassignedVariableError<F, S>> {
+    pub fn concretize(&self, assign: &HashMap<Ident<S>, GroundAtom<S>>) -> Result<Rule<GroundAtom<S>>, UnassignedVariableError<S>> {
         Ok(Rule {
-            consequents:     self.consequents.iter().map(|a| a.concretize(assign)).collect::<Result<_, UnassignedVariableError<F, S>>>()?,
-            pos_antecedents: self.pos_antecedents.iter().map(|a| a.concretize(assign)).collect::<Result<_, UnassignedVariableError<F, S>>>()?,
-            neg_antecedents: self.neg_antecedents.iter().map(|a| a.concretize(assign)).collect::<Result<_, UnassignedVariableError<F, S>>>()?,
+            consequents:     self.consequents.iter().map(|a| a.concretize(assign)).collect::<Result<_, UnassignedVariableError<S>>>()?,
+            pos_antecedents: self.pos_antecedents.iter().map(|a| a.concretize(assign)).collect::<Result<_, UnassignedVariableError<S>>>()?,
+            neg_antecedents: self.neg_antecedents.iter().map(|a| a.concretize(assign)).collect::<Result<_, UnassignedVariableError<S>>>()?,
         })
     }
 }
-impl<F, S> Rule<Atom<F, S>>
-where
-    Span<F, S>: Clone,
-{
+impl<S: Clone> Rule<Atom<S>> {
     /// Tries to create an equivalent grounded rule out of this one.
     ///
     /// # Returns
@@ -221,7 +234,7 @@ where
     /// you just want to check whether an atom exists, use [`Atom::is_grounded()`] on all atoms
     /// instead.
     #[inline]
-    pub fn to_grounded_rule(&self) -> Option<Rule<GroundAtom<F, S>>> {
+    pub fn to_grounded_rule(&self) -> Option<Rule<GroundAtom<S>>> {
         Some(Rule {
             consequents:     self.consequents.iter().map(Atom::to_ground_atom).collect::<Option<_>>()?,
             pos_antecedents: self.pos_antecedents.iter().map(Atom::to_ground_atom).collect::<Option<_>>()?,
@@ -229,7 +242,7 @@ where
         })
     }
 }
-impl<F, S> Rule<Atom<F, S>> {
+impl<S> Rule<Atom<S>> {
     /// Tries to turn this rule into one with grounded atoms.
     ///
     /// # Returns
@@ -240,7 +253,7 @@ impl<F, S> Rule<Atom<F, S>> {
     /// you just want to check whether an atom exists, use [`Atom::is_grounded()`] on all atoms
     /// instead.
     #[inline]
-    pub fn into_grounded_rule(self) -> Option<Rule<GroundAtom<F, S>>> {
+    pub fn into_grounded_rule(self) -> Option<Rule<GroundAtom<S>>> {
         Some(Rule {
             consequents:     self.consequents.into_iter().map(Atom::into_ground_atom).collect::<Option<_>>()?,
             pos_antecedents: self.pos_antecedents.into_iter().map(Atom::into_ground_atom).collect::<Option<_>>()?,
@@ -248,16 +261,13 @@ impl<F, S> Rule<Atom<F, S>> {
         })
     }
 }
-impl<F, S> Rule<GroundAtom<F, S>>
-where
-    Span<F, S>: Clone,
-{
+impl<S: Clone> Rule<GroundAtom<S>> {
     /// Create an equivalent rule over atoms out of this one.
     ///
     /// # Returns
     /// An equivalent Rule over [`Atom`]s.
     #[inline]
-    pub fn to_atom_rule(&self) -> Rule<Atom<F, S>> {
+    pub fn to_atom_rule(&self) -> Rule<Atom<S>> {
         Rule {
             consequents:     self.consequents.iter().map(GroundAtom::to_atom).collect(),
             pos_antecedents: self.pos_antecedents.iter().map(GroundAtom::to_atom).collect(),
@@ -265,13 +275,13 @@ where
         }
     }
 }
-impl<F, S> Rule<GroundAtom<F, S>> {
+impl<S> Rule<GroundAtom<S>> {
     /// Turns this rule into one with grounded atoms.
     ///
     /// # Returns
     /// An equivalent Rule over [`Atom`]s.
     #[inline]
-    pub fn into_atom_rule(self) -> Rule<Atom<F, S>> {
+    pub fn into_atom_rule(self) -> Rule<Atom<S>> {
         Rule {
             consequents:     self.consequents.into_iter().map(GroundAtom::into_atom).collect(),
             pos_antecedents: self.pos_antecedents.into_iter().map(GroundAtom::into_atom).collect(),
@@ -333,17 +343,16 @@ impl<A: Display> Display for Rule<A> {
 // cycle in deriving that `Punctuated<Atom, Comma>` implements one of those traits (since the
 // question of whether it does depends on `Atom`, which transitively depends on `FactArgs`).
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[better_derive(bound = (Span<F, S>))]
-pub enum Atom<F, S> {
+#[better_derive(bound = (Span<S>: r#trait))]
+pub enum Atom<S> {
     /// It's a fact (i.e., non-variable).
-    Fact(Fact<F, S>),
+    Fact(Fact<S>),
     /// It's a variable.
-    Var(Ident<F, S>),
+    Var(Ident<S>),
 }
-impl<F, S> Atom<F, S>
+impl<S: Clone> Atom<S>
 where
-    Ident<F, S>: std::cmp::Eq + std::hash::Hash,
-    Span<F, S>: Clone,
+    Ident<S>: std::cmp::Eq + std::hash::Hash,
 {
     /// A fool-proof version of [`Atom::to_ground_atom`] where any variables will be instantiated
     /// using the given assignment.
@@ -358,17 +367,14 @@ where
     /// This function will error with an [`UnassignedVariableError`] if one of its variables did
     /// not occur in the given `assign`ment.
     #[inline]
-    pub fn concretize(&self, assign: &HashMap<Ident<F, S>, GroundAtom<F, S>>) -> Result<GroundAtom<F, S>, UnassignedVariableError<F, S>> {
+    pub fn concretize(&self, assign: &HashMap<Ident<S>, GroundAtom<S>>) -> Result<GroundAtom<S>, UnassignedVariableError<S>> {
         match self {
             Self::Fact(f) => f.concretize(assign),
             Self::Var(v) => Ok(assign.get(v).ok_or(UnassignedVariableError { ident: v.clone() })?.clone()),
         }
     }
 }
-impl<F, S> Atom<F, S>
-where
-    Span<F, S>: Clone,
-{
+impl<S: Clone> Atom<S> {
     /// Tries to create an equivalent [`GroundAtom`] out of this Atom.
     ///
     /// # Returns
@@ -378,14 +384,14 @@ where
     /// possible until it discovers an argument with a variable _or_ it finishes. As a result, if
     /// you just want to check whether an atom exists, use [`Atomlike::is_grounded()`] instead.
     #[inline]
-    pub fn to_ground_atom(&self) -> Option<GroundAtom<F, S>> {
+    pub fn to_ground_atom(&self) -> Option<GroundAtom<S>> {
         match self {
             Self::Fact(f) => f.to_ground_atom(),
             Self::Var(_) => None,
         }
     }
 }
-impl<F, S> Atom<F, S> {
+impl<S> Atom<S> {
     /// Tries to turn this Atom into a [`GroundAtom`].
     ///
     /// # Returns
@@ -395,14 +401,14 @@ impl<F, S> Atom<F, S> {
     /// possible until it discovers an argument with a variable _or_ it finishes. As a result, if
     /// you just want to check whether an atom exists, use [`Atomlike::is_grounded()`] instead.
     #[inline]
-    pub fn into_ground_atom(self) -> Option<GroundAtom<F, S>> {
+    pub fn into_ground_atom(self) -> Option<GroundAtom<S>> {
         match self {
             Self::Fact(f) => f.into_ground_atom(),
             Self::Var(_) => None,
         }
     }
 }
-impl<F, S> Atomlike<F, S> for Atom<F, S> {
+impl<S> Atomlike<S> for Atom<S> {
     #[inline]
     fn is_constant(&self) -> bool {
         match self {
@@ -436,30 +442,30 @@ impl<F, S> Atomlike<F, S> for Atom<F, S> {
     }
 
     #[inline]
-    fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>>
+    fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<S>>
     where
         'i: 's,
-        Ident<F, S>: 'i,
+        Ident<S>: 'i,
     {
         match self {
-            Self::Fact(f) => Box::new(f.vars()) as Box<dyn 's + Iterator<Item = &'s Ident<F, S>>>,
+            Self::Fact(f) => Box::new(f.vars()) as Box<dyn 's + Iterator<Item = &'s Ident<S>>>,
             Self::Var(v) => Box::new(Some(v).into_iter()),
         }
     }
 
     #[inline]
-    fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>>
+    fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<S>>
     where
         'i: 's,
-        Ident<F, S>: 'i,
+        Ident<S>: 'i,
     {
         match self {
-            Self::Fact(f) => Box::new(f.vars_mut()) as Box<dyn 's + Iterator<Item = &'s mut Ident<F, S>>>,
+            Self::Fact(f) => Box::new(f.vars_mut()) as Box<dyn 's + Iterator<Item = &'s mut Ident<S>>>,
             Self::Var(v) => Box::new(Some(v).into_iter()),
         }
     }
 }
-impl<F, S: SpannableDisplay> Display for Atom<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for Atom<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         match self {
@@ -468,9 +474,9 @@ impl<F, S: SpannableDisplay> Display for Atom<F, S> {
         }
     }
 }
-impl<F, S> From<GroundAtom<F, S>> for Atom<F, S> {
+impl<S> From<GroundAtom<S>> for Atom<S> {
     #[inline]
-    fn from(value: GroundAtom<F, S>) -> Self { value.into_atom() }
+    fn from(value: GroundAtom<S>) -> Self { value.into_atom() }
 }
 
 /// Defines a non-variable [`Atom`] that may have variables in it.
@@ -478,13 +484,13 @@ impl<F, S> From<GroundAtom<F, S>> for Atom<F, S> {
 /// Note: being compiled, this node has no more syntax-only elements (e.g.,
 /// [`Arrow`](crate::ast::Arrow) and the likes).
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Fact<F, S> {
+pub struct Fact<S> {
     /// The identifier of the atom.
-    pub ident: Ident<F, S>,
+    pub ident: Ident<S>,
     /// Any arguments to the atom.
-    pub args:  Vec<Atom<F, S>>,
+    pub args:  Vec<Atom<S>>,
 }
-impl<F, S> Fact<F, S> {
+impl<S> Fact<S> {
     /// Returns whether this atom has any arguments.
     ///
     /// If true, implies [`Fact::is_grounded`] will also return true.
@@ -499,7 +505,7 @@ impl<F, S> Fact<F, S> {
     /// # Returns
     /// An [`Iterator`] yielding zero or more [`Atom`]s representing each argument.
     #[inline]
-    fn args<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<F, S>> { self.args.iter().flat_map(Atom::args) }
+    fn args<'s>(&'s self) -> impl 's + Iterator<Item = &'s Atom<S>> { self.args.iter().flat_map(Atom::args) }
 
     /// Returns an iterator over the arguments in this fact, if any.
     ///
@@ -507,7 +513,7 @@ impl<F, S> Fact<F, S> {
     /// An [`Iterator`] yielding zero or more mutable references to [`Atom`]s representing each
     /// argument.
     #[inline]
-    fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<F, S>> { self.args.iter_mut().flat_map(Atom::args_mut) }
+    fn args_mut<'s>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Atom<S>> { self.args.iter_mut().flat_map(Atom::args_mut) }
 
     /// Returns whether this atom has any variables.
     ///
@@ -521,25 +527,24 @@ impl<F, S> Fact<F, S> {
     /// # Returns
     /// Some [`Iterator`] over [`Ident`] (references).
     #[inline]
-    fn vars<'s>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>> { self.args.iter().flat_map(Atom::vars) }
+    fn vars<'s>(&'s self) -> impl 's + Iterator<Item = &'s Ident<S>> { self.args.iter().flat_map(Atom::vars) }
 
     /// Returns an iterator over the internal variables.
     ///
     /// # Returns
     /// Some [`Iterator`] over [`Ident`] (mutable references).
     #[inline]
-    fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>>
+    fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<S>>
     where
         'i: 's,
-        Ident<F, S>: 'i,
+        Ident<S>: 'i,
     {
         self.args.iter_mut().flat_map(Atom::vars_mut)
     }
 }
-impl<F, S> Fact<F, S>
+impl<S: Clone> Fact<S>
 where
-    Ident<F, S>: std::cmp::Eq + std::hash::Hash,
-    Span<F, S>: Clone,
+    Ident<S>: std::cmp::Eq + std::hash::Hash,
 {
     /// A fool-proof version of [`Fact::to_ground_atom`] where any variables will be instantiated
     /// using the given assignment.
@@ -554,17 +559,14 @@ where
     /// This function will error with an [`UnassignedVariableError`] if one of its variables did
     /// not occur in the given `assign`ment.
     #[inline]
-    pub fn concretize(&self, assign: &HashMap<Ident<F, S>, GroundAtom<F, S>>) -> Result<GroundAtom<F, S>, UnassignedVariableError<F, S>> {
+    pub fn concretize(&self, assign: &HashMap<Ident<S>, GroundAtom<S>>) -> Result<GroundAtom<S>, UnassignedVariableError<S>> {
         Ok(GroundAtom {
             ident: self.ident.clone(),
-            args:  self.args.iter().map(|a| a.concretize(assign)).collect::<Result<_, UnassignedVariableError<F, S>>>()?,
+            args:  self.args.iter().map(|a| a.concretize(assign)).collect::<Result<_, UnassignedVariableError<S>>>()?,
         })
     }
 }
-impl<F, S> Fact<F, S>
-where
-    Span<F, S>: Clone,
-{
+impl<S: Clone> Fact<S> {
     /// Tries to create an equivalent [`GroundAtom`] out of this Fact.
     ///
     /// # Returns
@@ -574,9 +576,9 @@ where
     /// possible until it discovers an argument with a variable _or_ it finishes. As a result, if
     /// you just want to check whether an atom exists, use [`Fact::is_grounded()`] instead.
     #[inline]
-    pub fn to_ground_atom(&self) -> Option<GroundAtom<F, S>> {
+    pub fn to_ground_atom(&self) -> Option<GroundAtom<S>> {
         // Try the arguments first
-        let mut args: Vec<GroundAtom<F, S>> = Vec::with_capacity(self.args.len());
+        let mut args: Vec<GroundAtom<S>> = Vec::with_capacity(self.args.len());
         for arg in &self.args {
             args.push(arg.to_ground_atom()?);
         }
@@ -585,7 +587,7 @@ where
         Some(GroundAtom { ident: self.ident.clone(), args })
     }
 }
-impl<F, S> Fact<F, S> {
+impl<S> Fact<S> {
     /// Tries to turn this Fact into a [`GroundAtom`].
     ///
     /// # Returns
@@ -595,9 +597,9 @@ impl<F, S> Fact<F, S> {
     /// possible until it discovers an argument with a variable _or_ it finishes. As a result, if
     /// you just want to check whether an atom exists, use [`Fact::is_grounded()`] instead.
     #[inline]
-    pub fn into_ground_atom(self) -> Option<GroundAtom<F, S>> {
+    pub fn into_ground_atom(self) -> Option<GroundAtom<S>> {
         // Try the arguments first
-        let mut args: Vec<GroundAtom<F, S>> = Vec::with_capacity(self.args.len());
+        let mut args: Vec<GroundAtom<S>> = Vec::with_capacity(self.args.len());
         for arg in self.args {
             args.push(arg.into_ground_atom()?);
         }
@@ -606,7 +608,7 @@ impl<F, S> Fact<F, S> {
         Some(GroundAtom { ident: self.ident, args })
     }
 }
-impl<F, S: SpannableDisplay> Display for Fact<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for Fact<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         self.ident.fmt(f)?;
@@ -626,9 +628,9 @@ impl<F, S: SpannableDisplay> Display for Fact<F, S> {
         Ok(())
     }
 }
-impl<F, S> From<GroundAtom<F, S>> for Fact<F, S> {
+impl<S> From<GroundAtom<S>> for Fact<S> {
     #[inline]
-    fn from(value: GroundAtom<F, S>) -> Self { value.into_fact() }
+    fn from(value: GroundAtom<S>) -> Self { value.into_fact() }
 }
 
 
@@ -641,47 +643,44 @@ impl<F, S> From<GroundAtom<F, S>> for Fact<F, S> {
 // cycle in deriving that `Punctuated<Atom, Comma>` implements one of those traits (since the
 // question of whether it does depends on `Atom`, which transitively depends on `FactArgs`).
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-#[better_derive(bound = (Span<F, S>))]
-pub struct GroundAtom<F, S> {
+#[better_derive(bound = (Span<S>: r#trait))]
+pub struct GroundAtom<S> {
     /// The identifier of the atom.
-    pub ident: Ident<F, S>,
+    pub ident: Ident<S>,
     /// Any arguments to the atom.
-    pub args:  Vec<GroundAtom<F, S>>,
+    pub args:  Vec<GroundAtom<S>>,
 }
-impl<F, S> GroundAtom<F, S>
-where
-    Span<F, S>: Clone,
-{
+impl<S: Clone> GroundAtom<S> {
     /// Creates an equivalent [`Atom`] out of this GroundAtom.
     ///
     /// # Returns
     /// An equivalent [`Atom::Fact`].
     #[inline]
-    pub fn to_atom(&self) -> Atom<F, S> { Atom::Fact(self.to_fact()) }
+    pub fn to_atom(&self) -> Atom<S> { Atom::Fact(self.to_fact()) }
 
     /// Creates an equivalent [`Fact`] out of this GroundAtom.
     ///
     /// # Returns
     /// An equivalent [`Fact`].
     #[inline]
-    pub fn to_fact(&self) -> Fact<F, S> { Fact { ident: self.ident.clone(), args: self.args.iter().cloned().map(GroundAtom::into_atom).collect() } }
+    pub fn to_fact(&self) -> Fact<S> { Fact { ident: self.ident.clone(), args: self.args.iter().cloned().map(GroundAtom::into_atom).collect() } }
 }
-impl<F, S> GroundAtom<F, S> {
+impl<S> GroundAtom<S> {
     /// Turns this GroundAtom into an [`Atom`].
     ///
     /// # Returns
     /// An equivalent [`Atom::Fact`].
     #[inline]
-    pub fn into_atom(self) -> Atom<F, S> { Atom::Fact(self.into_fact()) }
+    pub fn into_atom(self) -> Atom<S> { Atom::Fact(self.into_fact()) }
 
     /// Turns this GroundAtom into a [`Fact`].
     ///
     /// # Returns
     /// An equivalent [`Fact`].
     #[inline]
-    pub fn into_fact(self) -> Fact<F, S> { Fact { ident: self.ident, args: self.args.into_iter().map(GroundAtom::into_atom).collect() } }
+    pub fn into_fact(self) -> Fact<S> { Fact { ident: self.ident, args: self.args.into_iter().map(GroundAtom::into_atom).collect() } }
 }
-impl<F, S> Atomlike<F, S> for GroundAtom<F, S> {
+impl<S> Atomlike<S> for GroundAtom<S> {
     #[inline]
     fn is_constant(&self) -> bool { self.args.is_empty() }
 
@@ -695,24 +694,24 @@ impl<F, S> Atomlike<F, S> for GroundAtom<F, S> {
     fn is_grounded(&self) -> bool { true }
 
     #[inline]
-    fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<F, S>>
+    fn vars<'s, 'i>(&'s self) -> impl 's + Iterator<Item = &'s Ident<S>>
     where
         'i: 's,
-        Ident<F, S>: 'i,
+        Ident<S>: 'i,
     {
         None.into_iter()
     }
 
     #[inline]
-    fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<F, S>>
+    fn vars_mut<'s, 'i>(&'s mut self) -> impl 's + Iterator<Item = &'s mut Ident<S>>
     where
         'i: 's,
-        Ident<F, S>: 'i,
+        Ident<S>: 'i,
     {
         None.into_iter()
     }
 }
-impl<F, S: SpannableDisplay> Display for GroundAtom<F, S> {
+impl<'s, S: SpannableBytes<'s>> Display for GroundAtom<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         self.ident.fmt(f)?;
@@ -732,15 +731,15 @@ impl<F, S: SpannableDisplay> Display for GroundAtom<F, S> {
         Ok(())
     }
 }
-impl<F, S> TryFrom<Atom<F, S>> for GroundAtom<F, S> {
+impl<S> TryFrom<Atom<S>> for GroundAtom<S> {
     type Error = ContainsVariablesError;
 
     #[inline]
-    fn try_from(value: Atom<F, S>) -> Result<Self, Self::Error> { value.into_ground_atom().ok_or(ContainsVariablesError) }
+    fn try_from(value: Atom<S>) -> Result<Self, Self::Error> { value.into_ground_atom().ok_or(ContainsVariablesError) }
 }
-impl<F, S> TryFrom<Fact<F, S>> for GroundAtom<F, S> {
+impl<S> TryFrom<Fact<S>> for GroundAtom<S> {
     type Error = ContainsVariablesError;
 
     #[inline]
-    fn try_from(value: Fact<F, S>) -> Result<Self, Self::Error> { value.into_ground_atom().ok_or(ContainsVariablesError) }
+    fn try_from(value: Fact<S>) -> Result<Self, Self::Error> { value.into_ground_atom().ok_or(ContainsVariablesError) }
 }

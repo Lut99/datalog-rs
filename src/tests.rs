@@ -14,11 +14,21 @@
 
 #![allow(unused)]
 
-use crate::ast::{Arrow, Atom, Comma, Dot, Fact, FactArgs, Ident, Literal, NegAtom, Not, Parens, Punctuated, Rule, RuleBody, Span};
+use crate::ast::{
+    Arrow, Atom, Comma, Dot, Fact, FactArgs, Ident, Literal, NegAtom, Not, Parens, ParensClose, ParensOpen, Punctuated, Rule, RuleBody, Span,
+};
 #[cfg(feature = "ir")]
 use crate::ir;
 #[cfg(feature = "transitions")]
-use crate::transitions::ast::Curly;
+use crate::transitions::ast::{Curly, CurlyClose, CurlyOpen};
+
+
+/***** CONSTANTS *****/
+/// Pretends all (relevant) sources are in the same source.
+pub const GENERATED_SOURCE_ID: &'static str = "<GENERATED>";
+
+
+
 
 
 /***** LIBRARY *****/
@@ -65,94 +75,109 @@ pub fn make_ir_rule<A>(
 
 /// Makes an [`ir::Atom`] conveniently.
 #[cfg(feature = "interpreter")]
-pub fn make_ir_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> ir::Atom<&'static str, &'static str> {
+pub fn make_ir_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> ir::Atom<(&'static str, &'static str)> {
+    let mut factory = ir::Ident::<(&'static str, &'static str)>::factory();
+
     // Make the punctuation
-    let mut vals: Vec<ir::Atom<&'static str, &'static str>> = Vec::new();
+    let mut vals: Vec<ir::Atom<(&'static str, &'static str)>> = Vec::new();
     for arg in args {
         // Either push as atom or as variable
         vals.push(if arg.chars().next().unwrap_or_else(|| panic!("Empty argument given")).is_uppercase() {
-            ir::Atom::Var(Ident { value: Span::new("make_ir_atom::var", arg) })
+            ir::Atom::Var(factory.create(arg.into(), None))
         } else {
-            ir::Atom::Fact(ir::Fact { ident: Ident { value: Span::new("make_ir_atom::arg", arg) }, args: vec![] })
+            ir::Atom::Fact(ir::Fact { ident: factory.create(arg.into(), None), args: vec![] })
         })
     }
 
     // Make the atom
-    ir::Atom::Fact(ir::Fact { ident: Ident { value: Span::new("make_ir_atom::name", name) }, args: vals })
+    ir::Atom::Fact(ir::Fact { ident: factory.create(name.into(), None), args: vals })
 }
 
 /// Makes an [`ir::GroundAtom`] conveniently.
 #[cfg(feature = "interpreter")]
-pub fn make_ir_ground_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> ir::GroundAtom<&'static str, &'static str> {
+pub fn make_ir_ground_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> ir::GroundAtom<(&'static str, &'static str)> {
+    let mut factory = ir::Ident::<(&'static str, &'static str)>::factory();
     ir::GroundAtom {
-        ident: Ident { value: Span::new("make_ir_ground_atom::name", name) },
-        args:  args.into_iter().map(|a| ir::GroundAtom { ident: Ident { value: Span::new("make_ir_ground_atom::arg", a) }, args: vec![] }).collect(),
+        ident: factory.create(name.into(), None),
+        args:  args.into_iter().map(|a| ir::GroundAtom { ident: factory.create(a.into(), None), args: vec![] }).collect(),
     }
+}
+
+/// Makes an [`ir::Ident`] conveniently.
+pub fn make_ir_ident(value: &'static str) -> ir::Ident<(&'static str, &'static str)> {
+    // Make the atom
+    ir::Ident::new(value.into(), None)
 }
 
 
 
 /// Makes a [`Rule`] conveniently.
 pub fn make_rule(
-    consequents: impl IntoIterator<Item = Atom<&'static str, &'static str>>,
-    antecedents: impl IntoIterator<Item = Literal<&'static str, &'static str>>,
-) -> Rule<&'static str, &'static str> {
+    cons: impl IntoIterator<Item = Atom<(&'static str, &'static str)>>,
+    ants: impl IntoIterator<Item = Literal<(&'static str, &'static str)>>,
+) -> Rule<(&'static str, &'static str)> {
     // Convert the consequents and antecedents first
-    let consequents: Punctuated<Atom<&'static str, &'static str>, Comma<&'static str, &'static str>> = consequents.into_iter().collect();
-    let antecedents: Punctuated<Literal<&'static str, &'static str>, Comma<&'static str, &'static str>> = antecedents.into_iter().collect();
+    let mut consequents: Punctuated<Atom<(&'static str, &'static str)>, Comma<(&'static str, &'static str)>> = Punctuated::new();
+    for (i, con) in cons.into_iter().enumerate() {
+        if i > 0 {
+            consequents.push_punct(Comma { span: None });
+        }
+        consequents.push_value(con);
+    }
+    let mut antecedents: Punctuated<Literal<(&'static str, &'static str)>, Comma<(&'static str, &'static str)>> = Punctuated::new();
+    for (i, ant) in ants.into_iter().enumerate() {
+        if i > 0 {
+            antecedents.push_punct(Comma { span: None });
+        }
+        antecedents.push_value(ant);
+    }
 
     // Now build the rule
     Rule {
         consequents,
-        tail: if !antecedents.is_empty() {
-            Some(RuleBody { arrow_token: Arrow { span: Span::new("make_rule::arrow", ":-") }, antecedents })
-        } else {
-            None
-        },
-        dot: Dot { span: Span::new("make_rule::dot", ".") },
+        tail: if !antecedents.is_empty() { Some(RuleBody { arrow_token: Arrow { span: None }, antecedents }) } else { None },
+        dot: Dot { span: None },
     }
 }
 
 
 
 /// Makes a [`Literal`] conveniently.
-pub fn make_lit(polarity: bool, name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Literal<&'static str, &'static str> {
+pub fn make_lit(polarity: bool, name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Literal<(&'static str, &'static str)> {
     if polarity {
         Literal::Atom(make_atom(name, args))
     } else {
-        Literal::NegAtom(NegAtom { not_token: Not { span: Span::new("make_lit::not", "not") }, atom: make_atom(name, args) })
+        Literal::NegAtom(NegAtom { not_token: Not { span: None }, atom: make_atom(name, args) })
     }
 }
 
 /// Makes an [`Atom`] conveniently.
 #[track_caller]
-pub fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Atom<&'static str, &'static str> {
+pub fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> Atom<(&'static str, &'static str)> {
     // Make the punctuation
-    let mut punct: Punctuated<Atom<&'static str, &'static str>, Comma<&'static str, &'static str>> = Punctuated::new();
+    let mut punct: Punctuated<Atom<(&'static str, &'static str)>, Comma<(&'static str, &'static str)>> = Punctuated::new();
     for (i, arg) in args.into_iter().enumerate() {
         // Either push as atom or as variable
-        let arg: Atom<&'static str, &'static str> = if arg.chars().next().unwrap_or_else(|| panic!("Empty argument given")).is_uppercase() {
-            Atom::Var(Ident { value: Span::new("make_atom::var", arg) })
+        let arg: Atom<(&'static str, &'static str)> = if arg.chars().next().unwrap_or_else(|| panic!("Empty argument given")).is_uppercase() {
+            Atom::Var(Ident::new(arg.into()))
         } else {
-            Atom::Fact(Fact { ident: Ident { value: Span::new("make_atom::arg", arg) }, args: None })
+            Atom::Fact(Fact { ident: Ident::new(arg.into()), args: None })
         };
 
         // Then push with the correct punctuation
         if i == 0 {
-            punct.push_first(arg);
+            punct.push_value(arg);
         } else {
-            punct.push(Comma { span: Span::new("make_atom::arg::comma", ",") }, arg);
+            punct.push_punct(Comma { span: None });
+            punct.push_value(arg);
         }
     }
 
     // Make the atom
     Atom::Fact(Fact {
-        ident: Ident { value: Span::new("make_atom::name", name) },
+        ident: Ident::new(name.into()),
         args:  if !punct.is_empty() {
-            Some(FactArgs {
-                paren_tokens: Parens { open: Span::new("make_atom::parens::open", "("), close: Span::new("make_atom::parens::close", ")") },
-                args: punct,
-            })
+            Some(FactArgs { paren_tokens: Parens { open: ParensOpen { span: None }, close: ParensClose { span: None } }, args: punct })
         } else {
             None
         },
@@ -162,14 +187,14 @@ pub fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str
 
 
 /// Makes an [`Ident`] conveniently.
-pub fn make_ident(value: &'static str) -> Ident<&'static str, &'static str> {
+pub fn make_ident(value: &'static str) -> Ident<(&'static str, &'static str)> {
     // Make the atom
-    Ident { value: Span::new("make_ident", value) }
+    Ident::new(value.into())
 }
 
 /// Makes a [`Curly`] conveniently.
 #[cfg(feature = "transitions")]
-pub fn make_curly() -> Curly<&'static str, &'static str> {
+pub fn make_curly() -> Curly<(&'static str, &'static str)> {
     // Make the atom
-    Curly { open: Span::new("make_curly::open", "{"), close: Span::new("make_curly::close", "}") }
+    Curly { open: CurlyOpen { span: None }, close: CurlyClose { span: None } }
 }

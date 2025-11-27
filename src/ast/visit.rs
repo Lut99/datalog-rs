@@ -13,37 +13,25 @@
 //
 
 use super::{Arrow, Atom, Comma, Dot, Fact, FactArgs, Ident, Literal, NegAtom, Not, Parens, Rule, RuleBody, Span, Spec};
+use crate::ast::{ParensClose, ParensOpen};
 
 
 /***** HELPER MACROS *****/
 /// Implements a visitor function for the given token.
 macro_rules! token_visitor_impl {
     ($name:ident) => {
-        impl<F, S> Visitable for $name<F, S> {
+        impl<S> Visitable for $name<S> {
             #[inline]
             fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
                 let Self { span } = self;
-                visitor.visit_span(span);
+                if let Some(span) = span {
+                    visitor.visit_span(span);
+                }
             }
         }
     };
 }
 pub(crate) use token_visitor_impl;
-
-/// Implements a visitor function for the given token.
-macro_rules! delim_visitor_impl {
-    ($name:ident) => {
-        impl<F, S> Visitable for $name<F, S> {
-            #[inline]
-            fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
-                let Self { open, close } = self;
-                visitor.visit_span(open);
-                visitor.visit_span(close);
-            }
-        }
-    };
-}
-pub(crate) use delim_visitor_impl;
 
 
 
@@ -70,7 +58,7 @@ pub trait Visitable {
 }
 
 // Implementations for the AST.
-impl<F, S> Visitable for Spec<F, S> {
+impl<S> Visitable for Spec<S> {
     #[inline]
     fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
         let Self { rules } = self;
@@ -82,13 +70,13 @@ impl<F, S> Visitable for Spec<F, S> {
     }
 }
 
-impl<F, S> Visitable for Rule<F, S> {
+impl<S> Visitable for Rule<S> {
     #[inline]
     fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
         let Self { consequents, tail, dot } = self;
 
         // Visit everything in the consequents first
-        for (atom, comma) in consequents.pairs() {
+        for (atom, comma) in consequents {
             visitor.visit_atom(atom);
             if let Some(comma) = comma {
                 visitor.visit_comma(comma);
@@ -104,7 +92,7 @@ impl<F, S> Visitable for Rule<F, S> {
         visitor.visit_dot(dot)
     }
 }
-impl<F, S> Visitable for RuleBody<F, S> {
+impl<S> Visitable for RuleBody<S> {
     #[inline]
     fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
         let Self { arrow_token, antecedents } = self;
@@ -113,7 +101,7 @@ impl<F, S> Visitable for RuleBody<F, S> {
         visitor.visit_arrow(arrow_token);
 
         // Then visit all the antecedents
-        for (lit, comma) in antecedents.pairs() {
+        for (lit, comma) in antecedents {
             visitor.visit_literal(lit);
             if let Some(comma) = comma {
                 visitor.visit_comma(comma);
@@ -122,7 +110,7 @@ impl<F, S> Visitable for RuleBody<F, S> {
     }
 }
 
-impl<F, S> Visitable for Literal<F, S> {
+impl<S> Visitable for Literal<S> {
     #[inline]
     fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
         match self {
@@ -131,7 +119,7 @@ impl<F, S> Visitable for Literal<F, S> {
         }
     }
 }
-impl<F, S> Visitable for NegAtom<F, S> {
+impl<S> Visitable for NegAtom<S> {
     #[inline]
     fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
         let Self { not_token, atom } = self;
@@ -144,7 +132,7 @@ impl<F, S> Visitable for NegAtom<F, S> {
     }
 }
 
-impl<F, S> Visitable for Atom<F, S> {
+impl<S> Visitable for Atom<S> {
     #[inline]
     fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
         match self {
@@ -153,7 +141,7 @@ impl<F, S> Visitable for Atom<F, S> {
         }
     }
 }
-impl<F, S> Visitable for Fact<F, S> {
+impl<S> Visitable for Fact<S> {
     #[inline]
     fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
         let Self { ident, args } = self;
@@ -167,7 +155,7 @@ impl<F, S> Visitable for Fact<F, S> {
         }
     }
 }
-impl<F, S> Visitable for FactArgs<F, S> {
+impl<S> Visitable for FactArgs<S> {
     #[inline]
     fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
         let Self { paren_tokens, args } = self;
@@ -176,7 +164,7 @@ impl<F, S> Visitable for FactArgs<F, S> {
         visitor.visit_parens(paren_tokens);
 
         // Then visit the fact's arguments (and commas)
-        for (arg, comma) in args.pairs() {
+        for (arg, comma) in args {
             visitor.visit_atom(arg);
             if let Some(comma) = comma {
                 visitor.visit_comma(comma);
@@ -185,13 +173,15 @@ impl<F, S> Visitable for FactArgs<F, S> {
     }
 }
 
-impl<F, S> Visitable for Ident<F, S> {
+impl<S> Visitable for Ident<S> {
     #[inline]
     fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
-        let Self { value } = self;
+        let Self { value: _, span } = self;
 
         // Visit the span
-        visitor.visit_span(value)
+        if let Some(span) = span {
+            visitor.visit_span(span);
+        }
     }
 }
 
@@ -199,9 +189,19 @@ token_visitor_impl!(Arrow);
 token_visitor_impl!(Comma);
 token_visitor_impl!(Dot);
 token_visitor_impl!(Not);
-delim_visitor_impl!(Parens);
 
-impl<F, S> Visitable for Span<F, S> {
+impl<S> Visitable for Parens<S> {
+    #[inline]
+    fn visit<'ast>(&'ast self, visitor: &mut (impl ?Sized + Visitor<'ast>)) {
+        let Self { open, close } = self;
+        visitor.visit_parens_open(open);
+        visitor.visit_parens_close(close);
+    }
+}
+token_visitor_impl!(ParensOpen);
+token_visitor_impl!(ParensClose);
+
+impl<S> Visitable for Span<S> {
     #[inline]
     fn visit<'ast>(&self, _visitor: &mut (impl ?Sized + Visitor<'ast>)) {
         /* Nothing */
@@ -228,7 +228,7 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `spec`: The [`Spec`] that is being visited.
     #[inline]
-    fn visit_spec<F, S>(&mut self, spec: &'ast Spec<F, S>) { spec.visit(self) }
+    fn visit_spec<S>(&mut self, spec: &'ast Spec<S>) { spec.visit(self) }
 
 
 
@@ -239,7 +239,7 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `rule`: The [`Rule`] that is being visited.
     #[inline]
-    fn visit_rule<F, S>(&mut self, rule: &'ast Rule<F, S>) { rule.visit(self) }
+    fn visit_rule<S>(&mut self, rule: &'ast Rule<S>) { rule.visit(self) }
 
     /// Visits a rule's body in a rule.
     ///
@@ -248,7 +248,7 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `rule_body`: The [`RuleBody`] that is being visited.
     #[inline]
-    fn visit_rule_body<F, S>(&mut self, rule_body: &'ast RuleBody<F, S>) { rule_body.visit(self) }
+    fn visit_rule_body<S>(&mut self, rule_body: &'ast RuleBody<S>) { rule_body.visit(self) }
 
 
 
@@ -259,7 +259,7 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `literal`: The [`Literal`] that is being visited.
     #[inline]
-    fn visit_literal<F, S>(&mut self, literal: &'ast Literal<F, S>) { literal.visit(self) }
+    fn visit_literal<S>(&mut self, literal: &'ast Literal<S>) { literal.visit(self) }
 
     /// Visits a negative atom in the more generic literal.
     ///
@@ -268,7 +268,7 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `neg_atom`: The [`NegAtom`] that is being visited.
     #[inline]
-    fn visit_neg_atom<F, S>(&mut self, neg_atom: &'ast NegAtom<F, S>) { neg_atom.visit(self) }
+    fn visit_neg_atom<S>(&mut self, neg_atom: &'ast NegAtom<S>) { neg_atom.visit(self) }
 
 
 
@@ -279,7 +279,7 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `atom`: The [`Atom`] that is being visited.
     #[inline]
-    fn visit_atom<F, S>(&mut self, atom: &'ast Atom<F, S>) { atom.visit(self) }
+    fn visit_atom<S>(&mut self, atom: &'ast Atom<S>) { atom.visit(self) }
 
     /// Visits a fact that is a non-variable atom.
     ///
@@ -288,7 +288,7 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `fact`: The [`Fact`] that is being visited.
     #[inline]
-    fn visit_fact<F, S>(&mut self, fact: &'ast Fact<F, S>) { fact.visit(self) }
+    fn visit_fact<S>(&mut self, fact: &'ast Fact<S>) { fact.visit(self) }
 
     /// Visits the argument-part of a fact.
     ///
@@ -297,7 +297,7 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `fact_args`: The [`FactArgs`] that is being visited.
     #[inline]
-    fn visit_fact_args<F, S>(&mut self, fact_args: &'ast FactArgs<F, S>) { fact_args.visit(self) }
+    fn visit_fact_args<S>(&mut self, fact_args: &'ast FactArgs<S>) { fact_args.visit(self) }
 
 
 
@@ -308,7 +308,7 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `ident`: The [`Ident`] that is being visited.
     #[inline]
-    fn visit_ident<F, S>(&mut self, ident: &'ast Ident<F, S>) { ident.visit(self) }
+    fn visit_ident<S>(&mut self, ident: &'ast Ident<S>) { ident.visit(self) }
 
 
 
@@ -319,7 +319,7 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `arrow`: The [`Arrow`] that is being visited.
     #[inline]
-    fn visit_arrow<F, S>(&mut self, arrow: &'ast Arrow<F, S>) { arrow.visit(self) }
+    fn visit_arrow<S>(&mut self, arrow: &'ast Arrow<S>) { arrow.visit(self) }
 
     /// Visits a comma.
     ///
@@ -328,7 +328,7 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `comma`: The [`Comma`] that is being visited.
     #[inline]
-    fn visit_comma<F, S>(&mut self, comma: &'ast Comma<F, S>) { comma.visit(self) }
+    fn visit_comma<S>(&mut self, comma: &'ast Comma<S>) { comma.visit(self) }
 
     /// Visits a dot.
     ///
@@ -337,7 +337,7 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `dot`: The [`Dot`] that is being visited.
     #[inline]
-    fn visit_dot<F, S>(&mut self, dot: &'ast Dot<F, S>) { dot.visit(self) }
+    fn visit_dot<S>(&mut self, dot: &'ast Dot<S>) { dot.visit(self) }
 
     /// Visits a not.
     ///
@@ -346,7 +346,7 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `not`: The [`Not`] that is being visited.
     #[inline]
-    fn visit_not<F, S>(&mut self, not: &'ast Not<F, S>) { not.visit(self) }
+    fn visit_not<S>(&mut self, not: &'ast Not<S>) { not.visit(self) }
 
     /// Visits a parens.
     ///
@@ -355,7 +355,25 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `parens`: The [`Parens`] that is being visited.
     #[inline]
-    fn visit_parens<F, S>(&mut self, parens: &'ast Parens<F, S>) { parens.visit(self) }
+    fn visit_parens<S>(&mut self, parens: &'ast Parens<S>) { parens.visit(self) }
+
+    /// Visits a parens open token.
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `parens_open`: The [`ParensOpen`] that is being visited.
+    #[inline]
+    fn visit_parens_open<S>(&mut self, parens_open: &'ast ParensOpen<S>) { parens_open.visit(self) }
+
+    /// Visits a parens close token.
+    ///
+    /// By default, this function redirects to the node's [`Visitable::visit()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `parens_close`: The [`ParensClose`] that is being visited.
+    #[inline]
+    fn visit_parens_close<S>(&mut self, parens_close: &'ast ParensClose<S>) { parens_close.visit(self) }
 
 
 
@@ -366,5 +384,5 @@ pub trait Visitor<'ast> {
     /// # Arguments
     /// - `span`: The [`Span`] that is being visited.
     #[inline]
-    fn visit_span<F, S>(&mut self, span: &'ast Span<F, S>) { span.visit(self) }
+    fn visit_span<S>(&mut self, span: &'ast Span<S>) { span.visit(self) }
 }

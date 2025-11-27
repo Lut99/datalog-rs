@@ -20,10 +20,10 @@ use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use ast_toolkit::span::SpannableDisplay;
+use ast_toolkit::span::SpannableBytes;
 use better_derive::{Clone, Debug};
 
-use crate::ir::{GroundAtom, Span};
+use crate::ir::GroundAtom;
 
 
 /***** HELPERS *****/
@@ -173,26 +173,26 @@ impl<T> ComplementedSet<T> {
 /// universe: we wrap it in a `Complement`-enum, which does this negated complement trick lazily
 /// (i.e., only at query time instead of quantification time).
 #[derive(Clone, Debug)]
-pub struct KnowledgeBase<F, S> {
+pub struct KnowledgeBase<S> {
     /// Defines derived atoms.
-    truths:      BTreeSet<GroundAtom<F, S>>,
+    truths:      BTreeSet<GroundAtom<S>>,
     /// Defines assumed _negated_ atoms.
     ///
     /// This is the other half of `pos_truths`, which behaves exactly the same except that you
     /// should imagine a `not` in front of all of them.
-    assumptions: ComplementedSet<GroundAtom<F, S>>,
+    assumptions: ComplementedSet<GroundAtom<S>>,
 }
 
 // Constructors
-impl<F, S> Default for KnowledgeBase<F, S> {
+impl<S> Default for KnowledgeBase<S> {
     #[inline]
     fn default() -> Self { Self::new() }
 }
-impl<F, S> KnowledgeBase<F, S> {
+impl<S> KnowledgeBase<S> {
     /// Constructor for the State that initializes it from the given spec.
     ///
     /// # Arguments
-    /// - `spec`: Some [`Spec<'s, F, S>`] to interpret.
+    /// - `spec`: Some [`Spec<'s, S>`] to interpret.
     ///
     /// # Returns
     /// A new State that is initialized to the universe of possible atoms read from the spec.
@@ -202,10 +202,7 @@ impl<F, S> KnowledgeBase<F, S> {
 }
 
 // Hashing
-impl<F, S> KnowledgeBase<F, S>
-where
-    Span<F, S>: Hash + Ord,
-{
+impl<'s, S: SpannableBytes<'s>> KnowledgeBase<S> {
     /// Returns a hash of the knowledge base.
     ///
     /// # Returns
@@ -217,11 +214,8 @@ where
         hasher.finish()
     }
 }
-impl<F, S> Eq for KnowledgeBase<F, S> where Span<F, S>: Hash + Ord {}
-impl<F, S> Hash for KnowledgeBase<F, S>
-where
-    Span<F, S>: Hash + Ord,
-{
+impl<'s, S: SpannableBytes<'s>> Eq for KnowledgeBase<S> {}
+impl<'s, S: SpannableBytes<'s>> Hash for KnowledgeBase<S> {
     #[inline]
     #[track_caller]
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -241,19 +235,13 @@ where
         }
     }
 }
-impl<F, S> PartialEq for KnowledgeBase<F, S>
-where
-    Span<F, S>: Hash + Ord,
-{
+impl<'s, S: SpannableBytes<'s>> PartialEq for KnowledgeBase<S> {
     #[inline]
     fn eq(&self, other: &Self) -> bool { self.truths.eq(&other.truths) && self.assumptions.eq(&other.assumptions) }
 }
 
 // Reasoning
-impl<F, S> KnowledgeBase<F, S>
-where
-    Span<F, S>: Hash + Ord,
-{
+impl<'s, S: SpannableBytes<'s>> KnowledgeBase<S> {
     /// Updates the knowledge base with a new fact to learn.
     ///
     /// # Arguments
@@ -261,13 +249,13 @@ where
     ///
     /// # Returns
     /// Whether anything has actually changed.
-    pub fn learn(&mut self, atom: GroundAtom<F, S>) -> bool { self.truths.insert(atom) }
+    pub fn learn(&mut self, atom: GroundAtom<S>) -> bool { self.truths.insert(atom) }
 
     /// Applies the stable transformation to the knowledge base; i.e., assumes that everything not
     /// derived is false.
     pub fn apply_stable_transformation(&mut self) {
         // With the new complemented set this is actually super-duper easy!
-        let mut truths: BTreeSet<GroundAtom<F, S>> = BTreeSet::new();
+        let mut truths: BTreeSet<GroundAtom<S>> = BTreeSet::new();
         std::mem::swap(&mut truths, &mut self.truths);
         self.assumptions.complement(truths.into_iter());
     }
@@ -287,7 +275,7 @@ where
     /// # Returns
     /// True if the given fact is true, or false otherwise.
     #[inline]
-    pub fn holds(&self, is_pos: bool, atom: &GroundAtom<F, S>) -> bool {
+    pub fn holds(&self, is_pos: bool, atom: &GroundAtom<S>) -> bool {
         if is_pos { self.truths.contains(atom) } else { self.assumptions.contains(atom) }
     }
 
@@ -301,7 +289,7 @@ where
     /// - [`Some(true)`] if we know the fact to be true;
     /// - [`Some(false)`] if we neither know it to be true or unknown; or
     /// - [`None`] if we know it to be unknown (e.g., underivable).
-    pub fn closed_world_truth(&self, atom: &GroundAtom<F, S>) -> Option<bool> {
+    pub fn closed_world_truth(&self, atom: &GroundAtom<S>) -> Option<bool> {
         // Now find the assigned truth value
         if self.truths.contains(atom) {
             Some(true)
@@ -317,11 +305,11 @@ where
     /// # Returns
     /// An [`Iterator`] over (references to) [`GroundAtom`]s.
     #[inline]
-    pub fn truths<'s>(&'s self) -> impl 's + Clone + ExactSizeIterator + Iterator<Item = &'s GroundAtom<F, S>> { self.truths.iter() }
+    pub fn truths<'kb>(&'kb self) -> impl 'kb + Clone + ExactSizeIterator + Iterator<Item = &'kb GroundAtom<S>> { self.truths.iter() }
 }
 
 // Collection
-impl<F, S> KnowledgeBase<F, S> {
+impl<S> KnowledgeBase<S> {
     /// Clears the knowledge base, resetting it to start but keeping the memory around.
     #[inline]
     pub fn reset(&mut self) {
@@ -331,10 +319,9 @@ impl<F, S> KnowledgeBase<F, S> {
 }
 
 // Formatting
-impl<F, S> Display for KnowledgeBase<F, S>
+impl<'s, S> Display for KnowledgeBase<S>
 where
-    S: SpannableDisplay,
-    Span<F, S>: Hash + Ord,
+    S: SpannableBytes<'s>,
 {
     #[inline]
     #[track_caller]
