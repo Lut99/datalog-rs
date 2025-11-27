@@ -7,7 +7,7 @@
 
 use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fmt::{Debug, Display, Formatter, Result as FResult};
 use std::hash::{BuildHasher as _, Hash, Hasher};
 
 use ast_toolkit::span::{Span, Spanning};
@@ -103,7 +103,7 @@ impl IdentViewer {
 
 /***** LIBRARY *****/
 /// Defines compressed identifiers that are cheap to carry around and compare.
-#[derive(Clone, Copy, better_derive::Debug)]
+#[derive(Clone, Copy)]
 pub struct Ident<S> {
     /// Determines the "uniqueness" of the Ident. This is what we use to compare and hash.
     uniqueness: u64,
@@ -156,6 +156,19 @@ impl<S> Ident<S> {
 }
 
 // Ops
+impl<S> Debug for Ident<S>
+where
+    Span<S>: Debug,
+{
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        let mut fmt = f.debug_struct("Ident");
+        let viewer = Self::viewer();
+        fmt.field("uniqueness", &viewer.value_of(self));
+        fmt.field("span", &self.span);
+        fmt.finish()
+    }
+}
 impl<S> Display for Ident<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
