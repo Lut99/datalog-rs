@@ -216,12 +216,26 @@ where
     #[inline]
     pub fn compile(&self) -> ir::Atom<S> {
         match self {
-            Self::Fact(f) => ir::Atom::Fact(ir::Fact {
-                ident: f.ident.compile(),
-                args:  f.args.iter().flat_map(|t| t.args.values().map(ast::Atom::compile)).collect(),
-            }),
+            Self::Fact(f) => ir::Atom::Fact(f.compile()),
             Self::Var(v) => ir::Atom::Var(v.compile()),
         }
+    }
+}
+
+
+
+impl<S> ast::Fact<S>
+where
+    S: Clone,
+{
+    /// Compiles this relatively-close-to-the-syntax fact to an intermediate representation (IR)
+    /// fact that is suitable for interpretation.
+    ///
+    /// # Returns
+    /// A Datalog IR [`Fact`](ir::Fact) that is the compiled version.
+    #[inline]
+    pub fn compile(&self) -> ir::Fact<S> {
+        ir::Fact { ident: self.ident.compile(), args: self.args.iter().flat_map(|t| t.args.values().map(ast::Atom::compile)).collect() }
     }
 }
 
