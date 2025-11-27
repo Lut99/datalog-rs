@@ -1,6 +1,6 @@
 [package]
 name = "datalog"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Tim Müller"]
 repository = "https://github.com/Lut99/datalog-rs"
@@ -39,7 +39,7 @@ console = "0.15.0"
 log = "0.4.0"
 
 error-trace = "4.0.0"
-humanlog = { git = "https://github.com/Lut99/humanlog-rs" }
+humanlog = { git = "https://github.com/Lut99/humanlog-rs", tag = "v0.2.0" }
 
 
 [features]
