@@ -652,6 +652,17 @@ pub struct Ident<S> {
     /// Where we found it.
     pub span:  Option<Span<S>>,
 }
+impl<S> Ident<S> {
+    /// Creates a new identifier that's not attached to any source.
+    ///
+    /// # Arguments
+    /// - `value`: The value of the identifier.
+    ///
+    /// # Returns
+    /// A new Ident with  [`Ident::span`] set to [`None`].
+    #[inline]
+    pub const fn new(value: String) -> Self { Self { value, span: None } }
+}
 impl<'s, S: SpannableBytes<'s>> Display for Ident<S> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", self.value) }

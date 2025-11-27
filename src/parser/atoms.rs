@@ -55,7 +55,7 @@ use crate::ast;
 ///     (
 ///         span1.slice(5..),
 ///         Atom::Fact(Fact {
-///             ident: Ident { value: span1.slice(..3) },
+///             ident: Ident { value: "qux".into(), span: Some(span1.slice(..3)) },
 ///             args:  Some(FactArgs {
 ///                 paren_tokens: Parens {
 ///                     open:  span1.slice(3..4).into(),
@@ -71,14 +71,14 @@ use crate::ast;
 ///     (
 ///         span2.slice(8..),
 ///         Atom::Fact(Fact {
-///             ident: Ident { value: span2.slice(..3) },
+///             ident: Ident { value: "qux".into(), span: Some(span2.slice(..3)) },
 ///             args:  Some(FactArgs {
 ///                 paren_tokens: Parens {
 ///                     open:  span2.slice(3..4).into(),
 ///                     close: span2.slice(7..8).into(),
 ///                 },
 ///                 args: punct![Atom::Fact(Fact {
-///                     ident: Ident { value: span2.slice(4..7) },
+///                     ident: Ident { value: "foo".into(), span: Some(span2.slice(4..7)) },
 ///                     args:  None,
 ///                 })],
 ///             }),
@@ -90,17 +90,17 @@ use crate::ast;
 ///     (
 ///         span3.slice(13..),
 ///         Atom::Fact(Fact {
-///             ident: Ident { value: span3.slice(..3) },
+///             ident: Ident { value: "qux".into(), span: Some(span3.slice(..3)) },
 ///             args:  Some(FactArgs {
 ///                 paren_tokens: Parens {
 ///                     open:  span3.slice(3..4).into(),
 ///                     close: span3.slice(12..13).into(),
 ///                 },
 ///                 args: punct![
-///                     Atom::Var(Ident { value: span3.slice(4..7) }),
+///                     Atom::Var(Ident { value: "Bar".into(), span: Some(span3.slice(4..7)) }),
 ///                     Comma::from(span3.slice(7..8)),
 ///                     Atom::Fact(Fact {
-///                         ident: Ident { value: span3.slice(9..12) },
+///                         ident: Ident { value: "baz".into(), span: Some(span3.slice(9..12)) },
 ///                         args:  None,
 ///                     })
 ///                 ],
@@ -112,14 +112,17 @@ use crate::ast;
 ///     comb.parse(span4).unwrap(),
 ///     (
 ///         span4.slice(3..),
-///         Atom::Fact(Fact { ident: Ident { value: span4.slice(..3) }, args: None })
+///         Atom::Fact(Fact {
+///             ident: Ident { value: "foo".into(), span: Some(span4.slice(..3)) },
+///             args:  None,
+///         })
 ///     )
 /// );
 /// assert!(matches!(comb.parse(span5), Err(SnackError::Recoverable(_))));
 /// assert!(matches!(comb.parse(span6), Err(SnackError::Fatal(_))));
 /// assert_eq!(
 ///     comb.parse(span7).unwrap(),
-///     (span7.slice(3..), Atom::Var(Ident { value: span7.slice(..3) })),
+///     (span7.slice(3..), Atom::Var(Ident { value: "Bar".into(), span: Some(span7.slice(..3)) })),
 /// );
 /// ```
 #[inline]
@@ -161,7 +164,7 @@ where
 /// assert_eq!(
 ///     comb.parse(span1).unwrap(),
 ///     (span1.slice(5..), Fact {
-///         ident: Ident { value: span1.slice(..3) },
+///         ident: Ident { value: "qux".into(), span: Some(span1.slice(..3)) },
 ///         args:  Some(FactArgs {
 ///             paren_tokens: Parens {
 ///                 open:  span1.slice(3..4).into(),
@@ -174,14 +177,14 @@ where
 /// assert_eq!(
 ///     comb.parse(span2).unwrap(),
 ///     (span2.slice(8..), Fact {
-///         ident: Ident { value: span2.slice(..3) },
+///         ident: Ident { value: "qux".into(), span: Some(span2.slice(..3)) },
 ///         args:  Some(FactArgs {
 ///             paren_tokens: Parens {
 ///                 open:  span2.slice(3..4).into(),
 ///                 close: span2.slice(7..8).into(),
 ///             },
 ///             args: punct![Atom::Fact(Fact {
-///                 ident: Ident { value: span2.slice(4..7) },
+///                 ident: Ident { value: "foo".into(), span: Some(span2.slice(4..7)) },
 ///                 args:  None,
 ///             })],
 ///         }),
@@ -190,23 +193,29 @@ where
 /// assert_eq!(
 ///     comb.parse(span3).unwrap(),
 ///     (span3.slice(13..), Fact {
-///         ident: Ident { value: span3.slice(..3) },
+///         ident: Ident { value: "qux".into(), span: Some(span3.slice(..3)) },
 ///         args:  Some(FactArgs {
 ///             paren_tokens: Parens {
 ///                 open:  span3.slice(3..4).into(),
 ///                 close: span3.slice(12..13).into(),
 ///             },
 ///             args: punct![
-///                 Atom::Var(Ident { value: span3.slice(4..7) }),
+///                 Atom::Var(Ident { value: "Bar".into(), span: Some(span3.slice(4..7)) }),
 ///                 Comma::from(span3.slice(7..8)),
-///                 Atom::Fact(Fact { ident: Ident { value: span3.slice(9..12) }, args: None })
+///                 Atom::Fact(Fact {
+///                     ident: Ident { value: "baz".into(), span: Some(span3.slice(9..12)) },
+///                     args:  None,
+///                 })
 ///             ],
 ///         }),
 ///     })
 /// );
 /// assert_eq!(
 ///     comb.parse(span4).unwrap(),
-///     (span4.slice(3..), Fact { ident: Ident { value: span4.slice(..3) }, args: None })
+///     (span4.slice(3..), Fact {
+///         ident: Ident { value: "foo".into(), span: Some(span4.slice(..3)) },
+///         args:  None,
+///     })
 /// );
 /// assert!(matches!(comb.parse(span5), Err(SnackError::Recoverable(_))));
 /// assert!(matches!(comb.parse(span6), Err(SnackError::Fatal(_))));
@@ -264,7 +273,7 @@ where
 ///             close: span2.slice(4..5).into(),
 ///         },
 ///         args: punct![Atom::Fact(Fact {
-///             ident: Ident { value: span2.slice(1..4) },
+///             ident: Ident { value: "foo".into(), span: Some(span2.slice(1..4)) },
 ///             args:  None,
 ///         })],
 ///     })
@@ -277,9 +286,12 @@ where
 ///             close: span3.slice(9..10).into(),
 ///         },
 ///         args: punct![
-///             Atom::Var(Ident { value: span3.slice(1..4) }),
+///             Atom::Var(Ident { value: "Bar".into(), span: Some(span3.slice(1..4)) }),
 ///             Comma::from(span3.slice(4..5)),
-///             Atom::Fact(Fact { ident: Ident { value: span3.slice(6..9) }, args: None })
+///             Atom::Fact(Fact {
+///                 ident: Ident { value: "baz".into(), span: Some(span3.slice(6..9)) },
+///                 args:  None,
+///             })
 ///         ],
 ///     })
 /// );
@@ -329,7 +341,10 @@ where
 /// let span3 = Span::new(("<example>", "()"));
 ///
 /// let mut comb = ident();
-/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(3..), Ident { value: span1.slice(..3) }));
+/// assert_eq!(
+///     comb.parse(span1).unwrap(),
+///     (span1.slice(3..), Ident { value: "foo".into(), span: Some(span1.slice(..3)) })
+/// );
 /// assert!(matches!(comb.parse(span2), Err(SnackError::Recoverable(_))));
 /// assert!(matches!(comb.parse(span3), Err(SnackError::Recoverable(_))));
 /// ```
@@ -345,7 +360,10 @@ where
                 (b >= b'a' && b <= b'z') || (b >= b'0' && b <= b'9') || b == b'-' || b == b'_'
             }),
         )),
-        |value| ast::Ident { value },
+        |span| ast::Ident {
+            value: String::from_utf8(span.as_bytes().into()).unwrap_or_else(|err| panic!("Parsed identifier should only be valid UTF-8: {err}")),
+            span:  Some(span),
+        },
     )
     .boxed()
 }
@@ -374,7 +392,10 @@ where
 ///
 /// let mut comb = var();
 /// assert!(matches!(comb.parse(span1), Err(SnackError::Recoverable(_))));
-/// assert_eq!(comb.parse(span2).unwrap(), (span2.slice(3..), Ident { value: span2.slice(..3) }));
+/// assert_eq!(
+///     comb.parse(span2).unwrap(),
+///     (span2.slice(3..), Ident { value: "Bar".into(), span: Some(span2.slice(..3)) })
+/// );
 /// assert!(matches!(comb.parse(span3), Err(SnackError::Recoverable(_))));
 /// ```
 #[inline]
@@ -389,7 +410,10 @@ where
                 (b >= b'a' && b <= b'z') || (b >= b'0' && b <= b'9') || b == b'-' || b == b'_'
             }),
         )),
-        |value| ast::Ident { value },
+        |span| ast::Ident {
+            value: String::from_utf8(span.as_bytes().into()).unwrap_or_else(|err| panic!("Parsed variable should only be valid UTF-8: {err}")),
+            span:  Some(span),
+        },
     )
     .boxed()
 }

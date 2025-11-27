@@ -103,9 +103,9 @@ impl<S> Visitable for GroundAtom<S> {
 impl<S> Visitable for Ident<S> {
     #[inline]
     fn visit<'ir>(&'ir self, visitor: &mut (impl ?Sized + Visitor<'ir>)) {
-        let Self { value } = self;
-
-        visitor.visit_span(value)
+        if let Some(span) = self.span() {
+            visitor.visit_span(span);
+        }
     }
 }
 impl<S> Visitable for Span<S> {

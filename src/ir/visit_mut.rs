@@ -10,7 +10,7 @@
 //
 //  Description:
 //!   Defines a visitor pattern interface for the Datalog IR.
-//!   
+//!
 //!   This version promises mutable access to all nodes.
 //
 
@@ -105,9 +105,9 @@ impl<S> VisitableMut for GroundAtom<S> {
 impl<S> VisitableMut for Ident<S> {
     #[inline]
     fn visit_mut<'ir>(&'ir mut self, visitor: &mut (impl ?Sized + VisitorMut<'ir>)) {
-        let Self { value } = self;
-
-        visitor.visit_span_mut(value)
+        if let Some(span) = self.span_mut() {
+            visitor.visit_span_mut(span);
+        }
     }
 }
 impl<S> VisitableMut for Span<S> {

@@ -217,10 +217,25 @@ where
     pub fn compile(&self) -> ir::Atom<S> {
         match self {
             Self::Fact(f) => ir::Atom::Fact(ir::Fact {
-                ident: f.ident.clone(),
+                ident: f.ident.compile(),
                 args:  f.args.iter().flat_map(|t| t.args.values().map(ast::Atom::compile)).collect(),
             }),
-            Self::Var(v) => ir::Atom::Var(v.clone()),
+            Self::Var(v) => ir::Atom::Var(v.compile()),
         }
     }
+}
+
+
+
+impl<S> ast::Ident<S>
+where
+    S: Clone,
+{
+    /// Compiles this relatively-close-to-the-syntax identifier to an intermediate representation
+    /// (IR) identifier that is suitable for interpretation.
+    ///
+    /// # Returns
+    /// A Datalog IR [`Ident`](ir::Ident) that is the compiled version.
+    #[inline]
+    pub fn compile(&self) -> ir::Ident<S> { ir::Ident::new(self.value.clone(), self.span.clone()) }
 }

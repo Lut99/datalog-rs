@@ -20,8 +20,7 @@ use ast_toolkit::span::Spannable;
 use better_derive::Debug;
 use indexmap::IndexSet;
 
-use crate::ast::{Ident, Span};
-use crate::ir::{Atom, Atomlike, GroundAtom, Rule};
+use crate::ir::{Atom, Atomlike, GroundAtom, Ident, Rule, Span};
 
 
 /***** LIBRARY *****/

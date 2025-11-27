@@ -52,13 +52,13 @@ use crate::ast;
 ///     (span2.slice(11..), Spec {
 ///         rules: vec![Rule {
 ///             consequents: punct![Atom::Fact(Fact {
-///                 ident: Ident { value: span2.slice(..3) },
+///                 ident: Ident { value: "foo".into(), span: Some(span2.slice(..3)) },
 ///                 args:  None,
 ///             })],
 ///             tail: Some(RuleBody {
 ///                 arrow_token: span2.slice(4..6).into(),
 ///                 antecedents: punct![Literal::Atom(Atom::Fact(Fact {
-///                     ident: Ident { value: span2.slice(7..10) },
+///                     ident: Ident { value: "bar".into(), span: Some(span2.slice(7..10)) },
 ///                     args:  None,
 ///                 }))],
 ///             }),
@@ -72,13 +72,13 @@ use crate::ast;
 ///         rules: vec![
 ///             Rule {
 ///                 consequents: punct![Atom::Fact(Fact {
-///                     ident: Ident { value: span2.slice(..3) },
+///                     ident: Ident { value: "foo".into(), span: Some(span2.slice(..3)) },
 ///                     args:  None,
 ///                 })],
 ///                 tail: Some(RuleBody {
 ///                     arrow_token: span2.slice(4..6).into(),
 ///                     antecedents: punct![Literal::Atom(Atom::Fact(Fact {
-///                         ident: Ident { value: span2.slice(7..10) },
+///                         ident: Ident { value: "bar".into(), span: Some(span2.slice(7..10)) },
 ///                         args:  None,
 ///                     }))],
 ///                 }),
@@ -87,12 +87,12 @@ use crate::ast;
 ///             Rule {
 ///                 consequents: punct![
 ///                     Atom::Fact(Fact {
-///                         ident: Ident { value: span3.slice(12..15) },
+///                         ident: Ident { value: "foo".into(), span: Some(span3.slice(12..15)) },
 ///                         args:  None,
 ///                     }),
 ///                     Comma::from(span3.slice(15..16)),
 ///                     Atom::Fact(Fact {
-///                         ident: Ident { value: span3.slice(17..20) },
+///                         ident: Ident { value: "bar".into(), span: Some(span3.slice(17..20)) },
 ///                         args:  None,
 ///                     })
 ///                 ],

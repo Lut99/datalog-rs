@@ -6,17 +6,19 @@
 //
 
 use std::borrow::Cow;
-use std::hash::BuildHasher as _;
+use std::cmp::Ordering;
+use std::fmt::{Display, Formatter, Result as FResult};
+use std::hash::{BuildHasher as _, Hash, Hasher};
 
 use ast_toolkit::span::{Span, Spanning};
 use fxhash::FxBuildHasher;
 use hashbrown::HashTable;
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 
 /***** GLOBALS *****/
 /// The hasher we use to build the identifier names.
-static IDENT_NAMES_HASHER: RwLock<FxBuildHasher> = RwLock::new(FxBuildHasher::new());
+static IDENT_NAMES_HASHER: Mutex<FxBuildHasher> = Mutex::new(FxBuildHasher::new());
 /// The table of identifier uniqueness values to their string values.
 static IDENT_NAMES_TABLE: RwLock<HashTable<(u64, String)>> = RwLock::new(HashTable::new());
 
@@ -28,7 +30,7 @@ static IDENT_NAMES_TABLE: RwLock<HashTable<(u64, String)>> = RwLock::new(HashTab
 /// Lock for the global table to be able to bundle the creation of multiple identifiers.
 pub struct IdentFactory {
     /// A lock to the global hasher.
-    hasher: RwLockWriteGuard<'static, FxBuildHasher>,
+    hasher: MutexGuard<'static, FxBuildHasher>,
     /// A lock to the global table.
     table:  RwLockWriteGuard<'static, HashTable<(u64, String)>>,
 }
@@ -64,10 +66,8 @@ impl IdentFactory {
 
 /// Lock for the global table to be able to bundle the reading of multiple identifiers.
 pub struct IdentViewer {
-    /// A lock to the global hasher.
-    hasher: RwLockReadGuard<'static, FxBuildHasher>,
     /// A lock to the global table.
-    table:  RwLockReadGuard<'static, HashTable<(u64, String)>>,
+    table: RwLockReadGuard<'static, HashTable<(u64, String)>>,
 }
 
 // Identifier lock
@@ -103,7 +103,7 @@ impl IdentViewer {
 
 /***** LIBRARY *****/
 /// Defines compressed identifiers that are cheap to carry around and compare.
-#[derive(Clone, Copy, better_derive::Debug, better_derive::Eq, better_derive::Hash, better_derive::PartialEq)]
+#[derive(Clone, Copy, better_derive::Debug)]
 pub struct Ident<S> {
     /// Determines the "uniqueness" of the Ident. This is what we use to compare and hash.
     uniqueness: u64,
@@ -141,7 +141,7 @@ impl<S> Ident<S> {
     /// # Returns
     /// A new [`IdentFactory`] that can [`IdentFactory::create()`].
     #[inline]
-    pub fn factory() -> IdentFactory { IdentFactory { hasher: IDENT_NAMES_HASHER.write(), table: IDENT_NAMES_TABLE.write() } }
+    pub fn factory() -> IdentFactory { IdentFactory { hasher: IDENT_NAMES_HASHER.lock(), table: IDENT_NAMES_TABLE.write() } }
 
     /// Acquires the global lock once as a read lock, then returns an [`IdentViewer`] that can be
     /// used to get the [`Ident::value()`] of multiple identifiers efficiently (and as reference).
@@ -152,7 +152,41 @@ impl<S> Ident<S> {
     /// # Returns
     /// A new [`IdentViewer`] that can [`IdentViewer::value_of()`].
     #[inline]
-    pub fn viewer() -> IdentViewer { IdentViewer { hasher: IDENT_NAMES_HASHER.read(), table: IDENT_NAMES_TABLE.read() } }
+    pub fn viewer() -> IdentViewer { IdentViewer { table: IDENT_NAMES_TABLE.read() } }
+}
+
+// Ops
+impl<S> Display for Ident<S> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        let viewer = Self::viewer();
+        write!(f, "{}", viewer.value_of(self))
+    }
+}
+impl<S> Eq for Ident<S> {}
+impl<S> Hash for Ident<S> {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) { self.uniqueness.hash(state); }
+}
+impl<S> Ord for Ident<S> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Get a global lock and both names
+        let viewer = Self::viewer();
+        let lhs: &str = viewer.value_of(self);
+        let rhs: &str = viewer.value_of(other);
+
+        // Compare
+        lhs.cmp(rhs)
+    }
+}
+impl<S> PartialEq for Ident<S> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool { self.uniqueness == other.uniqueness }
+}
+impl<S> PartialOrd for Ident<S> {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
 // Accessors
@@ -168,6 +202,20 @@ impl<S> Ident<S> {
     /// instantly.
     #[inline]
     pub fn value(&self) -> String { Self::viewer().value_of(self).into() }
+
+    /// Returns the inner [`Span`] for read-only access.
+    ///
+    /// # Returns
+    /// A reference to the [`Span`] that relates this identifier to the source text, if any.
+    #[inline]
+    pub const fn span(&self) -> &Option<Span<S>> { &self.span }
+
+    /// Returns the inner [`Span`] mutably.
+    ///
+    /// # Returns
+    /// A mutable reference to the [`Span`] that relates this identifier to the source text, if any.
+    #[inline]
+    pub const fn span_mut(&mut self) -> &mut Option<Span<S>> { &mut self.span }
 }
 impl<S: Clone> Spanning<S> for Ident<S> {
     #[inline]

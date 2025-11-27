@@ -76,27 +76,30 @@ pub fn make_ir_rule<A>(
 /// Makes an [`ir::Atom`] conveniently.
 #[cfg(feature = "interpreter")]
 pub fn make_ir_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> ir::Atom<(&'static str, &'static str)> {
+    let mut factory = ir::Ident::<(&'static str, &'static str)>::factory();
+
     // Make the punctuation
     let mut vals: Vec<ir::Atom<(&'static str, &'static str)>> = Vec::new();
     for arg in args {
         // Either push as atom or as variable
         vals.push(if arg.chars().next().unwrap_or_else(|| panic!("Empty argument given")).is_uppercase() {
-            ir::Atom::Var(Ident { value: Span::new((GENERATED_SOURCE_ID, arg)) })
+            ir::Atom::Var(factory.create(arg.into(), None))
         } else {
-            ir::Atom::Fact(ir::Fact { ident: Ident { value: Span::new((GENERATED_SOURCE_ID, arg)) }, args: vec![] })
+            ir::Atom::Fact(ir::Fact { ident: factory.create(arg.into(), None), args: vec![] })
         })
     }
 
     // Make the atom
-    ir::Atom::Fact(ir::Fact { ident: Ident { value: Span::new((GENERATED_SOURCE_ID, name)) }, args: vals })
+    ir::Atom::Fact(ir::Fact { ident: factory.create(name.into(), None), args: vals })
 }
 
 /// Makes an [`ir::GroundAtom`] conveniently.
 #[cfg(feature = "interpreter")]
 pub fn make_ir_ground_atom(name: &'static str, args: impl IntoIterator<Item = &'static str>) -> ir::GroundAtom<(&'static str, &'static str)> {
+    let mut factory = ir::Ident::<(&'static str, &'static str)>::factory();
     ir::GroundAtom {
-        ident: Ident { value: Span::new((GENERATED_SOURCE_ID, name)) },
-        args:  args.into_iter().map(|a| ir::GroundAtom { ident: Ident { value: Span::new((GENERATED_SOURCE_ID, a)) }, args: vec![] }).collect(),
+        ident: factory.create(name.into(), None),
+        args:  args.into_iter().map(|a| ir::GroundAtom { ident: factory.create(a.into(), None), args: vec![] }).collect(),
     }
 }
 
@@ -150,9 +153,9 @@ pub fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str
     for (i, arg) in args.into_iter().enumerate() {
         // Either push as atom or as variable
         let arg: Atom<(&'static str, &'static str)> = if arg.chars().next().unwrap_or_else(|| panic!("Empty argument given")).is_uppercase() {
-            Atom::Var(Ident { value: Span::new((GENERATED_SOURCE_ID, arg)) })
+            Atom::Var(Ident::new(arg.into()))
         } else {
-            Atom::Fact(Fact { ident: Ident { value: Span::new((GENERATED_SOURCE_ID, arg)) }, args: None })
+            Atom::Fact(Fact { ident: Ident::new(arg.into()), args: None })
         };
 
         // Then push with the correct punctuation
@@ -166,7 +169,7 @@ pub fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str
 
     // Make the atom
     Atom::Fact(Fact {
-        ident: Ident { value: Span::new(("make_atom::name", name)) },
+        ident: Ident::new(name.into()),
         args:  if !punct.is_empty() {
             Some(FactArgs { paren_tokens: Parens { open: ParensOpen { span: None }, close: ParensClose { span: None } }, args: punct })
         } else {
@@ -180,7 +183,7 @@ pub fn make_atom(name: &'static str, args: impl IntoIterator<Item = &'static str
 /// Makes an [`Ident`] conveniently.
 pub fn make_ident(value: &'static str) -> Ident<(&'static str, &'static str)> {
     // Make the atom
-    Ident { value: Span::new((GENERATED_SOURCE_ID, value)) }
+    Ident::new(value.into())
 }
 
 // /// Makes a [`Curly`] conveniently.

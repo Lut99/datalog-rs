@@ -53,13 +53,13 @@ use crate::ast;
 ///     comb.parse(span1).unwrap(),
 ///     (span1.slice(11..), Rule {
 ///         consequents: punct![Atom::Fact(Fact {
-///             ident: Ident { value: span1.slice(..3) },
+///             ident: Ident { value: "foo".into(), span: Some(span1.slice(..3)) },
 ///             args:  None,
 ///         })],
 ///         tail: Some(RuleBody {
 ///             arrow_token: span1.slice(4..6).into(),
 ///             antecedents: punct![Literal::Atom(Atom::Fact(Fact {
-///                 ident: Ident { value: span1.slice(7..10) },
+///                 ident: Ident { value: "bar".into(), span: Some(span1.slice(7..10)) },
 ///                 args:  None,
 ///             }))],
 ///         }),
@@ -70,9 +70,15 @@ use crate::ast;
 ///     comb.parse(span2).unwrap(),
 ///     (span2.slice(9..), Rule {
 ///         consequents: punct![
-///             Atom::Fact(Fact { ident: Ident { value: span2.slice(..3) }, args: None }),
+///             Atom::Fact(Fact {
+///                 ident: Ident { value: "foo".into(), span: Some(span2.slice(..3)) },
+///                 args:  None,
+///             }),
 ///             Comma::from(span2.slice(3..4)),
-///             Atom::Fact(Fact { ident: Ident { value: span2.slice(5..8) }, args: None })
+///             Atom::Fact(Fact {
+///                 ident: Ident { value: "bar".into(), span: Some(span2.slice(5..8)) },
+///                 args:  None,
+///             })
 ///         ],
 ///         tail: None,
 ///         dot: span2.slice(8..9).into(),
@@ -82,14 +88,14 @@ use crate::ast;
 ///     comb.parse(span3).unwrap(),
 ///     (span3.slice(21..), Rule {
 ///         consequents: punct![Atom::Fact(Fact {
-///             ident: Ident { value: span3.slice(..3) },
+///             ident: Ident { value: "bar".into(), span: Some(span3.slice(..3)) },
 ///             args:  Some(FactArgs {
 ///                 paren_tokens: Parens {
 ///                     open:  span3.slice(3..4).into(),
 ///                     close: span3.slice(7..8).into(),
 ///                 },
 ///                 args: punct![Atom::Fact(Fact {
-///                     ident: Ident { value: span3.slice(4..7) },
+///                     ident: Ident { value: "foo".into(), span: Some(span3.slice(4..7)) },
 ///                     args:  None,
 ///                 })],
 ///             }),
@@ -97,13 +103,16 @@ use crate::ast;
 ///         tail: Some(RuleBody {
 ///             arrow_token: span3.slice(9..11).into(),
 ///             antecedents: punct![Literal::Atom(Atom::Fact(Fact {
-///                 ident: Ident { value: span3.slice(12..15) },
+///                 ident: Ident { value: "baz".into(), span: Some(span3.slice(12..15)) },
 ///                 args:  Some(FactArgs {
 ///                     paren_tokens: Parens {
 ///                         open:  span3.slice(15..16).into(),
 ///                         close: span3.slice(19..20).into(),
 ///                     },
-///                     args: punct![Atom::Var(Ident { value: span3.slice(16..19) })],
+///                     args: punct![Atom::Var(Ident {
+///                         value: "Qux".into(),
+///                         span:  Some(span3.slice(16..19)),
+///                     })],
 ///                 }),
 ///             }))],
 ///         }),
@@ -168,7 +177,7 @@ where
 ///     (span1.slice(6..), RuleBody {
 ///         arrow_token: span1.slice(..2).into(),
 ///         antecedents: punct![Literal::Atom(Atom::Fact(Fact {
-///             ident: Ident { value: span1.slice(3..6) },
+///             ident: Ident { value: "foo".into(), span: Some(span1.slice(3..6)) },
 ///             args:  None,
 ///         }))],
 ///     }),
@@ -181,7 +190,7 @@ where
 ///             Literal::NegAtom(NegAtom {
 ///                 not_token: span2.slice(3..6).into(),
 ///                 atom:      Atom::Fact(Fact {
-///                     ident: Ident { value: span2.slice(7..10) },
+///                     ident: Ident { value: "foo".into(), span: Some(span2.slice(7..10)) },
 ///                     args:  Some(FactArgs {
 ///                         paren_tokens: Parens {
 ///                             open:  span2.slice(10..11).into(),
@@ -193,14 +202,14 @@ where
 ///             }),
 ///             Comma::from(span2.slice(12..13)),
 ///             Literal::Atom(Atom::Fact(Fact {
-///                 ident: Ident { value: span2.slice(14..17) },
+///                 ident: Ident { value: "bar".into(), span: Some(span2.slice(14..17)) },
 ///                 args:  Some(FactArgs {
 ///                     paren_tokens: Parens {
 ///                         open:  span2.slice(17..18).into(),
 ///                         close: span2.slice(21..22).into(),
 ///                     },
 ///                     args: punct![Atom::Fact(Fact {
-///                         ident: Ident { value: span2.slice(18..21) },
+///                         ident: Ident { value: "baz".into(), span: Some(span2.slice(18..21)) },
 ///                         args:  None,
 ///                     })],
 ///                 }),
