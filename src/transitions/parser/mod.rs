@@ -22,16 +22,17 @@ pub mod transitions;
 pub mod triggers;
 
 // Imports
-use ast_toolkit::snack::span::{MatchBytes, OneOfBytes, OneOfUtf8, WhileUtf8};
-use ast_toolkit::snack::{Combinator as _, Result as SResult};
-use ast_toolkit::span::{Span, Spannable};
+use ast_toolkit::snack::Combinator as _;
+use ast_toolkit::snack::boxed::BoxedParseError;
+use ast_toolkit::snack::result::SnackError;
+use ast_toolkit::span::{Span, SpannableBytes};
 
 use super::ast::TransitionSpec;
 
 
 /***** ERRORS *****/
 /// The concrete error type returned by the [`parse()`] function.
-pub type Error<F, S> = ast_toolkit::snack::error::Error<'static, F, S, specs::ParseError<F, S>>;
+pub type Error<'s, S> = BoxedParseError<'s, S>;
 
 
 
@@ -52,15 +53,13 @@ pub type Error<F, S> = ast_toolkit::snack::error::Error<'static, F, S, specs::Pa
 /// # Errors
 /// This function returns an [`Error`] if the given `input` was not a valid $Datalog^\neg$-program.
 #[inline]
-pub fn parse<F, S>(what: F, source: S) -> Result<TransitionSpec<F, S>, Error<F, S>>
+pub fn parse<'s, S>(source: S) -> Result<TransitionSpec<S>, Error<'s, S>>
 where
-    F: Clone,
-    S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + Spannable + WhileUtf8,
+    S: 's + Clone + SpannableBytes<'s>,
 {
     // Simply parse as a literal
-    match specs::trans_spec().parse(Span::new(what, source)) {
-        SResult::Ok(_, res) => Ok(res),
-        SResult::Fail(fail) => Err(fail.try_into().unwrap()),
-        SResult::Error(err) => Err(err),
+    match specs::trans_spec().parse(Span::new(source)) {
+        Ok((_, res)) => Ok(res),
+        Err(SnackError::Recoverable(err) | SnackError::Fatal(err)) => Err(err),
     }
 }

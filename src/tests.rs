@@ -19,8 +19,8 @@ use crate::ast::{
 };
 #[cfg(feature = "ir")]
 use crate::ir;
-// #[cfg(feature = "transitions")]
-// use crate::transitions::ast::Curly;
+#[cfg(feature = "transitions")]
+use crate::transitions::ast::{Curly, CurlyClose, CurlyOpen};
 
 
 /***** CONSTANTS *****/
@@ -101,6 +101,12 @@ pub fn make_ir_ground_atom(name: &'static str, args: impl IntoIterator<Item = &'
         ident: factory.create(name.into(), None),
         args:  args.into_iter().map(|a| ir::GroundAtom { ident: factory.create(a.into(), None), args: vec![] }).collect(),
     }
+}
+
+/// Makes an [`ir::Ident`] conveniently.
+pub fn make_ir_ident(value: &'static str) -> ir::Ident<(&'static str, &'static str)> {
+    // Make the atom
+    ir::Ident::new(value.into(), None)
 }
 
 
@@ -186,9 +192,9 @@ pub fn make_ident(value: &'static str) -> Ident<(&'static str, &'static str)> {
     Ident::new(value.into())
 }
 
-// /// Makes a [`Curly`] conveniently.
-// #[cfg(feature = "transitions")]
-// pub fn make_curly() -> Curly<(&'static str, &'static str)> {
-//     // Make the atom
-//     Curly { open: Span::new(("make_curly::open", "{")).into(), close: Span::new(("make_curly::close", "}")).into() }
-// }
+/// Makes a [`Curly`] conveniently.
+#[cfg(feature = "transitions")]
+pub fn make_curly() -> Curly<(&'static str, &'static str)> {
+    // Make the atom
+    Curly { open: CurlyOpen { span: None }, close: CurlyClose { span: None } }
+}

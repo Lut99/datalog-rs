@@ -24,20 +24,20 @@ use crate::ir::{Atom, GroundAtom, Ident, Rule};
 /***** LIBRARY *****/
 /// The transition system equivalent of an
 /// [`Interpretation`](crate::interpreter::interpretation::Interpretation).
-#[derive(Clone, Debug)]
-pub struct State<F, S> {
+#[derive(Clone, better_derive::Debug)]
+pub struct State<S> {
     /// Currently defined transitions.
-    pub trans: HashMap<Ident<F, S>, Transition<F, S>>,
+    pub trans: HashMap<Ident<S>, Transition<S>>,
     /// Currently defined rules.
-    pub rules: IndexSet<Rule<Atom<F, S>>>,
+    pub rules: IndexSet<Rule<Atom<S>>>,
     /// Any facts that are currently postulated (somehow).
-    pub posts: IndexSet<GroundAtom<F, S>>,
+    pub posts: IndexSet<GroundAtom<S>>,
 }
-impl<F, S> Default for State<F, S> {
+impl<S> Default for State<S> {
     #[inline]
     fn default() -> Self { Self::new() }
 }
-impl<F, S> State<F, S> {
+impl<S> State<S> {
     /// Constructor for the State that initializes it to an empty one.
     ///
     /// # Returns

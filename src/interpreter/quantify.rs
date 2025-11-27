@@ -261,9 +261,9 @@ where
     /// Defines an iterator over the powerset of the given constants.
     iter: PowerSet<I>,
 }
-impl<'a, S, I> AtomQuantifier<'a, S, I>
+impl<'a, 's, S, I> AtomQuantifier<'a, S, I>
 where
-    S: Clone + Spannable<'a>,
+    S: Clone + Spannable<'s>,
     I: Clone + ExactSizeIterator + Iterator,
 {
     /// Constructor for the AtomQuantifier.
@@ -439,7 +439,7 @@ impl<'s, S: Clone + Spannable<'s>> Atom<S> {
     /// # Returns
     /// An [`AtomQuantifier`] that will produce concrete atoms without variables in them.
     #[inline]
-    pub fn concretize_for<I>(&'s self, domain: impl IntoIterator<IntoIter = I>) -> AtomQuantifier<'s, S, I>
+    pub fn concretize_for<I>(&self, domain: impl IntoIterator<IntoIter = I>) -> AtomQuantifier<'_, S, I>
     where
         I: Clone + ExactSizeIterator + Iterator,
     {

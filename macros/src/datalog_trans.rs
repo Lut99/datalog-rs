@@ -32,9 +32,9 @@ use crate::common::{Atom, CratePath, DatalogAttributes, FromStr, Literal, Rule, 
 /// # Returns
 /// A [`TokenStream2`] that represents the serialized curly brackets.
 fn serialize_not(not: &Token![!]) -> TokenStream2 {
-    let (crate_path, from_str): (CratePath, FromStr) = Default::default();
+    let (crate_path, _): (CratePath, FromStr) = Default::default();
     quote_spanned! { not.span => #crate_path::transitions::ast::Exclaim {
-        span: #crate_path::ast::Span::new(#from_str, "!"),
+        span: ::std::option::Option::None,
     } }
 }
 
@@ -46,10 +46,10 @@ fn serialize_not(not: &Token![!]) -> TokenStream2 {
 /// # Returns
 /// A [`TokenStream2`] that represents the serialized curly brackets.
 fn serialize_brace(brace: &Brace) -> TokenStream2 {
-    let (crate_path, from_str): (CratePath, FromStr) = Default::default();
+    let (crate_path, _): (CratePath, FromStr) = Default::default();
     quote_spanned! { brace.span.join() => #crate_path::transitions::ast::Curly {
-        open: #crate_path::ast::Span::new(#from_str, "{"),
-        close: #crate_path::ast::Span::new(#from_str, "}"),
+        open: #crate_path::transitions::ast::CurlyOpen { span: ::std::option::Option::None },
+        close: #crate_path::transitions::ast::CurlyClose { span: ::std::option::Option::None },
     } }
 }
 
@@ -144,7 +144,7 @@ impl Parse for Postulation {
 impl ToTokens for Postulation {
     #[inline]
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let (crate_path, from_str): (CratePath, FromStr) = Default::default();
+        let (crate_path, _): (CratePath, FromStr) = Default::default();
 
         // First, generate consequences
         let consequents_tokens: TokenStream2 = serialize_punctuated(self.consequents.iter());
@@ -158,7 +158,7 @@ impl ToTokens for Postulation {
             quote_spanned! {
                 colon.span =>
                 Some(#crate_path::ast::RuleBody {
-                    arrow_token: #crate_path::ast::Arrow { span: #crate_path::ast::Span::new(#from_str, ":-") },
+                    arrow_token: #crate_path::ast::Arrow { span: ::std::option::Option::None, },
                     antecedents: #antecedents_tokens,
                 })
             }
@@ -176,7 +176,7 @@ impl ToTokens for Postulation {
                 curly_tokens: #curly_tokens,
                 consequents: #consequents_tokens,
                 tail: #antecedents_tokens,
-                dot: #crate_path::ast::Dot { span: #crate_path::ast::Span::new(#from_str, ".") },
+                dot: #crate_path::ast::Dot { span: ::std::option::Option::None },
             }
         });
     }
@@ -217,7 +217,7 @@ impl Parse for Transition {
 impl ToTokens for Transition {
     #[inline]
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let (crate_path, from_str): (CratePath, FromStr) = Default::default();
+        let (crate_path, _): (CratePath, FromStr) = Default::default();
 
         // OK, write the final struct
         let ident: &TransIdent = &self.ident;
@@ -228,7 +228,7 @@ impl ToTokens for Transition {
                 ident: #ident,
                 curly_tokens: #curly_tokens,
                 postulations: ::std::vec![#(#posts),*],
-                dot: #crate_path::ast::Dot { span: #crate_path::ast::Span::new(#from_str, ".") },
+                dot: #crate_path::ast::Dot { span: ::std::option::Option::None },
             }
         })
     }
@@ -269,7 +269,7 @@ impl Parse for Trigger {
 impl ToTokens for Trigger {
     #[inline]
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let (crate_path, from_str): (CratePath, FromStr) = Default::default();
+        let (crate_path, _): (CratePath, FromStr) = Default::default();
 
         // OK, write the final struct
         let exclaim: TokenStream2 = serialize_not(&self.not);
@@ -280,7 +280,7 @@ impl ToTokens for Trigger {
                 exclaim_token: #exclaim,
                 curly_tokens: #curly_tokens,
                 idents: ::std::vec![#(#idents),*],
-                dot: #crate_path::ast::Dot { span: #crate_path::ast::Span::new(#from_str, ".") },
+                dot: #crate_path::ast::Dot { span: ::std::option::Option::None },
             }
         })
     }
@@ -305,15 +305,15 @@ impl Parse for PostulationOp {
 impl ToTokens for PostulationOp {
     #[inline]
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let (crate_path, from_str): (CratePath, FromStr) = Default::default();
+        let (crate_path, _): (CratePath, FromStr) = Default::default();
 
         // Write the appropriate postulation op
         match self {
             Self::Create(p) => tokens.extend(quote_spanned! { p.span() =>
-                #crate_path::transitions::ast::PostulationOp::Create(#crate_path::transitions::ast::Add { span: #crate_path::ast::Span::new(#from_str, "+") })
+                #crate_path::transitions::ast::PostulationOp::Create(#crate_path::transitions::ast::Add { span: ::std::option::Option::None })
             }),
             Self::Obfuscate(t) => tokens.extend(quote_spanned! { t.span() =>
-                #crate_path::transitions::ast::PostulationOp::Obfuscate(#crate_path::transitions::ast::Squiggly { span: #crate_path::ast::Span::new(#from_str, "~") })
+                #crate_path::transitions::ast::PostulationOp::Obfuscate(#crate_path::transitions::ast::Squiggly { span: ::std::option::Option::None })
             }),
         }
     }
@@ -337,14 +337,16 @@ impl Parse for TransIdent {
 impl ToTokens for TransIdent {
     #[inline]
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let (crate_path, from_str): (CratePath, FromStr) = Default::default();
+        let (crate_path, _): (CratePath, FromStr) = Default::default();
 
         // Craft a string literal with the appropriate value
         let span: Span = self.pound.span().join(self.ident.span()).unwrap_or_else(Span::call_site);
         let value: LitStr = LitStr::new(&format!("#{}", self.ident.to_string()), span);
 
         // We can write it in one go
-        tokens.extend(quote_spanned! { span => #crate_path::ast::Ident { value: #crate_path::ast::Span::new(#from_str, #value) } });
+        tokens.extend(
+            quote_spanned! { span => #crate_path::ast::Ident { value: ::std::string::String::from(#value), span: ::std::option::Option::None } },
+        );
     }
 }
 

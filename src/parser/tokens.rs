@@ -29,7 +29,11 @@ use crate::ast::{Arrow, Comma, Dot, Not, Parens, ParensClose, ParensOpen};
 /***** HELPER MACROS *****/
 /// Implements a token parser using [`Punct`]- or [`Keyword`]-combinators.
 macro_rules! token_impl {
-    ($comb:ident(keyword): $tag:literal => $token:ident) => {
+    ($comb:ident($kind:ident): $tag:literal => $token:ident) => {
+        token_impl!($comb($kind): $tag => {datalog} $token);
+    };
+
+    ($comb:ident(keyword): $tag:literal => {$prefix:path} $token:ident) => {
         #[doc = concat!("Combinator for parsing a `", $tag, "`.")]
         #[doc = ""]
         #[doc = "# Returns"]
@@ -44,8 +48,8 @@ macro_rules! token_impl {
         #[doc = "use ast_toolkit::snack::result::{Expected, Result as SResult, SnackError};"]
         #[doc = "use ast_toolkit::snack::scan::tag;"]
         #[doc = "use ast_toolkit::span::Span;"]
-        #[doc = concat!("use datalog::ast::", stringify!($token), ";")]
-        #[doc = concat!("use datalog::parser::tokens::{self, ", stringify!($comb), "};")]
+        #[doc = concat!("use ", stringify!($prefix), "::ast::", stringify!($token), ";")]
+        #[doc = concat!("use ", stringify!($prefix), "::parser::tokens::", stringify!($comb), ";")]
         #[doc = ""]
         #[doc = concat!("let span1 = Span::new((\"<example>\", \"", $tag, "\"));")]
         #[doc = concat!("let span2 = Span::new((\"<example>\", \"", $tag, " foo\"));")]
@@ -56,7 +60,7 @@ macro_rules! token_impl {
             #[doc = concat!("assert_eq!(comb.parse(span2), Ok((span2.slice(", stringify!($tag), ".len() + 1..), ", stringify!($token), "{ span: Some(span2.slice(..", stringify!($tag), ".len() + 1)) })));")]
         #[doc = "assert_eq!("]
         #[doc = "    comb.parse(span3),"]
-        #[doc = "    Err(SnackError::Recoverable(tokens::Recoverable::Token(tag::Recoverable {"]
+        #[doc = "    Err(SnackError::Recoverable(datalog::parser::tokens::Recoverable::Token(tag::Recoverable {"]
         #[doc = concat!("        tag: b", stringify!($tag), ",")]
         #[doc = "        is_fixable: false,"]
         #[doc = "        span: span3,"]
@@ -64,19 +68,19 @@ macro_rules! token_impl {
         #[doc = ");"]
         #[doc = "assert_eq!("]
         #[doc = "    comb.parse(span4),"]
-        #[doc = concat!("    Err(SnackError::Recoverable(tokens::Recoverable::Ident { span: span4.slice(", stringify!($tag), ".len()..) }))")]
+        #[doc = concat!("    Err(SnackError::Recoverable(datalog::parser::tokens::Recoverable::Ident { span: span4.slice(", stringify!($tag), ".len()..) }))")]
         #[doc = ");"]
         #[doc = "```"]
         #[inline]
-        pub const fn $comb<'s, S>() -> Keyword<$token<S>, S>
+        pub const fn $comb<'s, S>() -> crate::parser::tokens::Keyword<$token<S>, S>
         where
-            S: Clone + SpannableBytes<'s>,
+            S: Clone + ast_toolkit::span::SpannableBytes<'s>,
         {
-            Keyword { _t: PhantomData, _s: PhantomData }
+            crate::parser::tokens::Keyword { _t: std::marker::PhantomData, _s: std::marker::PhantomData }
         }
     };
 
-    ($comb:ident(punct): $tag:literal => $token:ident) => {
+    ($comb:ident(punct): $tag:literal => {$prefix:path} $token:ident) => {
         #[doc = concat!("Combinator for parsing a `", $tag, "`.")]
         #[doc = ""]
         #[doc = "# Returns"]
@@ -91,8 +95,8 @@ macro_rules! token_impl {
         #[doc = "use ast_toolkit::snack::result::{Expected, Result as SResult, SnackError};"]
         #[doc = "use ast_toolkit::snack::scan::tag;"]
         #[doc = "use ast_toolkit::span::Span;"]
-        #[doc = concat!("use datalog::ast::", stringify!($token), ";")]
-        #[doc = concat!("use datalog::parser::tokens::{self, ", stringify!($comb), "};")]
+        #[doc = concat!("use ", stringify!($prefix), "::ast::", stringify!($token), ";")]
+        #[doc = concat!("use ", stringify!($prefix), "::parser::tokens::", stringify!($comb), ";")]
         #[doc = ""]
         #[doc = concat!("let span1 = Span::new((\"<example>\", \"", $tag, "\"));")]
         #[doc = concat!("let span2 = Span::new((\"<example>\", \"", $tag, " foo\"));")]
@@ -102,7 +106,7 @@ macro_rules! token_impl {
         #[doc = concat!("assert_eq!(comb.parse(span2), Ok((span2.slice(", stringify!($tag), ".len() + 1..), ", stringify!($token), " { span: Some(span2.slice(..", stringify!($tag), ".len() + 1)) })));")]
         #[doc = "assert_eq!("]
         #[doc = "    comb.parse(span3),"]
-        #[doc = "    Err(SnackError::Recoverable(tokens::Recoverable::Token(tag::Recoverable {"]
+        #[doc = "    Err(SnackError::Recoverable(datalog::parser::tokens::Recoverable::Token(tag::Recoverable {"]
         #[doc = concat!("        tag: b", stringify!($tag), ",")]
         #[doc = "        is_fixable: false,"]
         #[doc = "        span: span3,"]
@@ -110,11 +114,11 @@ macro_rules! token_impl {
         #[doc = ");"]
         #[doc = "```"]
         #[inline]
-        pub const fn $comb<'s, S>() -> Punct<$token<S>, S>
+        pub const fn $comb<'s, S>() -> crate::parser::tokens::Punct<$token<S>, S>
         where
-            S: Clone + SpannableBytes<'s>,
+            S: Clone + ast_toolkit::span::SpannableBytes<'s>,
         {
-            Punct { _t: PhantomData, _s: PhantomData }
+            crate::parser::tokens::Punct { _t: std::marker::PhantomData, _s: std::marker::PhantomData }
         }
     };
 }
@@ -124,12 +128,15 @@ pub(crate) use token_impl;
 
 /// Implements a delimiting token parser using the [`Delim`]-combinator.
 macro_rules! delim_impl {
-    (__conv_kind($comb:ident, $kind:ident, punct)) => { Punct<<$comb::<S> as Utf8Delimiter<S>>::$kind, S> };
-    (__conv_kind($comb:ident, $kind:ident, keyword)) => { Keyword<<$comb::<S> as Utf8Delimiter<S>>::$kind, S> };
+    (__conv_kind($comb:ident, $kind:ident, punct)) => { crate::parser::tokens::Punct<<$comb::<S> as ast_toolkit::tokens::Utf8Delimiter<S>>::$kind, S> };
+    (__conv_kind($comb:ident, $kind:ident, keyword)) => { crate::parser::tokens::Keyword<<$comb::<S> as ast_toolkit::tokens::Utf8Delimiter<S>>::$kind, S> };
 
     ($comb:ident($lcomb:ident($lkind:ident) : $ltoken:ident, $rcomb:ident($rkind:ident) : $rtoken:ident): $ltag:literal, $rtag:literal => $delim:ident) => {
-        token_impl!($lcomb($lkind): $ltag => $ltoken);
-        token_impl!($rcomb($rkind): $rtag => $rtoken);
+        delim_impl!($comb($lcomb($lkind): $ltoken, $rcomb($rkind): $rtoken): $ltag, $rtag => { datalog } $delim);
+    };
+    ($comb:ident($lcomb:ident($lkind:ident) : $ltoken:ident, $rcomb:ident($rkind:ident) : $rtoken:ident): $ltag:literal, $rtag:literal => {$prefix:path} $delim:ident) => {
+        token_impl!($lcomb($lkind): $ltag => {$prefix} $ltoken);
+        token_impl!($rcomb($rkind): $rtag => {$prefix} $rtoken);
 
         #[doc = concat!("Combinator for parsing a `", $ltag, $rtag, "`-delimited piece of input.")]
         #[doc = "# Arguments"]
@@ -147,8 +154,8 @@ macro_rules! delim_impl {
         #[doc = "use ast_toolkit::snack::result::{Expected, Result as SResult, SnackError};"]
         #[doc = "use ast_toolkit::snack::scan::tag;"]
         #[doc = "use ast_toolkit::span::Span;"]
-        #[doc = concat!("use datalog::ast::{", stringify!($delim), ", ", stringify!($ltoken), ", ", stringify!($rtoken), "};")]
-        #[doc = concat!("use datalog::parser::tokens::{self, ", stringify!($comb), "};")]
+        #[doc = concat!("use ", stringify!($prefix), "::ast::{", stringify!($delim), ", ", stringify!($ltoken), ", ", stringify!($rtoken), "};")]
+        #[doc = concat!("use ", stringify!($prefix), "::parser::tokens::", stringify!($comb), ";")]
         #[doc = ""]
         #[doc = concat!("let span1 = Span::new((\"<example>\", \"", $ltag, "howdy", $rtag, "\"));")]
         #[doc = concat!("let span2 = Span::new((\"<example>\", \"", $ltag, "   howdy", $rtag, "  foo\"));")]
@@ -161,9 +168,9 @@ macro_rules! delim_impl {
         #[doc = "    Ok(("]
         #[doc = concat!("        span1.slice(\"", $ltag, "\".len() + 5 + \"", $rtag, "\".len()..),")]
         #[doc = "        ("]
-        #[doc = "            Parens {"]
-        #[doc = concat!("                open:  ParensOpen { span: Some(span1.slice(..\"", $ltag, "\".len())) },")]
-        #[doc = concat!("                close: ParensClose { span: Some(span1.slice(\"", $ltag, "\".len() + 5..\"", $ltag, "\".len() + 5 + \"", $rtag, "\".len())) },")]
+        #[doc = concat!("            ", stringify!($delim), " {")]
+        #[doc = concat!("                open:  ", stringify!($ltoken), " { span: Some(span1.slice(..\"", $ltag, "\".len())) },")]
+        #[doc = concat!("                close: ", stringify!($rtoken), " { span: Some(span1.slice(\"", $ltag, "\".len() + 5..\"", $ltag, "\".len() + 5 + \"", $rtag, "\".len())) },")]
         #[doc = "            },"]
         #[doc = concat!("            span1.slice(\"", $ltag, "\".len()..\"", $ltag, "\".len() + 5)")]
         #[doc = "        )"]
@@ -174,9 +181,9 @@ macro_rules! delim_impl {
         #[doc = "    Ok(("]
         #[doc = concat!("        span2.slice(\"", $ltag, "\".len() + 8 + \"", $rtag, "\".len() + 2..),")]
         #[doc = "        ("]
-        #[doc = "            Parens {"]
-        #[doc = concat!("                open:  ParensOpen { span: Some(span2.slice(..\"", $ltag, "\".len())) },")]
-        #[doc = concat!("                close: ParensClose { span: Some(span2.slice(\"", $ltag, "\".len() + 8..\"", $ltag, "\".len() + 8 + \"", $rtag, "\".len())) },")]
+        #[doc = concat!("            ", stringify!($delim), " {")]
+        #[doc = concat!("                open:  ", stringify!($ltoken), " { span: Some(span2.slice(..\"", $ltag, "\".len())) },")]
+        #[doc = concat!("                close: ", stringify!($rtoken), " { span: Some(span2.slice(\"", $ltag, "\".len() + 8..\"", $ltag, "\".len() + 8 + \"", $rtag, "\".len())) },")]
         #[doc = "            },"]
         #[doc = concat!("            span2.slice(\"", $ltag, "\".len() + 3..\"", $ltag, "\".len() + 8)")]
         #[doc = "        )"]
@@ -184,7 +191,7 @@ macro_rules! delim_impl {
         #[doc = ");"]
         #[doc = "assert_eq!("]
         #[doc = "    comb.parse(span3),"]
-        #[doc = "    Err(SnackError::Recoverable(tokens::DelimRecoverable::Open(tokens::Recoverable::Token(tag::Recoverable {"]
+        #[doc = "    Err(SnackError::Recoverable(datalog::parser::tokens::DelimRecoverable::Open(datalog::parser::tokens::Recoverable::Token(tag::Recoverable {"]
         #[doc = concat!("        tag: b", stringify!($ltag), ",")]
         #[doc = "        is_fixable: false,"]
         #[doc = "        span: span3,"]
@@ -192,7 +199,7 @@ macro_rules! delim_impl {
         #[doc = ");"]
         #[doc = "assert_eq!("]
         #[doc = "    comb.parse(span4),"]
-        #[doc = "    Err(SnackError::Recoverable(tokens::DelimRecoverable::Comb(tag::Recoverable {"]
+        #[doc = "    Err(SnackError::Recoverable(datalog::parser::tokens::DelimRecoverable::Comb(tag::Recoverable {"]
         #[doc = "        tag: b\"howdy\","]
         #[doc = "        is_fixable: false,"]
         #[doc = concat!("        span: span4.slice(\"", $ltag, "\".len()..),")]
@@ -200,7 +207,7 @@ macro_rules! delim_impl {
         #[doc = ");"]
         #[doc = "assert_eq!("]
         #[doc = "    comb.parse(span5),"]
-        #[doc = "    Err(SnackError::Fatal(tokens::DelimFatal::Close(tokens::Recoverable::Token(tag::Recoverable {"]
+        #[doc = "    Err(SnackError::Fatal(datalog::parser::tokens::DelimFatal::Close(datalog::parser::tokens::Recoverable::Token(tag::Recoverable {"]
         #[doc = concat!("        tag: b\"", $rtag, "\",")]
         #[doc = "        is_fixable: true,"]
         #[doc = concat!("        span: span5.slice(\"", $ltag, "\".len() + 5..),")]
@@ -208,14 +215,15 @@ macro_rules! delim_impl {
         #[doc = ");"]
         #[doc = "```"]
         #[inline]
-        pub const fn $comb<'s, C, S>(comb: C) -> Delim<delim_impl!(__conv_kind($delim, OpenToken, $lkind)), C, delim_impl!(__conv_kind($delim, CloseToken, $rkind)), $delim<S>, S>
+        pub const fn $comb<'s, C, S>(comb: C) -> crate::parser::tokens::Delim<delim_impl!(__conv_kind($delim, OpenToken, $lkind)), C, delim_impl!(__conv_kind($delim, CloseToken, $rkind)), $delim<S>, S>
         where
-            S: Clone + SpannableBytes<'s>,
+            S: Clone + ast_toolkit::span::SpannableBytes<'s>,
         {
-            Delim { open: $lcomb(), comb, close: $rcomb(), _t: PhantomData, _s: PhantomData }
+            crate::parser::tokens::Delim { open: $lcomb(), comb, close: $rcomb(), _t: std::marker::PhantomData, _s: std::marker::PhantomData }
         }
     };
 }
+pub(crate) use delim_impl;
 
 
 
@@ -492,8 +500,8 @@ impl<F: fmt::ExpectsFormatter> fmt::ExpectsFormatter for DelimExpectsFormatter<F
 /***** COMBINATORS *****/
 /// Parses tokens that need to be disambiguated from identifiers.
 pub struct Keyword<T, S> {
-    _t: PhantomData<T>,
-    _s: PhantomData<S>,
+    pub(crate) _t: PhantomData<T>,
+    pub(crate) _s: PhantomData<S>,
 }
 impl<'s, T: Utf8Token<S>, S: Clone + SpannableBytes<'s>> Combinator<'static, 's, S> for Keyword<T, S> {
     type Output = T;
@@ -529,8 +537,8 @@ impl<'s, T: Utf8Token<S>, S: Clone + SpannableBytes<'s>> Combinator<'static, 's,
 
 /// Parses tokens that needn't have their ends checked.
 pub struct Punct<T, S> {
-    _t: PhantomData<T>,
-    _s: PhantomData<S>,
+    pub(crate) _t: PhantomData<T>,
+    pub(crate) _s: PhantomData<S>,
 }
 impl<'s, T: Utf8Token<S>, S: Clone + SpannableBytes<'s>> Combinator<'static, 's, S> for Punct<T, S> {
     type Output = T;
@@ -559,11 +567,11 @@ impl<'s, T: Utf8Token<S>, S: Clone + SpannableBytes<'s>> Combinator<'static, 's,
 
 /// Parses delimiting tokens.
 pub struct Delim<D1, C, D2, T, S> {
-    open:  D1,
-    comb:  C,
-    close: D2,
-    _t:    PhantomData<T>,
-    _s:    PhantomData<S>,
+    pub(crate) open:  D1,
+    pub(crate) comb:  C,
+    pub(crate) close: D2,
+    pub(crate) _t:    PhantomData<T>,
+    pub(crate) _s:    PhantomData<S>,
 }
 impl<'c, 's, D1, C, D2, T, S> Combinator<'c, 's, S> for Delim<D1, C, D2, T, S>
 where
@@ -624,65 +632,3 @@ token_impl!(dot(punct): "." => Dot);
 token_impl!(not(keyword): "not" => Not);
 
 delim_impl!(parens(parens_open(punct): ParensOpen, parens_close(punct): ParensClose): "(", ")" => Parens);
-// /// Combinator for parsing parenthesis with something else in between.
-// ///
-// /// # Arguments
-// /// - `comb`: Some other combinator that is found in between the parenthesis.
-// ///
-// /// # Returns
-// /// A combinator that parses the parenthesis with the given `comb` in between them. Returns it as a
-// /// tuple of the [`Parens`] and the result of `comb`.
-// ///
-// /// # Fails
-// /// The returned combinator fails if the input is not parenthesis, or `comb` fails.
-// ///
-// /// # Example
-// /// ```rust
-// /// use ast_toolkit::snack::Combinator as _;
-// /// use ast_toolkit::snack::result::{Expected, Result as SResult, SnackError};
-// /// use ast_toolkit::snack::scan::tag;
-// /// use ast_toolkit::span::Span;
-// /// use datalog::ast::{Parens, ParensClose, ParensOpen};
-// /// use datalog::parser::tokens::{self, parens};
-// ///
-// /// let span1 = Span::new(("<example>", "(howdy)"));
-// /// let span2 = Span::new(("<example>", "(   howdy)  foo"));
-// /// let span3 = Span::new(("<example>", "foo"));
-// /// let span4 = Span::new(("<example>", "(foo)"));
-// /// let span5 = Span::new(("<example>", "(foo"));
-// ///
-// /// let mut comb = parens(tag(b"howdy"));
-// /// assert_eq!(
-// ///     comb.parse(span1),
-// ///     Ok((
-// ///         span1.slice(7..),
-// ///         (
-// ///             Parens {
-// ///                 open:  ParensOpen { span: Some(span1.slice(..1)) },
-// ///                 close: ParensClose { span: Some(span1.slice(6..7)) },
-// ///             },
-// ///             span.slice(1..6)
-// ///         )
-// ///     ))
-// /// );
-// /// // assert_eq!(comb.parse(span2), Ok((span2.slice(4..), Not { span: Some(span2.slice(..4)) })));
-// /// // assert_eq!(
-// /// //     comb.parse(span3),
-// /// //     Err(SnackError::Recoverable(tokens::Recoverable::Token(tag::Recoverable {
-// /// //         tag: b"not",
-// /// //         is_fixable: false,
-// /// //         span: span3,
-// /// //     })))
-// /// // );
-// /// // assert_eq!(
-// /// //     comb.parse(span4),
-// /// //     Err(SnackError::Recoverable(tokens::Recoverable::Ident { span: span4.slice(3..) }))
-// /// // );
-// /// ```
-// #[inline]
-// pub const fn parens<'t, 's, C, S>(comb: C) -> Parens<C, S>
-// where
-//     C: Combinator<'t, 's, S>,
-//     S: Clone + SpannableBytes<'s>,
-// {
-// }

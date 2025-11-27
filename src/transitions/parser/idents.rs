@@ -12,54 +12,11 @@
 //!   Parses the transition identifier.
 //
 
-use std::fmt::{Debug, Display, Formatter, Result as FResult};
-
-use ast_toolkit::snack::error::{Common, Failure};
-use ast_toolkit::snack::span::WhileUtf8;
-use ast_toolkit::snack::utf8::complete as utf8;
-use ast_toolkit::snack::{Result as SResult, comb};
-use ast_toolkit::span::{Span, Spanning};
+use ast_toolkit::snack::boxed::{BoxableCombinator as _, BoxedCombinator};
+use ast_toolkit::snack::{combinator as comb, scan, sequence as seq};
+use ast_toolkit::span::SpannableBytes;
 
 use crate::ast;
-
-
-/***** ERRORS *****/
-/// Error returned when parsing atoms and related.
-pub struct ParseError<F, S> {
-    pub span: Span<F, S>,
-}
-impl<F, S> Debug for ParseError<F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        let mut fmt = f.debug_struct("ParseError");
-        fmt.field("span", &self.span);
-        fmt.finish()
-    }
-}
-impl<F, S> Display for ParseError<F, S> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult { write!(f, "{}", TransIdentExpectsFormatter) }
-}
-impl<F, S> std::error::Error for ParseError<F, S> {}
-impl<F, S> Spanning<F, S> for ParseError<F, S>
-where
-    F: Clone,
-    S: Clone,
-{
-    #[inline]
-    fn span(&self) -> Span<F, S> { self.span.clone() }
-
-    #[inline]
-    fn into_span(self) -> Span<F, S>
-    where
-        Self: Sized,
-    {
-        self.span
-    }
-}
-
-
-
 
 
 /***** LIBRARY *****/
@@ -76,55 +33,41 @@ where
 ///
 /// # Example
 /// ```rust
-/// use ast_toolkit::snack::error::{Common, Failure};
-/// use ast_toolkit::snack::{Combinator as _, Result as SResult};
+/// use ast_toolkit::snack::Combinator as _;
+/// use ast_toolkit::snack::result::SnackError;
 /// use ast_toolkit::span::Span;
 /// use datalog::ast::Ident;
-/// use datalog::transitions::parser::idents::{ParseError, trans_ident};
+/// use datalog::transitions::parser::idents::trans_ident;
 ///
-/// let span1 = Span::new("<example>", "#foo");
-/// let span2 = Span::new("<example>", "bar");
-/// let span3 = Span::new("<example>", "Bar");
-/// let span4 = Span::new("<example>", "()");
+/// let span1 = Span::new(("<example>", "#foo"));
+/// let span2 = Span::new(("<example>", "bar"));
+/// let span3 = Span::new(("<example>", "Bar"));
+/// let span4 = Span::new(("<example>", "()"));
 ///
 /// let mut comb = trans_ident();
-/// assert_eq!(comb.parse(span1).unwrap(), (span1.slice(4..), Ident { value: span1.slice(..4) }));
-/// assert!(matches!(
-///     comb.parse(span2),
-///     SResult::Fail(Failure::Common(Common::Custom(ParseError { .. })))
-/// ));
-/// assert!(matches!(
-///     comb.parse(span3),
-///     SResult::Fail(Failure::Common(Common::Custom(ParseError { .. })))
-/// ));
-/// assert!(matches!(
-///     comb.parse(span4),
-///     SResult::Fail(Failure::Common(Common::Custom(ParseError { .. })))
-/// ));
+/// assert_eq!(
+///     comb.parse(span1).unwrap(),
+///     (span1.slice(4..), Ident { value: "#foo".into(), span: Some(span1.slice(..4)) })
+/// );
+/// assert!(matches!(comb.parse(span2), Err(SnackError::Recoverable(_))));
+/// assert!(matches!(comb.parse(span3), Err(SnackError::Recoverable(_))));
+/// assert!(matches!(comb.parse(span4), Err(SnackError::Recoverable(_))));
 /// ```
-#[comb(snack = ::ast_toolkit::snack, expected = "a lowercase, alphanumerical identifier preceded by a pound", Output = ast::Ident<F, S>, Error = ParseError<F, S>)]
-pub fn trans_ident<F, S>(input: Span<F, S>) -> _
+pub fn trans_ident<'s, S>() -> BoxedCombinator<'s, 's, 's, 's, 'static, 's, ast::Ident<S>, S>
 where
-    F: Clone,
-    S: Clone + WhileUtf8,
+    S: 's + Clone + SpannableBytes<'s>,
 {
-    let mut first: bool = true;
-    match utf8::while1(|c: &str| -> bool {
-        if c.len() != 1 {
-            return false;
-        }
-        let c: char = c.chars().next().unwrap();
-        if first {
-            first = false;
-            c == '#'
-        } else {
-            (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_'
-        }
-    })
-    .parse(input)
-    {
-        SResult::Ok(rem, value) => SResult::Ok(rem, ast::Ident { value }),
-        SResult::Fail(fail) => SResult::Fail(Failure::Common(Common::Custom(ParseError { span: fail.into_span() }))),
-        SResult::Error(_) => unreachable!(),
-    }
+    comb::map(
+        comb::recognize(seq::pair(
+            scan::elem("a pound", |&b| b == b'#'),
+            scan::while0("zero or more lowercase alphanumeric characters, dashes or underscores", |&b| {
+                (b >= b'a' && b <= b'z') || (b >= b'0' && b <= b'9') || b == b'-' || b == b'_'
+            }),
+        )),
+        |span| ast::Ident {
+            value: String::from_utf8(span.as_bytes().into()).unwrap_or_else(|err| panic!("Parsed identifier should only be valid UTF-8: {err}")),
+            span:  Some(span),
+        },
+    )
+    .boxed()
 }

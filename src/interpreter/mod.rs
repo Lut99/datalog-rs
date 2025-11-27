@@ -52,11 +52,11 @@ use crate::log::{debug, trace};
 /// - `rules`: A set of rules that are in the spec.
 /// - `kb`: Some [`KnowledgeBase`] to derive in. Specifically, will move atoms from unknown to
 ///   known if they can be derived.
-pub fn immediate_consequence<'s, I, S>(rules: I, kb: &mut KnowledgeBase<S>)
+pub fn immediate_consequence<'i, 's, I, S>(rules: I, kb: &mut KnowledgeBase<S>)
 where
-    I: IntoIterator<Item = &'s Rule<Atom<S>>>,
+    I: IntoIterator<Item = &'i Rule<Atom<S>>>,
     I::IntoIter: Clone,
-    S: 's + Clone + SpannableBytes<'s>,
+    S: 'i + Clone + SpannableBytes<'s>,
 {
     let rules = rules.into_iter();
 
@@ -113,11 +113,11 @@ where
 ///
 /// # Returns
 /// A new [`KnowledgeBase`] that contains the things we derived about the facts in the [`Spec`].
-pub fn alternating_fixpoint<'s, I, S>(rules: I) -> KnowledgeBase<S>
+pub fn alternating_fixpoint<'i, 's, I, S>(rules: I) -> KnowledgeBase<S>
 where
-    I: IntoIterator<Item = &'s Rule<Atom<S>>>,
+    I: IntoIterator<Item = &'i Rule<Atom<S>>>,
     I::IntoIter: Clone,
-    S: 's + Clone + SpannableBytes<'s>,
+    S: 'i + Clone + SpannableBytes<'s>,
 {
     let mut int: KnowledgeBase<S> = KnowledgeBase::new();
     alternating_fixpoint_mut(rules, &mut int);
@@ -139,11 +139,11 @@ where
 /// - `kb`: Some existing [`KnowledgeBase`] to populate. Note that it will _not_ be cleared
 ///   for you; call [`KnowledgeBase::clear()`] first if you're only interested in re-using the
 ///   memory, not the facts.
-pub fn alternating_fixpoint_mut<'s, I, S>(rules: I, kb: &mut KnowledgeBase<S>)
+pub fn alternating_fixpoint_mut<'i, 's, I, S>(rules: I, kb: &mut KnowledgeBase<S>)
 where
-    I: IntoIterator<Item = &'s Rule<Atom<S>>>,
+    I: IntoIterator<Item = &'i Rule<Atom<S>>>,
     I::IntoIter: Clone,
-    S: 's + Clone + SpannableBytes<'s>,
+    S: 'i + Clone + SpannableBytes<'s>,
 {
     let rules = rules.into_iter();
     debug!(
@@ -225,7 +225,7 @@ where
     /// # Returns
     /// A new [`KnowledgeBase`] that contains the things we derived about the facts in the [`Spec`].
     #[inline]
-    pub fn alternating_fixpoint(&'s self) -> KnowledgeBase<S> { alternating_fixpoint(&self.rules) }
+    pub fn alternating_fixpoint(&self) -> KnowledgeBase<S> { alternating_fixpoint(&self.rules) }
 
     /// Performs a proper derivation using the full well-founded semantics.
     ///
@@ -242,7 +242,7 @@ where
     ///   for you; call [`KnowledgeBase::clear()`] first if you're only interested in re-using the
     ///   memory, not the facts.
     #[inline]
-    pub fn alternating_fixpoint_mut(&'s self, kb: &mut KnowledgeBase<S>) { alternating_fixpoint_mut(&self.rules, kb) }
+    pub fn alternating_fixpoint_mut(&self, kb: &mut KnowledgeBase<S>) { alternating_fixpoint_mut(&self.rules, kb) }
 }
 
 
