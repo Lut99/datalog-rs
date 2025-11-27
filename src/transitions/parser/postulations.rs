@@ -24,7 +24,7 @@ use super::super::ast;
 use super::tokens;
 use crate::parser::atoms::{self, AtomExpectsFormatter};
 use crate::parser::rules::{self, RuleBodyExpectsFormatter};
-use crate::parser::whitespaces;
+use crate::parser::whitespace0;
 
 
 /***** ERRORS *****/
@@ -237,14 +237,14 @@ where
 {
     comb::map(
         seq::pair(
-            seq::terminated(postulation_op(), error::transmute(whitespaces::whitespace())),
+            seq::terminated(postulation_op(), error::transmute(whitespace0::whitespace())),
             error::cut(seq::tuple((
                 comb::map_err(
                     tokens::curly(multi::punctuated0(
                         seq::delimited(
-                            error::transmute(whitespaces::whitespace()),
+                            error::transmute(whitespace0::whitespace()),
                             comb::map_err(atoms::atom(), |err| ParseError::Atom { span: err.span() }),
-                            error::transmute(whitespaces::whitespace()),
+                            error::transmute(whitespace0::whitespace()),
                             // error::transmute(comb::not(utf8::complete::while1(|c| {
                             //     if c.len() != 1 {
                             //         return false;
@@ -262,9 +262,9 @@ where
                         _ => unreachable!(),
                     },
                 ),
-                error::transmute(whitespaces::whitespace()),
+                error::transmute(whitespace0::whitespace()),
                 comb::map_err(comb::opt(rules::rule_body()), |err| ParseError::RuleBody { span: err.into_span() }),
-                error::transmute(whitespaces::whitespace()),
+                error::transmute(whitespace0::whitespace()),
                 comb::map_err(crate::parser::tokens::dot(), |err| ParseError::Dot { span: err.into_span() }),
             ))),
         ),

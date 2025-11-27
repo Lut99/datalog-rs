@@ -67,7 +67,7 @@ impl<A: Visitable> Visitable for Rule<A> {
     }
 }
 
-impl<F, S> Visitable for Atom<F, S> {
+impl<S> Visitable for Atom<S> {
     #[inline]
     fn visit<'ir>(&'ir self, visitor: &mut (impl ?Sized + Visitor<'ir>)) {
         match self {
@@ -76,7 +76,7 @@ impl<F, S> Visitable for Atom<F, S> {
         }
     }
 }
-impl<F, S> Visitable for Fact<F, S> {
+impl<S> Visitable for Fact<S> {
     #[inline]
     fn visit<'ir>(&'ir self, visitor: &mut (impl ?Sized + Visitor<'ir>)) {
         let Self { ident, args } = self;
@@ -88,7 +88,7 @@ impl<F, S> Visitable for Fact<F, S> {
     }
 }
 
-impl<F, S> Visitable for GroundAtom<F, S> {
+impl<S> Visitable for GroundAtom<S> {
     #[inline]
     fn visit<'ir>(&'ir self, visitor: &mut (impl ?Sized + Visitor<'ir>)) {
         let Self { ident, args } = self;
@@ -100,7 +100,7 @@ impl<F, S> Visitable for GroundAtom<F, S> {
     }
 }
 
-impl<F, S> Visitable for Ident<F, S> {
+impl<S> Visitable for Ident<S> {
     #[inline]
     fn visit<'ir>(&'ir self, visitor: &mut (impl ?Sized + Visitor<'ir>)) {
         let Self { value } = self;
@@ -108,7 +108,7 @@ impl<F, S> Visitable for Ident<F, S> {
         visitor.visit_span(value)
     }
 }
-impl<F, S> Visitable for Span<F, S> {
+impl<S> Visitable for Span<S> {
     #[inline]
     fn visit<'ir>(&'ir self, _visitor: &mut (impl ?Sized + Visitor<'ir>)) {
         /* Nothing */
@@ -164,7 +164,7 @@ pub trait Visitor<'ir> {
     /// # Arguments
     /// - `atom`: The [`Atom`] that is being visited.
     #[inline]
-    fn visit_atom<F, S>(&mut self, atom: &'ir Atom<F, S>) { atom.visit(self) }
+    fn visit_atom<S>(&mut self, atom: &'ir Atom<S>) { atom.visit(self) }
 
     /// Visits a fact in a spec.
     ///
@@ -173,7 +173,7 @@ pub trait Visitor<'ir> {
     /// # Arguments
     /// - `fact`: The [`Fact`] that is being visited.
     #[inline]
-    fn visit_fact<F, S>(&mut self, fact: &'ir Fact<F, S>) { fact.visit(self) }
+    fn visit_fact<S>(&mut self, fact: &'ir Fact<S>) { fact.visit(self) }
 
 
 
@@ -184,7 +184,7 @@ pub trait Visitor<'ir> {
     /// # Arguments
     /// - `ground_atom`: The [`GroundAtom`] that is being visited.
     #[inline]
-    fn visit_ground_atom<F, S>(&mut self, ground_atom: &'ir GroundAtom<F, S>) { ground_atom.visit(self) }
+    fn visit_ground_atom<S>(&mut self, ground_atom: &'ir GroundAtom<S>) { ground_atom.visit(self) }
 
 
 
@@ -195,7 +195,7 @@ pub trait Visitor<'ir> {
     /// # Arguments
     /// - `ident`: The [`Ident`] that is being visited.
     #[inline]
-    fn visit_ident<F, S>(&mut self, ident: &'ir Ident<F, S>) { ident.visit(self) }
+    fn visit_ident<S>(&mut self, ident: &'ir Ident<S>) { ident.visit(self) }
 
     /// Visits a span.
     ///
@@ -204,5 +204,5 @@ pub trait Visitor<'ir> {
     /// # Arguments
     /// - `span`: The [`Span`] that is being visited.
     #[inline]
-    fn visit_span<F, S>(&mut self, span: &'ir Span<F, S>) { span.visit(self) }
+    fn visit_span<S>(&mut self, span: &'ir Span<S>) { span.visit(self) }
 }

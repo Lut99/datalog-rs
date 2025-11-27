@@ -24,7 +24,7 @@ use super::super::ast;
 use super::idents::TransIdentExpectsFormatter;
 use super::postulations::PostulationExpectsFormatter;
 use super::{idents, postulations, tokens};
-use crate::parser::whitespaces;
+use crate::parser::whitespace0;
 
 
 /***** ERRORS *****/
@@ -210,15 +210,15 @@ where
 {
     comb::map(
         seq::tuple((
-            comb::map_err(seq::terminated(idents::trans_ident(), error::transmute(whitespaces::whitespace())), |err| ParseError::TransIdent {
+            comb::map_err(seq::terminated(idents::trans_ident(), error::transmute(whitespace0::whitespace())), |err| ParseError::TransIdent {
                 span: err.into_span(),
             }),
             comb::map_err(
                 tokens::curly(seq::preceded(
-                    error::transmute(whitespaces::whitespace()),
+                    error::transmute(whitespace0::whitespace()),
                     multi::many0(seq::terminated(
                         comb::map_err(postulations::postulation(), |err| ParseError::Postulation { span: err.into_span() }),
-                        error::transmute(whitespaces::whitespace()),
+                        error::transmute(whitespace0::whitespace()),
                     )),
                 )),
                 |err| match err {

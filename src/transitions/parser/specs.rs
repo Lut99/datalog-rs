@@ -25,7 +25,7 @@ use super::transitions::TransitionExpectsFormatter;
 use super::triggers::TriggerExpectsFormatter;
 use super::{postulations, transitions, triggers};
 use crate::parser::rules::RuleExpectsFormatter;
-use crate::parser::{rules, whitespaces};
+use crate::parser::{rules, whitespace0};
 
 
 /***** ERRORS *****/
@@ -233,7 +233,7 @@ where
     S: Clone + MatchBytes + OneOfBytes + OneOfUtf8 + Spannable + WhileUtf8,
 {
     comb::map(
-        comb::all(multi::many0(seq::delimited(error::transmute(whitespaces::whitespace()), phrase(), error::transmute(whitespaces::whitespace())))),
+        comb::all(multi::many0(seq::delimited(error::transmute(whitespace0::whitespace()), phrase(), error::transmute(whitespace0::whitespace())))),
         |phrases| ast::TransitionSpec { phrases },
     )
     .parse(input)

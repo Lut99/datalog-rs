@@ -24,5 +24,5 @@ mod log;
 pub mod parser;
 #[cfg(test)]
 mod tests;
-#[cfg(feature = "transitions")]
-pub mod transitions;
+// #[cfg(feature = "transitions")]
+// pub mod transitions;

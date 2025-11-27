@@ -22,7 +22,7 @@ use ast_toolkit::span::{Span, Spanning};
 
 use super::super::ast;
 use super::{idents, tokens};
-use crate::parser::whitespaces;
+use crate::parser::whitespace0;
 use crate::transitions::parser::idents::TransIdentExpectsFormatter;
 
 
@@ -200,10 +200,10 @@ where
             comb::map_err(tokens::exclaim(), |err| ParseError::Exclaim { span: err.into_span() }),
             error::cut(comb::map_err(
                 tokens::curly(seq::preceded(
-                    error::transmute(whitespaces::whitespace()),
+                    error::transmute(whitespace0::whitespace()),
                     multi::many0(seq::terminated(
                         comb::map_err(idents::trans_ident(), |err| ParseError::TransIdent { span: err.into_span() }),
-                        error::transmute(whitespaces::whitespace()),
+                        error::transmute(whitespace0::whitespace()),
                     )),
                 )),
                 |err: ast_toolkit::tokens::snack::complete::ParseError<_, _, ParseError<F, S>>| -> ParseError<F, S> {

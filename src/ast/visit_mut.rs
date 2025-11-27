@@ -14,38 +14,25 @@
 //!   This version promises mutable access to all nodes.
 //
 
-use super::{Arrow, Atom, Comma, Dot, Fact, FactArgs, Ident, Literal, NegAtom, Not, Parens, Rule, RuleBody, Span, Spec};
+use super::{Arrow, Atom, Comma, Dot, Fact, FactArgs, Ident, Literal, NegAtom, Not, Parens, ParensClose, ParensOpen, Rule, RuleBody, Span, Spec};
 
 
 /***** HELPER MACROS *****/
 /// Implements a visitor function for the given token.
 macro_rules! token_visitor_mut_impl {
     ($name:ident) => {
-        impl<F, S> VisitableMut for $name<F, S> {
+        impl<S> VisitableMut for $name<S> {
             #[inline]
             fn visit_mut<'ast>(&'ast mut self, visitor: &mut (impl ?Sized + VisitorMut<'ast>)) {
                 let Self { span } = self;
-                visitor.visit_span_mut(span);
+                if let Some(span) = span {
+                    visitor.visit_span_mut(span);
+                }
             }
         }
     };
 }
 pub(crate) use token_visitor_mut_impl;
-
-/// Implements a visitor function for the given token.
-macro_rules! delim_visitor_mut_impl {
-    ($name:ident) => {
-        impl<F, S> VisitableMut for $name<F, S> {
-            #[inline]
-            fn visit_mut<'ast>(&'ast mut self, visitor: &mut (impl ?Sized + VisitorMut<'ast>)) {
-                let Self { open, close } = self;
-                visitor.visit_span_mut(open);
-                visitor.visit_span_mut(close);
-            }
-        }
-    };
-}
-pub(crate) use delim_visitor_mut_impl;
 
 
 
@@ -72,7 +59,7 @@ pub trait VisitableMut {
 }
 
 // Implementations for the AST.
-impl<F, S> VisitableMut for Spec<F, S> {
+impl<S> VisitableMut for Spec<S> {
     #[inline]
     fn visit_mut<'ast>(&'ast mut self, visitor: &mut (impl ?Sized + VisitorMut<'ast>)) {
         let Self { rules } = self;
@@ -84,13 +71,13 @@ impl<F, S> VisitableMut for Spec<F, S> {
     }
 }
 
-impl<F, S> VisitableMut for Rule<F, S> {
+impl<S> VisitableMut for Rule<S> {
     #[inline]
     fn visit_mut<'ast>(&'ast mut self, visitor: &mut (impl ?Sized + VisitorMut<'ast>)) {
         let Self { consequents, tail, dot } = self;
 
         // Visit everything in the consequents first
-        for (atom, comma) in consequents.pairs_mut() {
+        for (atom, comma) in consequents {
             visitor.visit_atom_mut(atom);
             if let Some(comma) = comma {
                 visitor.visit_comma_mut(comma);
@@ -106,7 +93,7 @@ impl<F, S> VisitableMut for Rule<F, S> {
         visitor.visit_dot_mut(dot)
     }
 }
-impl<F, S> VisitableMut for RuleBody<F, S> {
+impl<S> VisitableMut for RuleBody<S> {
     #[inline]
     fn visit_mut<'ast>(&'ast mut self, visitor: &mut (impl ?Sized + VisitorMut<'ast>)) {
         let Self { arrow_token, antecedents } = self;
@@ -115,7 +102,7 @@ impl<F, S> VisitableMut for RuleBody<F, S> {
         visitor.visit_arrow_mut(arrow_token);
 
         // Then visit all the antecedents
-        for (lit, comma) in antecedents.pairs_mut() {
+        for (lit, comma) in antecedents {
             visitor.visit_literal_mut(lit);
             if let Some(comma) = comma {
                 visitor.visit_comma_mut(comma);
@@ -124,7 +111,7 @@ impl<F, S> VisitableMut for RuleBody<F, S> {
     }
 }
 
-impl<F, S> VisitableMut for Literal<F, S> {
+impl<S> VisitableMut for Literal<S> {
     #[inline]
     fn visit_mut<'ast>(&'ast mut self, visitor: &mut (impl ?Sized + VisitorMut<'ast>)) {
         match self {
@@ -133,7 +120,7 @@ impl<F, S> VisitableMut for Literal<F, S> {
         }
     }
 }
-impl<F, S> VisitableMut for NegAtom<F, S> {
+impl<S> VisitableMut for NegAtom<S> {
     #[inline]
     fn visit_mut<'ast>(&'ast mut self, visitor: &mut (impl ?Sized + VisitorMut<'ast>)) {
         let Self { not_token, atom } = self;
@@ -146,7 +133,7 @@ impl<F, S> VisitableMut for NegAtom<F, S> {
     }
 }
 
-impl<F, S> VisitableMut for Atom<F, S> {
+impl<S> VisitableMut for Atom<S> {
     #[inline]
     fn visit_mut<'ast>(&'ast mut self, visitor: &mut (impl ?Sized + VisitorMut<'ast>)) {
         match self {
@@ -155,7 +142,7 @@ impl<F, S> VisitableMut for Atom<F, S> {
         }
     }
 }
-impl<F, S> VisitableMut for Fact<F, S> {
+impl<S> VisitableMut for Fact<S> {
     #[inline]
     fn visit_mut<'ast>(&'ast mut self, visitor: &mut (impl ?Sized + VisitorMut<'ast>)) {
         let Self { ident, args } = self;
@@ -169,7 +156,7 @@ impl<F, S> VisitableMut for Fact<F, S> {
         }
     }
 }
-impl<F, S> VisitableMut for FactArgs<F, S> {
+impl<S> VisitableMut for FactArgs<S> {
     #[inline]
     fn visit_mut<'ast>(&'ast mut self, visitor: &mut (impl ?Sized + VisitorMut<'ast>)) {
         let Self { paren_tokens, args } = self;
@@ -178,7 +165,7 @@ impl<F, S> VisitableMut for FactArgs<F, S> {
         visitor.visit_parens_mut(paren_tokens);
 
         // Then visit the fact's arguments (and commas)
-        for (arg, comma) in args.pairs_mut() {
+        for (arg, comma) in args {
             visitor.visit_atom_mut(arg);
             if let Some(comma) = comma {
                 visitor.visit_comma_mut(comma);
@@ -187,13 +174,15 @@ impl<F, S> VisitableMut for FactArgs<F, S> {
     }
 }
 
-impl<F, S> VisitableMut for Ident<F, S> {
+impl<S> VisitableMut for Ident<S> {
     #[inline]
     fn visit_mut<'ast>(&'ast mut self, visitor: &mut (impl ?Sized + VisitorMut<'ast>)) {
-        let Self { value } = self;
+        let Self { value: _, span } = self;
 
         // Visit the span
-        visitor.visit_span_mut(value)
+        if let Some(span) = span {
+            visitor.visit_span_mut(span);
+        }
     }
 }
 
@@ -201,9 +190,19 @@ token_visitor_mut_impl!(Arrow);
 token_visitor_mut_impl!(Comma);
 token_visitor_mut_impl!(Dot);
 token_visitor_mut_impl!(Not);
-delim_visitor_mut_impl!(Parens);
 
-impl<F, S> VisitableMut for Span<F, S> {
+impl<S> VisitableMut for Parens<S> {
+    #[inline]
+    fn visit_mut<'ast>(&'ast mut self, visitor: &mut (impl ?Sized + VisitorMut<'ast>)) {
+        let Self { open, close } = self;
+        visitor.visit_parens_open_mut(open);
+        visitor.visit_parens_close_mut(close);
+    }
+}
+token_visitor_mut_impl!(ParensOpen);
+token_visitor_mut_impl!(ParensClose);
+
+impl<S> VisitableMut for Span<S> {
     #[inline]
     fn visit_mut<'ast>(&'ast mut self, _visitor: &mut (impl ?Sized + VisitorMut<'ast>)) {
         /* Nothing */
@@ -230,7 +229,7 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `spec`: The (mutable reference to the) [`Spec`] that is being visited.
     #[inline]
-    fn visit_spec_mut<F, S>(&mut self, spec: &'ast mut Spec<F, S>) { spec.visit_mut(self) }
+    fn visit_spec_mut<S>(&mut self, spec: &'ast mut Spec<S>) { spec.visit_mut(self) }
 
 
 
@@ -241,7 +240,7 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `rule`: The (mutable reference to the) [`Rule`] that is being visited.
     #[inline]
-    fn visit_rule_mut<F, S>(&mut self, rule: &'ast mut Rule<F, S>) { rule.visit_mut(self) }
+    fn visit_rule_mut<S>(&mut self, rule: &'ast mut Rule<S>) { rule.visit_mut(self) }
 
     /// Visits a rule's body in a rule.
     ///
@@ -250,7 +249,7 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `rule_body`: The (mutable reference to the) [`RuleBody`] that is being visited.
     #[inline]
-    fn visit_rule_body_mut<F, S>(&mut self, rule_body: &'ast mut RuleBody<F, S>) { rule_body.visit_mut(self) }
+    fn visit_rule_body_mut<S>(&mut self, rule_body: &'ast mut RuleBody<S>) { rule_body.visit_mut(self) }
 
 
 
@@ -261,7 +260,7 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `literal`: The (mutable reference to the) [`Literal`] that is being visited.
     #[inline]
-    fn visit_literal_mut<F, S>(&mut self, literal: &'ast mut Literal<F, S>) { literal.visit_mut(self) }
+    fn visit_literal_mut<S>(&mut self, literal: &'ast mut Literal<S>) { literal.visit_mut(self) }
 
     /// Visits a negative atom in the more generic literal.
     ///
@@ -270,7 +269,7 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `neg_atom`: The (mutable reference to the) [`NegAtom`] that is being visited.
     #[inline]
-    fn visit_neg_atom_mut<F, S>(&mut self, neg_atom: &'ast mut NegAtom<F, S>) { neg_atom.visit_mut(self) }
+    fn visit_neg_atom_mut<S>(&mut self, neg_atom: &'ast mut NegAtom<S>) { neg_atom.visit_mut(self) }
 
 
 
@@ -281,7 +280,7 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `atom`: The (mutable reference to the) [`Atom`] that is being visited.
     #[inline]
-    fn visit_atom_mut<F, S>(&mut self, atom: &'ast mut Atom<F, S>) { atom.visit_mut(self) }
+    fn visit_atom_mut<S>(&mut self, atom: &'ast mut Atom<S>) { atom.visit_mut(self) }
 
     /// Visits a fact that is a non-variable atom.
     ///
@@ -290,7 +289,7 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `fact`: The (mutable reference to the) [`Fact`] that is being visited.
     #[inline]
-    fn visit_fact_mut<F, S>(&mut self, fact: &'ast mut Fact<F, S>) { fact.visit_mut(self) }
+    fn visit_fact_mut<S>(&mut self, fact: &'ast mut Fact<S>) { fact.visit_mut(self) }
 
     /// Visits the argument-part of a fact.
     ///
@@ -299,7 +298,7 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `fact_args`: The (mutable reference to the) [`FactArgs`] that is being visited.
     #[inline]
-    fn visit_fact_args_mut<F, S>(&mut self, fact_args: &'ast mut FactArgs<F, S>) { fact_args.visit_mut(self) }
+    fn visit_fact_args_mut<S>(&mut self, fact_args: &'ast mut FactArgs<S>) { fact_args.visit_mut(self) }
 
 
 
@@ -310,7 +309,7 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `ident`: The (mutable reference to the) [`Ident`] that is being visited.
     #[inline]
-    fn visit_ident_mut<F, S>(&mut self, ident: &'ast mut Ident<F, S>) { ident.visit_mut(self) }
+    fn visit_ident_mut<S>(&mut self, ident: &'ast mut Ident<S>) { ident.visit_mut(self) }
 
 
 
@@ -321,7 +320,7 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `arrow`: The (mutable reference to the) [`Arrow`] that is being visited.
     #[inline]
-    fn visit_arrow_mut<F, S>(&mut self, arrow: &'ast mut Arrow<F, S>) { arrow.visit_mut(self) }
+    fn visit_arrow_mut<S>(&mut self, arrow: &'ast mut Arrow<S>) { arrow.visit_mut(self) }
 
     /// Visits a comma.
     ///
@@ -330,7 +329,7 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `comma`: The (mutable reference to the) [`Comma`] that is being visited.
     #[inline]
-    fn visit_comma_mut<F, S>(&mut self, comma: &'ast mut Comma<F, S>) { comma.visit_mut(self) }
+    fn visit_comma_mut<S>(&mut self, comma: &'ast mut Comma<S>) { comma.visit_mut(self) }
 
     /// Visits a dot.
     ///
@@ -339,7 +338,7 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `dot`: The (mutable reference to the) [`Dot`] that is being visited.
     #[inline]
-    fn visit_dot_mut<F, S>(&mut self, dot: &'ast mut Dot<F, S>) { dot.visit_mut(self) }
+    fn visit_dot_mut<S>(&mut self, dot: &'ast mut Dot<S>) { dot.visit_mut(self) }
 
     /// Visits a not.
     ///
@@ -348,7 +347,7 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `not`: The (mutable reference to the) [`Not`] that is being visited.
     #[inline]
-    fn visit_not_mut<F, S>(&mut self, not: &'ast mut Not<F, S>) { not.visit_mut(self) }
+    fn visit_not_mut<S>(&mut self, not: &'ast mut Not<S>) { not.visit_mut(self) }
 
     /// Visits a parens.
     ///
@@ -357,7 +356,25 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `parens`: The (mutable reference to the) [`Parens`] that is being visited.
     #[inline]
-    fn visit_parens_mut<F, S>(&mut self, parens: &'ast mut Parens<F, S>) { parens.visit_mut(self) }
+    fn visit_parens_mut<S>(&mut self, parens: &'ast mut Parens<S>) { parens.visit_mut(self) }
+
+    /// Visits a parens open token.
+    ///
+    /// By default, this function redirects to the node's [`VisitableMut::visit_mut()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `parens_open`: The [`ParensOpen`] that is being visited.
+    #[inline]
+    fn visit_parens_open_mut<S>(&mut self, parens_open: &'ast mut ParensOpen<S>) { parens_open.visit_mut(self) }
+
+    /// Visits a parens close token.
+    ///
+    /// By default, this function redirects to the node's [`VisitableMut::visit_mut()`]-implementation.
+    ///
+    /// # Arguments
+    /// - `parens_close`: The [`ParensClose`] that is being visited.
+    #[inline]
+    fn visit_parens_close_mut<S>(&mut self, parens_close: &'ast mut ParensClose<S>) { parens_close.visit_mut(self) }
 
 
 
@@ -368,5 +385,5 @@ pub trait VisitorMut<'ast> {
     /// # Arguments
     /// - `span`: The (mutable reference to the) [`Span`] that is being visited.
     #[inline]
-    fn visit_span_mut<F, S>(&mut self, span: &'ast mut Span<F, S>) { span.visit_mut(self) }
+    fn visit_span_mut<S>(&mut self, span: &'ast mut Span<S>) { span.visit_mut(self) }
 }
